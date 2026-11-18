@@ -64,7 +64,7 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
   - [x] Agent: create / remove servers, clients (keys, PSK, next free address, LANs, disable),
         `.conf` download, live state and sessions for history, `direct` / `file` modes,
         e2e with a real client
-  - [ ] Web API and UI (clients page, QR code, create-server form)
+  - [x] Web API and UI (clients page, QR code, create-server form)
 - [ ] **AmneziaWG** server: the WireGuard backend with `awg` tools and the obfuscation settings
       (junk packets, padding, header values; check the current Amnezia spec), matching client
       configs for the Amnezia app; kernel module or `amneziawg-go` shipped in the image

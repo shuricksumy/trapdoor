@@ -72,7 +72,9 @@ func newTestEnv(t *testing.T, apiToken string) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ag := httptest.NewServer(agent.NewHost("agent-secret", log, agent.New(config.Agent{Token: "agent-secret", OpenVPNDir: t.TempDir(), CCDDir: t.TempDir(), TOTPIssuer: "trapdoor", MgmtAddr: "127.0.0.1:1"}, log, p)).Handler())
+	host := agent.NewHost("agent-secret", log, agent.New(config.Agent{Token: "agent-secret", OpenVPNDir: t.TempDir(), CCDDir: t.TempDir(), TOTPIssuer: "trapdoor", MgmtAddr: "127.0.0.1:1"}, log, p))
+	host.EnableWireGuard(config.Agent{WireGuard: "file", WireGuardDir: t.TempDir()}, nil)
+	ag := httptest.NewServer(host.Handler())
 	t.Cleanup(ag.Close)
 	e := &testEnv{t: t, clock: now, agent: &fakeAgent{
 		Client: agent.NewClient(ag.URL, "agent-secret", 5*time.Second),

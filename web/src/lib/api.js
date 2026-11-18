@@ -1,4 +1,4 @@
-import { navigate, servers, session } from './state.svelte.js';
+import { navigate, servers, session, setServers } from './state.svelte.js';
 
 export class ApiError extends Error {
   constructor(status, message) {
@@ -63,4 +63,11 @@ export function poll(fn, ms) {
   };
   tick();
   return () => clearTimeout(timer);
+}
+
+/** Fetch the server list again (after adding or removing a server). */
+export async function reloadServers() {
+  const st = await api('/status');
+  setServers(st.agent?.servers ?? []);
+  return st;
 }

@@ -21,6 +21,7 @@ import (
 // Defined here so tests can supply a fake.
 type Agent interface {
 	Info(ctx context.Context) (api.AgentInfo, error)
+	CreateServer(ctx context.Context, req api.CreateServer) (api.ServerInfo, error)
 	Server(id string) AgentClient
 }
 
@@ -61,6 +62,15 @@ type AgentClient interface {
 	Firewall(ctx context.Context) (api.Firewall, error)
 	SetFirewall(ctx context.Context, p api.FirewallPolicy) (api.Firewall, error)
 	AssignAddresses(ctx context.Context, names []string) (api.Firewall, error)
+
+	// WireGuard servers.
+	RemoveServer(ctx context.Context) error
+	Peers(ctx context.Context) ([]api.Peer, error)
+	Peer(ctx context.Context, name string) (api.Peer, error)
+	AddPeer(ctx context.Context, req api.NewPeer) (api.Peer, error)
+	UpdatePeer(ctx context.Context, name string, u api.PeerUpdate) (api.Peer, error)
+	RemovePeer(ctx context.Context, name string) error
+	PeerConf(ctx context.Context, name string) ([]byte, error)
 }
 
 // Deps are the web server's dependencies.
@@ -116,6 +126,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/servers/{server}/history/sessions", s.handleHistorySessions)
 	s.registerCertRoutes(api)
 	s.registerServerRoutes(api)
+	s.registerWireGuardRoutes(api)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
