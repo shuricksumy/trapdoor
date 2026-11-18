@@ -53,6 +53,8 @@ type Store struct {
 	dir  string
 	opts Options
 	mu   sync.Mutex
+	// kinds caches the kind per serial (certificates never change).
+	kinds map[string]Kind
 }
 
 var _ PKI = (*Store)(nil)
@@ -186,11 +188,43 @@ func (s *Store) List(_ context.Context) ([]Cert, error) {
 			last[e.CN()] = i
 		}
 		for i, e := range entries {
-			out = append(out, toCert(e, now, last[e.CN()] == i))
+			c := toCert(e, now, last[e.CN()] == i)
+			c.Kind = s.kindOf(e)
+			out = append(out, c)
 		}
 		return nil
 	})
 	return out, err
+}
+
+// kindOf reads the certificate of an index entry to tell client from server.
+func (s *Store) kindOf(e indexEntry) Kind {
+	if k, ok := s.kinds[e.Serial]; ok {
+		return k
+	}
+	var k Kind
+	for _, p := range []string{
+		s.path("certs_by_serial", e.Serial+".pem"),
+		s.path("revoked/certs_by_serial", e.Serial+".crt"),
+		s.path("issued", e.CN()+".crt"),
+	} {
+		c, err := s.readCert(p)
+		if err != nil || serialHex(c.SerialNumber) != e.Serial {
+			continue
+		}
+		k = KindClient
+		if slices.Contains(c.ExtKeyUsage, x509.ExtKeyUsageServerAuth) {
+			k = KindServer
+		}
+		break
+	}
+	if k != "" {
+		if s.kinds == nil {
+			s.kinds = map[string]Kind{}
+		}
+		s.kinds[e.Serial] = k
+	}
+	return k
 }
 
 // Get implements PKI.

@@ -13,6 +13,7 @@ import (
 	"github.com/shuricksumy/tunnelward/internal/history"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
 	"github.com/shuricksumy/tunnelward/internal/version"
+	"github.com/shuricksumy/tunnelward/internal/webui"
 )
 
 // AgentClient is the subset of the agent API the web process uses.
@@ -84,6 +85,15 @@ func (s *Server) Handler() http.Handler {
 	})
 	s.registerAuthRoutes(mux, api)
 	mux.Handle("/api/", s.requireAuth(api))
+	ui := webui.Handler()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		ui.ServeHTTP(w, r)
+	})
 	return httpx.LogRequests(s.Log, securityHeaders(mux))
 }
 

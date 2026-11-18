@@ -12,17 +12,17 @@
   - [x] Compatibility tests against real easyrsa 3.2 in CI
 - [x] `.ovpn` generation from templates (tls-crypt / tls-auth / tls-crypt-v2)
 - [x] End-to-end test with a real OpenVPN server and client in CI
-- [ ] QR code for `.ovpn` (web UI)
+- [ ] ~~QR code for `.ovpn`~~ dropped: a profile with keys (~5-8 kB) is larger than a QR code can hold
 - [x] Live sessions via OpenVPN management interface: list, traffic, kick; revoke/delete disconnects
 - [x] Session history & traffic statistics API (web): sessions + hourly traffic per user in SQLite,
       any date range with day / month / year grouping per user and for the whole server,
       presets, CSV export, gaps marked as estimated
-- [ ] Statistics page in the UI: date picker with presets, daily chart, per-user table
+- [x] Statistics page in the UI: date range with presets, day/month/year chart, per-client table with share, CSV export
 - [ ] Client 2FA: TOTP and/or static password, `tunnelward auth-verify` for OpenVPN
 - [x] Web: SQLite + migrations
 - [x] Web: admin login (users CLI, secure session cookie, throttling, CSRF protection)
 - [x] Web: certificate and session management endpoints (proxy to the agent, audit log lines)
-- [ ] Frontend (SvelteKit, embedded in the binary): dashboard, clients, certificates
+- [x] Web UI (Svelte 5, embedded): login, overview with today's timeline, clients, live sessions, account; light/dark/auto theme; phone layout
 - [ ] Docker image + two-service `docker-compose` example
 - [ ] Migration from openvpn-ui (`tunnelward migrate --from-openvpn-ui`, dry-run, backup)
 

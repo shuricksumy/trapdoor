@@ -1,0 +1,214 @@
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+
+/* Tokens. Signal colours are semantic only: ok = valid/online, warn =
+   expiring/estimated, bad = revoked/error. Never decorative. */
+:root {
+  --font: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --step--1: 0.8125rem; /* 13 */
+  --step-0: 0.9375rem;  /* 15 */
+  --step-1: 1.125rem;   /* 18 */
+  --step-2: 1.5rem;     /* 24 */
+  --step-3: 2rem;       /* 32 */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-s: 4px;
+  --radius-m: 8px;
+  --rail: 216px;
+}
+
+:root[data-theme='light'] {
+  --bg: #eef2f1;        /* panel grey with a hint of green */
+  --surface: #ffffff;
+  --sunken: #e3e9e7;
+  --ink: #1c2a2e;       /* graphite */
+  --ink-2: #4f6066;
+  --ink-3: #7c8b90;
+  --line: #d3dcda;
+  --accent: #0e6e78;    /* petrol */
+  --accent-ink: #ffffff;
+  --accent-soft: #d5ebec;
+  --upload: #7fb7bc;
+  --ok: #2c7a4b;
+  --ok-soft: #dcefe3;
+  --warn: #a86a12;
+  --warn-soft: #f6e9d2;
+  --bad: #b3261e;
+  --bad-soft: #f7dedc;
+  --focus: #0e6e78;
+  --shadow: 0 1px 2px rgb(28 42 46 / 6%), 0 4px 16px rgb(28 42 46 / 6%);
+}
+
+:root[data-theme='dark'] {
+  --bg: #12181b;
+  --surface: #1a2226;
+  --sunken: #0e1416;
+  --ink: #e2e9e8;
+  --ink-2: #a5b3b6;
+  --ink-3: #74858a;
+  --line: #2b373b;
+  --accent: #4fb9c3;
+  --accent-ink: #0b1d20;
+  --accent-soft: #173539;
+  --upload: #2f6f76;
+  --ok: #5cc285;
+  --ok-soft: #173426;
+  --warn: #e0a54a;
+  --warn-soft: #3a2c14;
+  --bad: #f08079;
+  --bad-soft: #3d1c1a;
+  --focus: #4fb9c3;
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px rgb(0 0 0 / 25%);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--bg);
+  font-variant-numeric: tabular-nums;
+}
+
+h1, h2, h3 { margin: 0; line-height: 1.2; font-weight: 600; }
+h1 { font-size: var(--step-2); letter-spacing: -0.01em; }
+h2 { font-size: var(--step-1); }
+h3 { font-size: var(--step-0); }
+p { margin: 0; }
+
+a { color: var(--accent); text-underline-offset: 2px; }
+
+.mono { font-family: var(--mono); font-size: 0.92em; }
+.muted { color: var(--ink-2); }
+.faint { color: var(--ink-3); }
+.small { font-size: var(--step--1); }
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-s);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--bad); }
+.btn.danger.solid { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn.ghost { border-color: transparent; background: transparent; }
+.btn.ghost:hover { background: var(--sunken); }
+.btn.small { height: 28px; padding: 0 var(--space-3); font-size: var(--step--1); }
+
+/* Form fields */
+.field { display: grid; gap: var(--space-1); }
+.field > span { font-size: var(--step--1); font-weight: 500; color: var(--ink-2); }
+input, select {
+  height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  min-width: 0;
+}
+input:focus-visible, select:focus-visible { outline-offset: 0; }
+.hint { font-size: var(--step--1); color: var(--ink-3); }
+
+/* Status pill: text + dot, colour carries meaning */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  font-size: var(--step--1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); }
+.pill.warn { color: var(--warn); background: var(--warn-soft); }
+.pill.bad { color: var(--bad); background: var(--bad-soft); }
+.pill.off { color: var(--ink-3); background: var(--sunken); }
+
+/* Panels: one quiet surface style; hierarchy from type, not boxes */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) 0;
+}
+.panel-body { padding: var(--space-4) var(--space-5) var(--space-5); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px var(--space-3); text-align: left; vertical-align: middle; }
+th {
+  font-size: var(--step--1);
+  font-weight: 500;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+td { border-bottom: 1px solid var(--line); }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: color-mix(in srgb, var(--sunken) 55%, transparent); }
+td.num, th.num { text-align: right; }
+
+.banner {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-s);
+  font-size: var(--step--1);
+}
+.banner.bad { background: var(--bad-soft); color: var(--bad); }
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+
+.empty {
+  padding: var(--space-6) var(--space-5);
+  color: var(--ink-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

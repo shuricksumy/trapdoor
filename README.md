@@ -27,15 +27,27 @@ tunnelward web     # web UI + API
 tunnelward version
 ```
 
+## Web UI
+
+The UI (Svelte 5 + Vite, in `web/`) is embedded in the binary and served by `tunnelward web`:
+overview with today's connection timeline, clients (certificates), live sessions, and traffic
+statistics with day / month / year views, presets, per-client shares and CSV export.
+Light, dark or automatic theme; works on phones. Strict Content-Security-Policy, no CDN:
+fonts (IBM Plex) are bundled.
+
 ## Development
 
-Requires Go 1.24+.
+Requires Go 1.24+ and, for the UI, Node 22.
 
 ```
-make build   # → bin/tunnelward
+make ui      # web/ → internal/webui/dist (embedded by the next build)
+make build   # → bin/tunnelward (without `make ui` the UI shows a "not built" notice)
 make test
 make lint    # needs golangci-lint
 ```
+
+UI development with hot reload: run `tunnelward web` on :8080, then `cd web && npm run dev`
+(Vite proxies `/api` to it).
 
 Run locally (two terminals):
 

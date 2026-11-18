@@ -54,6 +54,7 @@ type Cert struct {
 	RevokedAt    time.Time `json:"revoked_at,omitzero"`
 	RevokeReason string    `json:"revoke_reason,omitempty"`
 	Current      bool      `json:"current"`
+	Kind         string    `json:"kind,omitempty"` // "client" or "server"
 }
 
 // IssueCertRequest is the body of POST /v1/certs.

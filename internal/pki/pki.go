@@ -54,6 +54,8 @@ type Cert struct {
 	// Current is true for the newest entry of a name. Older entries are the
 	// history (previous, renewed or revoked certificates).
 	Current bool `json:"current"`
+	// Kind is "client" or "server"; empty when the certificate file is gone.
+	Kind Kind `json:"kind,omitempty"`
 }
 
 // IssueRequest asks for a new certificate.
