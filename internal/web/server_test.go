@@ -9,12 +9,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/shuricksumy/tunnelward/internal/api"
+	"github.com/shuricksumy/tunnelward/internal/auth"
 	"github.com/shuricksumy/tunnelward/internal/history"
 	"github.com/shuricksumy/tunnelward/internal/store"
 )
@@ -40,6 +42,7 @@ type testEnv struct {
 	agent *fakeAgent
 	col   *history.Collector
 	clock time.Time
+	auth  *auth.Service
 }
 
 func newTestEnv(t *testing.T, apiToken string) *testEnv {
@@ -53,8 +56,12 @@ func newTestEnv(t *testing.T, apiToken string) *testEnv {
 	e := &testEnv{t: t, agent: &fakeAgent{info: api.AgentInfo{Hostname: "vpn1"}}, clock: now}
 	e.col = &history.Collector{DB: db, Source: e.agent, Agent: "default", Log: log,
 		Now: func() time.Time { return e.clock }}
+	e.auth = auth.New(db, auth.Options{})
 	e.h = New(Deps{Agent: e.agent, Stats: &history.Stats{DB: db, Agent: "default"},
-		APIToken: apiToken, Location: time.UTC, Log: log, Now: func() time.Time { return now }}).Handler()
+		Auth: e.auth, Limiter: &auth.Limiter{MaxFailures: 3, MaxUserFailures: 5},
+		APIToken: apiToken, CookieSecure: true,
+		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
+		Location:       time.UTC, Log: log, Now: func() time.Time { return now }}).Handler()
 	return e
 }
 
@@ -104,9 +111,8 @@ func TestTokenRequired(t *testing.T) {
 	}
 
 	off := newTestEnv(t, "")
-	rec := off.get("/api/v1/status", "")
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "TW_WEB_API_TOKEN") {
-		t.Errorf("no token configured: %d %s", rec.Code, rec.Body.String())
+	if rec := off.get("/api/v1/status", "anything"); rec.Code != http.StatusUnauthorized {
+		t.Errorf("bearer accepted with no API token configured: %d", rec.Code)
 	}
 }
 

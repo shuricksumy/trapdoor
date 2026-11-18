@@ -70,6 +70,25 @@ var migrations = []string{
 		PRIMARY KEY (agent, name, hour)
 	) WITHOUT ROWID;
 	CREATE INDEX traffic_hour ON traffic_hourly (agent, hour);`,
+
+	// 2: admin users and login sessions
+	`CREATE TABLE users (
+		id            INTEGER PRIMARY KEY,
+		username      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+		password_hash TEXT    NOT NULL,
+		created_at    INTEGER NOT NULL,
+		password_changed_at INTEGER NOT NULL
+	);
+	CREATE TABLE login_sessions (
+		token_hash  BLOB    PRIMARY KEY, -- sha256 of the cookie value; the value itself is never stored
+		user_id     INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+		created_at  INTEGER NOT NULL,
+		last_used   INTEGER NOT NULL,
+		expires_at  INTEGER NOT NULL,   -- absolute limit
+		ip          TEXT    NOT NULL DEFAULT '',
+		user_agent  TEXT    NOT NULL DEFAULT ''
+	) WITHOUT ROWID;
+	CREATE INDEX login_sessions_user ON login_sessions (user_id);`,
 }
 
 func (db *DB) migrate(ctx context.Context) error {

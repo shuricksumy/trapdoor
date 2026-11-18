@@ -92,12 +92,34 @@ existing ones are reused, new ones are created with `openvpn --genkey` (`TW_OPEN
 ## Web API
 
 The web process records session history (polling the agent every `TW_POLL_INTERVAL`,
-default 30s) into SQLite (`TW_DB_PATH`) and serves reports. Until admin login exists,
-every `/api/v1/*` call needs `Authorization: Bearer <TW_WEB_API_TOKEN>`; without that
-variable the API stays disabled (401).
+default 30s) into SQLite (`TW_DB_PATH`) and serves reports.
+
+### Login
+
+Create the first admin, then log in from the browser (or curl):
+
+```
+TW_DB_PATH=./data/tunnelward.db tunnelward user add admin   # password from stdin or TW_ADMIN_PASSWORD
+tunnelward user list | passwd <name> | del <name>
+```
+
+- Passwords: PBKDF2-SHA256, 600 000 iterations, at least 10 characters
+- Session cookie `tw_session`: random 256-bit token, stored only as a SHA-256 hash; `HttpOnly`,
+  `SameSite=Strict`, `Secure` (set `TW_COOKIE_SECURE=false` only for plain-HTTP testing)
+- Logged out after `TW_SESSION_IDLE` (default 12h) of inactivity, and after 7 days at most;
+  changing a password logs out all sessions of that user
+- Failed logins throttled: 10 per IP and 30 per username per 15 minutes (429 + `Retry-After`);
+  unknown usernames take as long as wrong passwords
+- CSRF: state-changing requests from another site are refused (Fetch Metadata / Origin)
+- Behind a reverse proxy set `TW_TRUSTED_PROXIES` (CIDRs) so the real client IP is used
+- Scripts can use `Authorization: Bearer <TW_WEB_API_TOKEN>` instead (optional; off when unset)
 
 | Method | Path | Result |
 |---|---|---|
+| POST | `/api/v1/auth/login` | `{"username","password"}` → sets the session cookie |
+| POST | `/api/v1/auth/logout` | 204 |
+| GET | `/api/v1/auth/me` | current user |
+| POST | `/api/v1/auth/password` | `{"current_password","new_password"}` → 204, logs out everywhere |
 | GET | `/api/v1/status` | web version + agent reachability |
 | GET | `/api/v1/sessions` | live sessions (from the agent) |
 | GET | `/api/v1/stats` | traffic report (below) |

@@ -3,13 +3,13 @@ package web
 
 import (
 	"context"
-	"crypto/subtle"
 	"log/slog"
 	"net/http"
-	"strings"
+	"net/netip"
 	"time"
 
 	"github.com/shuricksumy/tunnelward/internal/api"
+	"github.com/shuricksumy/tunnelward/internal/auth"
 	"github.com/shuricksumy/tunnelward/internal/history"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
 	"github.com/shuricksumy/tunnelward/internal/version"
@@ -24,13 +24,19 @@ type AgentClient interface {
 
 // Deps are the web server's dependencies.
 type Deps struct {
-	Agent AgentClient
-	Stats *history.Stats
-	// APIToken protects /api/v1/*; when empty the API answers 401.
+	Agent   AgentClient
+	Stats   *history.Stats
+	Auth    *auth.Service
+	Limiter *auth.Limiter
+	// APIToken optionally allows scripts with "Authorization: Bearer"; empty = off.
 	APIToken string
-	Location *time.Location
-	Log      *slog.Logger
-	Now      func() time.Time // nil = time.Now
+	// CookieSecure marks the session cookie Secure (HTTPS only).
+	CookieSecure bool
+	// TrustedProxies may set X-Forwarded-For (for login throttling and logs).
+	TrustedProxies []netip.Prefix
+	Location       *time.Location
+	Log            *slog.Logger
+	Now            func() time.Time // nil = time.Now
 }
 
 // Server is the web HTTP server.
@@ -45,6 +51,9 @@ func New(d Deps) *Server {
 	}
 	if d.Now == nil {
 		d.Now = time.Now
+	}
+	if d.Limiter == nil {
+		d.Limiter = &auth.Limiter{}
 	}
 	return &Server{Deps: d}
 }
@@ -62,30 +71,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, apiHealth())
 	})
-	mux.Handle("/api/", s.requireToken(api))
-	return httpx.LogRequests(s.Log, mux)
+	s.registerAuthRoutes(mux, api)
+	mux.Handle("/api/", s.requireAuth(api))
+	return httpx.LogRequests(s.Log, securityHeaders(mux))
 }
 
 func apiHealth() api.Health { return api.Health{Status: "ok"} }
-
-// requireToken checks "Authorization: Bearer <TW_WEB_API_TOKEN>".
-// Temporary until admin login exists; never open without a token.
-func (s *Server) requireToken(next http.Handler) http.Handler {
-	want := []byte(s.APIToken)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if len(want) == 0 {
-			httpx.WriteError(w, http.StatusUnauthorized, "API disabled: set TW_WEB_API_TOKEN")
-			return
-		}
-		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !ok || subtle.ConstantTimeCompare([]byte(got), want) != 1 {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="tunnelward"`)
-			httpx.WriteError(w, http.StatusUnauthorized, "invalid or missing API token")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	st := api.Status{WebVersion: version.Version}

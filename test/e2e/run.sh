@@ -27,7 +27,7 @@ export TW_AGENT_TOKEN=$TOKEN TW_AGENT_LISTEN=127.0.0.1:19090 \
 	TW_OPENVPN_DIR=$WORK TW_PKI_DIR=$WORK/pki TW_CRL_COPIES=- \
 	TW_OPENVPN_MGMT=127.0.0.1:12080 \
 	TW_WEB_LISTEN=127.0.0.1:18080 TW_AGENT_URL=$API TW_DB_PATH=$WORK/tw.db \
-	TW_WEB_API_TOKEN=e2e-web-token TW_POLL_INTERVAL=5s TW_TZ=UTC
+	TW_WEB_API_TOKEN=e2e-web-token TW_POLL_INTERVAL=5s TW_TZ=UTC TW_COOKIE_SECURE=false
 WEB=http://127.0.0.1:18080
 webapi() { curl -fsS -H "Authorization: Bearer e2e-web-token" "$@"; }
 
@@ -41,7 +41,16 @@ log "start web (records session history every 5s)"
 "$BIN" web >"$WORK/web.log" 2>&1 &
 PIDS+=($!)
 for _ in $(seq 50); do curl -fs "$WEB/healthz" >/dev/null 2>&1 && break; sleep 0.1; done
-curl -s -o /dev/null -w "%{http_code}" "$WEB/api/v1/stats" | grep -q 401 || fail "web API open without token"
+curl -s -o /dev/null -w "%{http_code}" "$WEB/api/v1/stats" | grep -q 401 || fail "web API open without login"
+TW_ADMIN_PASSWORD=e2e-admin-password "$BIN" user add admin >/dev/null
+JAR=$WORK/cookies
+code=$(curl -s -o /dev/null -w "%{http_code}" -c "$JAR" -H "Content-Type: application/json" \
+	-d '{"username":"admin","password":"wrong-password"}' "$WEB/api/v1/auth/login")
+[[ $code == 401 ]] || fail "wrong admin password accepted ($code)"
+curl -fsS -c "$JAR" -H "Content-Type: application/json" \
+	-d '{"username":"admin","password":"e2e-admin-password"}' "$WEB/api/v1/auth/login" >/dev/null || fail "admin login failed"
+curl -fsS -b "$JAR" "$WEB/api/v1/auth/me" | grep -q '"username":"admin"' || fail "session cookie not accepted"
+log "admin logged in"
 
 log "issue server and client certificates"
 api -d '{"name":"server","kind":"server"}' "$API/v1/certs" >/dev/null
@@ -158,7 +167,7 @@ connect "$WORK/bob.ovpn" "$WORK/client6.log" || fail "bob could not connect with
 
 log "session history: alice's sessions and traffic were recorded"
 sleep 6
-webapi "$WEB/api/v1/stats?preset=today" >"$WORK/stats.json"
+curl -fsS -b "$JAR" "$WEB/api/v1/stats?preset=today" >"$WORK/stats.json" # as logged-in admin
 python3 - "$WORK/stats.json" <<'PY' || fail "stats: $(cat "$WORK/stats.json")"
 import json, sys
 r = json.load(open(sys.argv[1]))

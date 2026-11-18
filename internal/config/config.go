@@ -7,6 +7,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
@@ -49,9 +50,15 @@ type Web struct {
 	DBPath string
 	// AgentTimeout bounds each call to the agent.           TW_AGENT_TIMEOUT
 	AgentTimeout time.Duration
-	// APIToken protects /api/v1/* (Authorization: Bearer)
-	// until admin login exists; API disabled if empty.    TW_WEB_API_TOKEN
+	// APIToken optionally lets scripts call /api/v1/* with
+	// "Authorization: Bearer"; disabled if empty.         TW_WEB_API_TOKEN
 	APIToken string
+	// CookieSecure marks the login cookie HTTPS-only.     TW_COOKIE_SECURE (default true)
+	CookieSecure bool
+	// TrustedProxies may set X-Forwarded-For (CIDRs).     TW_TRUSTED_PROXIES
+	TrustedProxies []netip.Prefix
+	// SessionIdle logs out inactive admins.               TW_SESSION_IDLE (default 12h)
+	SessionIdle time.Duration
 	// Location for day/month/year boundaries in reports.  TW_TZ (IANA, default local)
 	Location *time.Location
 	// PollInterval for recording session history.         TW_POLL_INTERVAL
@@ -97,15 +104,34 @@ func LoadWeb() (Web, error) {
 			return Web{}, fmt.Errorf("TW_TZ: %w", err)
 		}
 	}
+	idle, err := time.ParseDuration(env("TW_SESSION_IDLE", "12h"))
+	if err != nil || idle < time.Minute {
+		return Web{}, fmt.Errorf("TW_SESSION_IDLE must be a duration of at least 1m")
+	}
+	var proxies []netip.Prefix
+	for _, p := range list(env("TW_TRUSTED_PROXIES", "-")) {
+		pfx, err := netip.ParsePrefix(p)
+		if err != nil {
+			addr, err2 := netip.ParseAddr(p)
+			if err2 != nil {
+				return Web{}, fmt.Errorf("TW_TRUSTED_PROXIES: %q is not a CIDR or IP", p)
+			}
+			pfx = netip.PrefixFrom(addr, addr.BitLen())
+		}
+		proxies = append(proxies, pfx.Masked())
+	}
 	c := Web{
-		Listen:       env("TW_WEB_LISTEN", ":8080"),
-		AgentURL:     env("TW_AGENT_URL", "http://127.0.0.1:9090"),
-		AgentToken:   os.Getenv("TW_AGENT_TOKEN"),
-		DBPath:       env("TW_DB_PATH", "./data/tunnelward.db"),
-		AgentTimeout: timeout,
-		APIToken:     os.Getenv("TW_WEB_API_TOKEN"),
-		Location:     loc,
-		PollInterval: poll,
+		Listen:         env("TW_WEB_LISTEN", ":8080"),
+		AgentURL:       env("TW_AGENT_URL", "http://127.0.0.1:9090"),
+		AgentToken:     os.Getenv("TW_AGENT_TOKEN"),
+		DBPath:         env("TW_DB_PATH", "./data/tunnelward.db"),
+		AgentTimeout:   timeout,
+		APIToken:       os.Getenv("TW_WEB_API_TOKEN"),
+		Location:       loc,
+		PollInterval:   poll,
+		CookieSecure:   env("TW_COOKIE_SECURE", "true") != "false",
+		TrustedProxies: proxies,
+		SessionIdle:    idle,
 	}
 	if c.AgentToken == "" {
 		return c, ErrNoToken
