@@ -44,7 +44,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		s.queryError(w, err)
 		return
 	}
-	rep, err := s.Stats.Report(r.Context(), q)
+	rep, err := s.stats(r).Report(r.Context(), q)
 	if err != nil {
 		s.queryError(w, err)
 		return
@@ -58,7 +58,7 @@ func (s *Server) handleStatsCSV(w http.ResponseWriter, r *http.Request) {
 		s.queryError(w, err)
 		return
 	}
-	rep, err := s.Stats.Report(r.Context(), q)
+	rep, err := s.stats(r).Report(r.Context(), q)
 	if err != nil {
 		s.queryError(w, err)
 		return
@@ -89,7 +89,7 @@ func (s *Server) handleHistorySessions(w http.ResponseWriter, r *http.Request) {
 		s.queryError(w, fmt.Errorf("%w: to is before from", history.ErrBadQuery))
 		return
 	}
-	list, err := s.Stats.Sessions(r.Context(), q.Name, from, to, limit)
+	list, err := s.stats(r).Sessions(r.Context(), q.Name, from, to, limit)
 	if err != nil {
 		s.queryError(w, err)
 		return

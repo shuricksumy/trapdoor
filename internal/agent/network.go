@@ -16,9 +16,9 @@ import (
 )
 
 func (s *Server) registerNetworkRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/network", s.handleServerNetwork)
-	mux.HandleFunc("GET /v1/certs/{name}/network", s.handleGetClientNetwork)
-	mux.HandleFunc("PUT /v1/certs/{name}/network", s.handleSetClientNetwork)
+	mux.HandleFunc("GET /network", s.handleServerNetwork)
+	mux.HandleFunc("GET /certs/{name}/network", s.handleGetClientNetwork)
+	mux.HandleFunc("PUT /certs/{name}/network", s.handleSetClientNetwork)
 }
 
 func (s *Server) serverConf() (ccdnet.Server, error) {

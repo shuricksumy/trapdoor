@@ -27,8 +27,8 @@ import (
 const serverCertName = "server"
 
 func (s *Server) registerSetupRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/setup", s.handleSetupStatus)
-	mux.HandleFunc("POST /v1/setup", s.handleSetup)
+	mux.HandleFunc("GET /setup", s.handleSetupStatus)
+	mux.HandleFunc("POST /setup", s.handleSetup)
 }
 
 func (s *Server) setupStatus(ctx context.Context) api.SetupStatus {

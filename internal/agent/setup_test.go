@@ -29,9 +29,9 @@ func TestSetup(t *testing.T) {
 	fm := &fakeMgmt{}
 	s.mgmt = fm
 	s.restartWait = 100 * time.Millisecond
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(serve(s))
 	t.Cleanup(srv.Close)
-	c := NewClient(srv.URL, "secret", 30*time.Second)
+	c := NewClient(srv.URL, "secret", 30*time.Second).Server(DefaultServerID)
 	ctx := context.Background()
 
 	st, err := c.SetupStatus(ctx)
@@ -82,9 +82,9 @@ func TestSetup(t *testing.T) {
 	s2 := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	s2.mgmt = &fakeMgmt{down: true}
 	s2.restartWait = 100 * time.Millisecond
-	srv2 := httptest.NewServer(s2.Handler())
+	srv2 := httptest.NewServer(serve(s2))
 	t.Cleanup(srv2.Close)
-	res, err = NewClient(srv2.URL, "secret", 30*time.Second).Setup(ctx, api.SetupRequest{PublicHost: "203.0.113.5", TLS: "tls-auth"})
+	res, err = NewClient(srv2.URL, "secret", 30*time.Second).Server(DefaultServerID).Setup(ctx, api.SetupRequest{PublicHost: "203.0.113.5", TLS: "tls-auth"})
 	if err != nil || res.Running || !strings.Contains(res.ServerConf, "tls-auth ta.key 0") || !strings.Contains(res.ServerConf, "crl-verify pki/crl.pem") ||
 		strings.Contains(res.ServerConf, "user nobody") || len(res.Warnings) == 0 {
 		t.Errorf("not running: %+v, %v", res, err)
@@ -96,9 +96,9 @@ func TestSetupFixedPort(t *testing.T) {
 	cfg := config.Agent{Token: "secret", OpenVPNDir: dir, PKIDir: filepath.Join(dir, "pki"), CCDDir: filepath.Join(dir, "ccd"),
 		MgmtAddr: "127.0.0.1:2080", SetupPort: 1194, SetupProto: "udp", SetupPublicPort: 11194}
 	s := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(serve(s))
 	t.Cleanup(srv.Close)
-	c := NewClient(srv.URL, "secret", 5*time.Second)
+	c := NewClient(srv.URL, "secret", 5*time.Second).Server(DefaultServerID)
 	ctx := context.Background()
 	st, err := c.SetupStatus(ctx)
 	if err != nil || st.FixedPort != 1194 || st.FixedProto != "udp" || st.Defaults.PublicPort != 11194 || st.Defaults.Port != 1194 {

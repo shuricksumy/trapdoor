@@ -12,26 +12,26 @@ import (
 )
 
 func (s *Server) registerCertRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/certs", s.handleListCerts)
-	mux.HandleFunc("POST /api/v1/certs", s.handleIssueCert)
-	mux.HandleFunc("POST /api/v1/certs/renew", s.handleRenewMany)
-	mux.HandleFunc("GET /api/v1/certs/{name}", s.handleGetCert)
-	mux.HandleFunc("DELETE /api/v1/certs/{name}", s.handleRemoveCert)
-	mux.HandleFunc("POST /api/v1/certs/{name}/revoke", s.handleRevokeCert)
-	mux.HandleFunc("POST /api/v1/certs/{name}/unrevoke", s.handleUnrevokeCert)
-	mux.HandleFunc("POST /api/v1/certs/{name}/renew", s.handleRenewCert)
-	mux.HandleFunc("GET /api/v1/certs/{name}/ovpn", s.handleProfile)
-	mux.HandleFunc("DELETE /api/v1/certs/{name}/sessions", s.handleKillName)
-	mux.HandleFunc("DELETE /api/v1/sessions/{id}", s.handleKillSession)
-	mux.HandleFunc("GET /api/v1/certs/{name}/auth", s.handleGetClientAuth)
-	mux.HandleFunc("PUT /api/v1/certs/{name}/auth", s.handleUpdateClientAuth)
-	mux.HandleFunc("GET /api/v1/network", s.handleServerNetwork)
-	mux.HandleFunc("GET /api/v1/certs/{name}/network", s.handleGetClientNetwork)
-	mux.HandleFunc("PUT /api/v1/certs/{name}/network", s.handleSetClientNetwork)
+	mux.HandleFunc("GET /api/v1/servers/{server}/certs", s.handleListCerts)
+	mux.HandleFunc("POST /api/v1/servers/{server}/certs", s.handleIssueCert)
+	mux.HandleFunc("POST /api/v1/servers/{server}/certs/renew", s.handleRenewMany)
+	mux.HandleFunc("GET /api/v1/servers/{server}/certs/{name}", s.handleGetCert)
+	mux.HandleFunc("DELETE /api/v1/servers/{server}/certs/{name}", s.handleRemoveCert)
+	mux.HandleFunc("POST /api/v1/servers/{server}/certs/{name}/revoke", s.handleRevokeCert)
+	mux.HandleFunc("POST /api/v1/servers/{server}/certs/{name}/unrevoke", s.handleUnrevokeCert)
+	mux.HandleFunc("POST /api/v1/servers/{server}/certs/{name}/renew", s.handleRenewCert)
+	mux.HandleFunc("GET /api/v1/servers/{server}/certs/{name}/ovpn", s.handleProfile)
+	mux.HandleFunc("DELETE /api/v1/servers/{server}/certs/{name}/sessions", s.handleKillName)
+	mux.HandleFunc("DELETE /api/v1/servers/{server}/sessions/{id}", s.handleKillSession)
+	mux.HandleFunc("GET /api/v1/servers/{server}/certs/{name}/auth", s.handleGetClientAuth)
+	mux.HandleFunc("PUT /api/v1/servers/{server}/certs/{name}/auth", s.handleUpdateClientAuth)
+	mux.HandleFunc("GET /api/v1/servers/{server}/network", s.handleServerNetwork)
+	mux.HandleFunc("GET /api/v1/servers/{server}/certs/{name}/network", s.handleGetClientNetwork)
+	mux.HandleFunc("PUT /api/v1/servers/{server}/certs/{name}/network", s.handleSetClientNetwork)
 }
 
 func (s *Server) handleServerNetwork(w http.ResponseWriter, r *http.Request) {
-	n, err := s.Agent.ServerNetwork(r.Context())
+	n, err := s.agent(r).ServerNetwork(r.Context())
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -44,7 +44,7 @@ func (s *Server) handleGetClientNetwork(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	n, err := s.Agent.ClientNetwork(r.Context(), name)
+	n, err := s.agent(r).ClientNetwork(r.Context(), name)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -61,7 +61,7 @@ func (s *Server) handleSetClientNetwork(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	n, err := s.Agent.SetClientNetwork(r.Context(), name, req)
+	n, err := s.agent(r).SetClientNetwork(r.Context(), name, req)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -75,7 +75,7 @@ func (s *Server) handleGetClientAuth(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	st, err := s.Agent.ClientAuth(r.Context(), name)
+	st, err := s.agent(r).ClientAuth(r.Context(), name)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -92,7 +92,7 @@ func (s *Server) handleUpdateClientAuth(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	st, err := s.Agent.UpdateClientAuth(r.Context(), name, req)
+	st, err := s.agent(r).UpdateClientAuth(r.Context(), name, req)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -119,7 +119,7 @@ func (s *Server) name(w http.ResponseWriter, r *http.Request) (string, bool) {
 // audit logs a change with the user who made it.
 func (s *Server) audit(r *http.Request, action, target string) {
 	p := principal(r)
-	s.Log.Info("audit", "action", action, "target", target, "by", p.Username, "via", p.Method, "ip", s.clientIP(r))
+	s.Log.Info("audit", "server", r.PathValue("server"), "action", action, "target", target, "by", p.Username, "via", p.Method, "ip", s.clientIP(r))
 }
 
 // agentError forwards the agent's 4xx answers; anything else is a 502.
@@ -138,7 +138,7 @@ func (s *Server) agentError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) handleListCerts(w http.ResponseWriter, r *http.Request) {
-	certs, err := s.Agent.ListCerts(r.Context())
+	certs, err := s.agent(r).ListCerts(r.Context())
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -151,7 +151,7 @@ func (s *Server) handleGetCert(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	c, err := s.Agent.GetCert(r.Context(), name)
+	c, err := s.agent(r).GetCert(r.Context(), name)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -168,7 +168,7 @@ func (s *Server) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid certificate name")
 		return
 	}
-	c, err := s.Agent.IssueCert(r.Context(), req)
+	c, err := s.agent(r).IssueCert(r.Context(), req)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -182,7 +182,7 @@ func (s *Server) handleRevokeCert(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	c, err := s.Agent.RevokeCert(r.Context(), name)
+	c, err := s.agent(r).RevokeCert(r.Context(), name)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -196,7 +196,7 @@ func (s *Server) handleUnrevokeCert(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	c, err := s.Agent.UnrevokeCert(r.Context(), name)
+	c, err := s.agent(r).UnrevokeCert(r.Context(), name)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -214,7 +214,7 @@ func (s *Server) handleRenewCert(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength != 0 && !decodeJSON(w, r, &req) {
 		return
 	}
-	c, err := s.Agent.RenewCert(r.Context(), name, req.ValidityDays)
+	c, err := s.agent(r).RenewCert(r.Context(), name, req.ValidityDays)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -247,7 +247,7 @@ func (s *Server) handleRenewMany(w http.ResponseWriter, r *http.Request) {
 			results = append(results, res)
 			continue
 		}
-		c, err := s.Agent.RenewCert(r.Context(), name, req.ValidityDays)
+		c, err := s.agent(r).RenewCert(r.Context(), name, req.ValidityDays)
 		if err != nil {
 			var ae *agent.APIError
 			if errors.As(err, &ae) {
@@ -269,7 +269,7 @@ func (s *Server) handleRemoveCert(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.Agent.RemoveCert(r.Context(), name); err != nil {
+	if err := s.agent(r).RemoveCert(r.Context(), name); err != nil {
 		s.agentError(w, err)
 		return
 	}
@@ -282,7 +282,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	profile, err := s.Agent.Profile(r.Context(), name)
+	profile, err := s.agent(r).Profile(r.Context(), name)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -298,7 +298,7 @@ func (s *Server) handleKillName(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	n, err := s.Agent.KillName(r.Context(), name)
+	n, err := s.agent(r).KillName(r.Context(), name)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -313,7 +313,7 @@ func (s *Server) handleKillSession(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "session id must be a client ID number")
 		return
 	}
-	if err := s.Agent.KillSession(r.Context(), id); err != nil {
+	if err := s.agent(r).KillSession(r.Context(), id); err != nil {
 		s.agentError(w, err)
 		return
 	}

@@ -12,12 +12,12 @@ import (
 )
 
 func (s *Server) registerServerConfigRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/server/config", s.handleGetServerConfig)
-	mux.HandleFunc("POST /v1/server/config/check", s.handleCheckServerConfig)
-	mux.HandleFunc("PUT /v1/server/config", s.handleSaveServerConfig)
-	mux.HandleFunc("POST /v1/server/restart", s.handleRestart)
-	mux.HandleFunc("GET /v1/server/backups", s.handleBackups)
-	mux.HandleFunc("GET /v1/server/backups/{name}", s.handleGetBackup)
+	mux.HandleFunc("GET /server/config", s.handleGetServerConfig)
+	mux.HandleFunc("POST /server/config/check", s.handleCheckServerConfig)
+	mux.HandleFunc("PUT /server/config", s.handleSaveServerConfig)
+	mux.HandleFunc("POST /server/restart", s.handleRestart)
+	mux.HandleFunc("GET /server/backups", s.handleBackups)
+	mux.HandleFunc("GET /server/backups/{name}", s.handleGetBackup)
 }
 
 func toSettings(x serverconf.Settings) api.ServerSettings { return api.ServerSettings(x) }

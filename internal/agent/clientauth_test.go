@@ -28,9 +28,9 @@ func authClient(t *testing.T) (*Client, string) {
 	}
 	ccd := filepath.Join(dir, "ccd")
 	cfg := config.Agent{Token: "secret", OpenVPNDir: dir, CCDDir: ccd, TOTPIssuer: "Home VPN", MgmtAddr: "127.0.0.1:1"}
-	srv := httptest.NewServer(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), p).Handler())
+	srv := httptest.NewServer(serve(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), p)))
 	t.Cleanup(srv.Close)
-	return NewClient(srv.URL, "secret", 10*time.Second), ccd
+	return NewClient(srv.URL, "secret", 10*time.Second).Server(DefaultServerID), ccd
 }
 
 func TestClientAuthLifecycle(t *testing.T) {

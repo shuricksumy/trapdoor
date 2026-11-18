@@ -109,7 +109,7 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 	log.Info("listening", "addr", cfg.Listen, "version", version.Version)
 	srv := agent.New(cfg, log, p)
 	go srv.ApplyFirewallAtStart(ctx)
-	return httpx.Serve(ctx, l, srv.Handler())
+	return httpx.Serve(ctx, l, agent.NewHost(cfg.Token, log, srv).Handler())
 }
 
 func runWeb(ctx context.Context, log *slog.Logger) error {
@@ -130,9 +130,18 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	const agentID = "default" // multi-server later
-	col := &history.Collector{DB: db, Source: client, Agent: agentID, Interval: cfg.PollInterval, Log: log}
-	go col.Run(ctx)
+	poller := &history.Poller{DB: db, Interval: cfg.PollInterval, Log: log,
+		List: func(ctx context.Context) ([]string, error) {
+			info, err := client.Info(ctx)
+			ids := make([]string, 0, len(info.Servers))
+			for _, s := range info.Servers {
+				ids = append(ids, s.ID)
+			}
+			return ids, err
+		},
+		Source: func(id string) history.Source { return client.Server(id) },
+	}
+	go poller.Run(ctx)
 
 	authSvc := auth.New(db, auth.Options{IdleTimeout: cfg.SessionIdle})
 	if n, err := authSvc.CountUsers(ctx); err == nil && n == 0 {
@@ -142,7 +151,7 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 		log.Warn("TD_COOKIE_SECURE=false: login cookie is sent over plain HTTP")
 	}
 	srv := web.New(web.Deps{
-		Agent: client, Stats: &history.Stats{DB: db, Agent: agentID},
+		Agent: web.ClientAgent(client), Stats: &history.Stats{DB: db},
 		Auth: authSvc, APIToken: cfg.APIToken, CookieSecure: cfg.CookieSecure,
 		TrustedProxies: cfg.TrustedProxies, Location: cfg.Location, Log: log,
 		ExpiryWarnDays: cfg.ExpiryWarnDays,

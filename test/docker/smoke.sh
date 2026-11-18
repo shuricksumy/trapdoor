@@ -55,18 +55,18 @@ curl -fs "$WEB/healthz" >/dev/null || fail "web not healthy"
 curl -fs "$WEB/" | grep -q 'id="app"' || fail "UI not served"
 
 log "setup wizard: needed, container port fixed, then create the server"
-api "$WEB/api/v1/setup" >"$WORK/setup-status.json"
+api "$WEB/api/v1/servers/openvpn/setup" >"$WORK/setup-status.json"
 grep -q '"needed":true' "$WORK/setup-status.json" || fail "setup not needed: $(cat "$WORK/setup-status.json")"
 grep -q '"fixed_port":1194' "$WORK/setup-status.json" || fail "no fixed port: $(cat "$WORK/setup-status.json")"
 grep -q '"public_port":11194' "$WORK/setup-status.json" || fail "public port not from VPN_PORT"
 api -H "Content-Type: application/json" -m 90 \
 	-d '{"public_host":"127.0.0.1","public_port":11194,"subnet":"10.77.0.0/24","dns":["10.77.0.1"]}' \
-	"$WEB/api/v1/setup" >"$WORK/setup.json" || fail "setup failed"
+	"$WEB/api/v1/servers/openvpn/setup" >"$WORK/setup.json" || fail "setup failed"
 grep -q '"running":true' "$WORK/setup.json" || fail "OpenVPN not running after setup: $(cat "$WORK/setup.json")"
 dc logs openvpn | grep -q "NAT 10.77.0.0/255.255.255.0" || fail "NAT not derived from server.conf"
 sudo grep -q "^remote 127.0.0.1 11194$" "$WORK/openvpn/client-template.txt" || fail "client template"
 code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-	-d '{"public_host":"127.0.0.1"}' "$WEB/api/v1/setup")
+	-d '{"public_host":"127.0.0.1"}' "$WEB/api/v1/servers/openvpn/setup")
 [[ $code == 409 ]] || fail "second setup answered $code, want 409"
 
 log "agent reaches OpenVPN's management interface (shared network namespace)"
@@ -80,24 +80,24 @@ JAR=$WORK/jar
 curl -fsS -c "$JAR" -H "Content-Type: application/json" -d '{"username":"admin","password":"smoke-admin-password"}' "$WEB/api/v1/auth/login" >/dev/null || fail "login"
 
 log "issue alice through the UI's API and connect from the host"
-curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -d '{"name":"alice"}' "$WEB/api/v1/certs" >/dev/null
-curl -fsS -b "$JAR" "$WEB/api/v1/certs/alice/ovpn" >"$WORK/alice.ovpn" || fail "download profile"
+curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -d '{"name":"alice"}' "$WEB/api/v1/servers/openvpn/certs" >/dev/null
+curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/certs/alice/ovpn" >"$WORK/alice.ovpn" || fail "download profile"
 sudo openvpn --config "$WORK/alice.ovpn" >"$WORK/client.log" 2>&1 &
 CLIENT_PID=$!
 for _ in $(seq 30); do grep -q "Initialization Sequence Completed" "$WORK/client.log" 2>/dev/null && break; sleep 1; done
 grep -q "Initialization Sequence Completed" "$WORK/client.log" || fail "alice could not connect"
-for _ in $(seq 15); do curl -fsS -b "$JAR" "$WEB/api/v1/sessions" | grep -q '"name":"alice"' && break; sleep 1; done
-curl -fsS -b "$JAR" "$WEB/api/v1/sessions" | grep -q '"name":"alice"' || fail "alice not in live sessions"
+for _ in $(seq 15); do curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/sessions" | grep -q '"name":"alice"' && break; sleep 1; done
+curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/sessions" | grep -q '"name":"alice"' || fail "alice not in live sessions"
 ping -c 2 -W 2 10.77.0.1 >/dev/null || fail "no traffic through the tunnel"
 
 log "revoke disconnects alice"
-curl -fsS -b "$JAR" -H "Origin: $WEB" -X POST "$WEB/api/v1/certs/alice/revoke" >/dev/null
-for _ in $(seq 10); do curl -fsS -b "$JAR" "$WEB/api/v1/sessions" | grep -q '"name":"alice"' || break; sleep 1; done
-! curl -fsS -b "$JAR" "$WEB/api/v1/sessions" | grep -q '"name":"alice"' || fail "revoked alice still online"
+curl -fsS -b "$JAR" -H "Origin: $WEB" -X POST "$WEB/api/v1/servers/openvpn/certs/alice/revoke" >/dev/null
+for _ in $(seq 10); do curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/sessions" | grep -q '"name":"alice"' || break; sleep 1; done
+! curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/sessions" | grep -q '"name":"alice"' || fail "revoked alice still online"
 
 log "server config: change via the web API, restart through management (supervised SIGTERM)"
 wj() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" "$@"; }
-wj "$WEB/api/v1/server/config" >"$WORK/sc.json"
+wj "$WEB/api/v1/servers/openvpn/server/config" >"$WORK/sc.json"
 python3 - "$WORK/sc.json" >"$WORK/sc-new.json" <<'PY'
 import json, sys
 c = json.load(open(sys.argv[1]))
@@ -105,21 +105,21 @@ s = c["settings"]
 s["dns"] = ["9.9.9.9"]
 print(json.dumps({"base_version": c["version"], "settings": s}))
 PY
-wj -X PUT -d @"$WORK/sc-new.json" "$WEB/api/v1/server/config" >/dev/null || fail "save server config"
-wj -X POST -d '{"rollback":true}' "$WEB/api/v1/server/restart" >"$WORK/restart.json"
+wj -X PUT -d @"$WORK/sc-new.json" "$WEB/api/v1/servers/openvpn/server/config" >/dev/null || fail "save server config"
+wj -X POST -d '{"rollback":true}' "$WEB/api/v1/servers/openvpn/server/restart" >"$WORK/restart.json"
 grep -q '"ok":true' "$WORK/restart.json" || fail "restart: $(cat "$WORK/restart.json")"
 dc logs openvpn | grep -q "starting again (restart requested)" || fail "supervisor did not restart OpenVPN"
 api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "agent lost OpenVPN after restart (network namespace)"
 
 log "a config that passes the checks but cannot start is rolled back"
-wj "$WEB/api/v1/server/config" >"$WORK/sc2.json"
+wj "$WEB/api/v1/servers/openvpn/server/config" >"$WORK/sc2.json"
 python3 - "$WORK/sc2.json" >"$WORK/sc-bad.json" <<'PY'
 import json, sys
 c = json.load(open(sys.argv[1]))
 print(json.dumps({"base_version": c["version"], "raw": c["raw"] + "local 203.0.113.99\n"}))
 PY
-wj -X PUT -d @"$WORK/sc-bad.json" "$WEB/api/v1/server/config" >/dev/null || fail "save bad-at-start config"
-curl -sS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -m 150 -X POST -d '{"rollback":true}' "$WEB/api/v1/server/restart" >"$WORK/rollback.json"
+wj -X PUT -d @"$WORK/sc-bad.json" "$WEB/api/v1/servers/openvpn/server/config" >/dev/null || fail "save bad-at-start config"
+curl -sS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -m 150 -X POST -d '{"rollback":true}' "$WEB/api/v1/servers/openvpn/server/restart" >"$WORK/rollback.json"
 grep -q '"rolled_back":true' "$WORK/rollback.json" || fail "no rollback: $(cat "$WORK/rollback.json")"
 grep -q "running again" "$WORK/rollback.json" || fail "OpenVPN not back after rollback: $(cat "$WORK/rollback.json")"
 ! sudo grep -q "203.0.113.99" "$WORK/openvpn/server.conf" || fail "bad config still in place"
@@ -128,7 +128,7 @@ grep -q "9.9.9.9" "$WORK/openvpn/server.conf" || fail "rolled back to the wrong 
 log "access rules: written by the agent, applied by the openvpn container (TD_FIREWALL=file)"
 api -X PUT -H "Content-Type: application/json" -m 30 \
 	-d '{"enabled":true,"default":"deny","rules":[{"to":"10.77.0.1","proto":"icmp","action":"allow"}]}' \
-	"$WEB/api/v1/firewall" >"$WORK/fw.json" || fail "save access rules"
+	"$WEB/api/v1/servers/openvpn/firewall" >"$WORK/fw.json" || fail "save access rules"
 grep -q '"applied":true' "$WORK/fw.json" || fail "rules not applied: $(cat "$WORK/fw.json")"
 dc exec -T openvpn iptables -S TD-FWD | grep -q -- "-d 10.77.0.1/32 -p icmp -j ACCEPT" || fail "rule not in the container"
 dc exec -T openvpn iptables -C FORWARD -i tun+ -j TD-FWD || fail "no FORWARD jump"

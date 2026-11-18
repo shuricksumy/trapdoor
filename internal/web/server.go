@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/shuricksumy/trapdoor/internal/agent"
 	"github.com/shuricksumy/trapdoor/internal/api"
 	"github.com/shuricksumy/trapdoor/internal/auth"
 	"github.com/shuricksumy/trapdoor/internal/history"
@@ -16,10 +17,23 @@ import (
 	"github.com/shuricksumy/trapdoor/internal/webui"
 )
 
-// AgentClient is the subset of the agent API the web process uses.
+// Agent is the agent host: its servers, and a client for each.
 // Defined here so tests can supply a fake.
-type AgentClient interface {
+type Agent interface {
 	Info(ctx context.Context) (api.AgentInfo, error)
+	Server(id string) AgentClient
+}
+
+// ClientAgent adapts *agent.Client to Agent.
+func ClientAgent(c *agent.Client) Agent { return clientAgent{c} }
+
+type clientAgent struct{ *agent.Client }
+
+func (a clientAgent) Server(id string) AgentClient { return a.Client.Server(id) }
+
+// AgentClient is the per-server part of the agent API the web process uses.
+type AgentClient interface {
+	ServerInfo(ctx context.Context) (api.ServerInfo, error)
 	Sessions(ctx context.Context) (api.Sessions, error)
 	ListCerts(ctx context.Context) ([]api.Cert, error)
 	GetCert(ctx context.Context, name string) (api.Cert, error)
@@ -51,7 +65,9 @@ type AgentClient interface {
 
 // Deps are the web server's dependencies.
 type Deps struct {
-	Agent   AgentClient
+	Agent Agent
+	// Stats is the history database; its Agent field is set per request to
+	// the server in the URL.
 	Stats   *history.Stats
 	Auth    *auth.Service
 	Limiter *auth.Limiter
@@ -94,10 +110,10 @@ func New(d Deps) *Server {
 func (s *Server) Handler() http.Handler {
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/status", s.handleStatus)
-	api.HandleFunc("GET /api/v1/sessions", s.handleLiveSessions)
-	api.HandleFunc("GET /api/v1/stats", s.handleStats)
-	api.HandleFunc("GET /api/v1/stats.csv", s.handleStatsCSV)
-	api.HandleFunc("GET /api/v1/history/sessions", s.handleHistorySessions)
+	api.HandleFunc("GET /api/v1/servers/{server}/sessions", s.handleLiveSessions)
+	api.HandleFunc("GET /api/v1/servers/{server}/stats", s.handleStats)
+	api.HandleFunc("GET /api/v1/servers/{server}/stats.csv", s.handleStatsCSV)
+	api.HandleFunc("GET /api/v1/servers/{server}/history/sessions", s.handleHistorySessions)
 	s.registerCertRoutes(api)
 	s.registerServerRoutes(api)
 
@@ -119,6 +135,15 @@ func (s *Server) Handler() http.Handler {
 	return httpx.LogRequests(s.Log, securityHeaders(mux))
 }
 
+// agent returns the client for the server named in the request's URL.
+// An unknown id is answered by the agent with 404.
+func (s *Server) agent(r *http.Request) AgentClient { return s.Agent.Server(r.PathValue("server")) }
+
+// stats returns the history of the server named in the request's URL.
+func (s *Server) stats(r *http.Request) *history.Stats {
+	return &history.Stats{DB: s.Stats.DB, Agent: r.PathValue("server")}
+}
+
 func apiHealth() api.Health { return api.Health{Status: "ok"} }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +160,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLiveSessions(w http.ResponseWriter, r *http.Request) {
-	live, err := s.Agent.Sessions(r.Context())
+	live, err := s.agent(r).Sessions(r.Context())
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadGateway, err.Error())
 		return

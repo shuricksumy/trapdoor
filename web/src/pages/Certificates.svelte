@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { api, poll } from '../lib/api.js';
+  import { api, apiURL, poll } from '../lib/api.js';
   import { date, relative, certState } from '../lib/format.js';
   import { toast, route, setQuery, settings } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
@@ -275,7 +275,7 @@
               <td class="actions">
                 {#if c.current}
                   {#if c.st.key === 'valid' || c.st.key === 'expiring'}
-                    <a class="btn small" href="/api/v1/certs/{c.name}/ovpn" download="{c.name}.ovpn">Download profile</a>
+                    <a class="btn small" href={apiURL(`/certs/${encodeURIComponent(c.name)}/ovpn`)} download="{c.name}.ovpn">Download profile</a>
                   {/if}
                   <details class="menu">
                     <summary class="btn small ghost" aria-label="More actions for {c.name}">More</summary>

@@ -76,7 +76,7 @@ func TestLoginFlow(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"username":"admin"`) {
 		t.Fatalf("me = %d %s", rec.Code, rec.Body.String())
 	}
-	if rec := e.do(http.MethodGet, "/api/v1/stats", "", cookie(c)); rec.Code != http.StatusOK {
+	if rec := e.do(http.MethodGet, "/api/v1/servers/openvpn/stats", "", cookie(c)); rec.Code != http.StatusOK {
 		t.Errorf("stats with session = %d", rec.Code)
 	}
 

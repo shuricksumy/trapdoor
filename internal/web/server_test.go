@@ -24,8 +24,8 @@ import (
 	"github.com/shuricksumy/trapdoor/internal/store"
 )
 
-// fakeAgent overrides Info/Sessions; certificate calls go to a real agent
-// with a real PKI.
+// fakeAgent overrides Info and live sessions; certificate calls go to a
+// real agent with a real PKI.
 type fakeAgent struct {
 	*agent.Client
 	info     api.AgentInfo
@@ -34,8 +34,17 @@ type fakeAgent struct {
 }
 
 func (f *fakeAgent) Info(context.Context) (api.AgentInfo, error) { return f.info, f.err }
-func (f *fakeAgent) Sessions(context.Context) (api.Sessions, error) {
-	return api.Sessions{Sessions: f.sessions}, f.err
+func (f *fakeAgent) Server(id string) AgentClient {
+	return &fakeServer{Client: f.Client.Server(id), f: f}
+}
+
+type fakeServer struct {
+	*agent.Client
+	f *fakeAgent
+}
+
+func (s *fakeServer) Sessions(context.Context) (api.Sessions, error) {
+	return api.Sessions{Sessions: s.f.sessions}, s.f.err
 }
 
 const token = "test-token-0123456789"
@@ -63,15 +72,15 @@ func newTestEnv(t *testing.T, apiToken string) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ag := httptest.NewServer(agent.New(config.Agent{Token: "agent-secret", OpenVPNDir: t.TempDir(), CCDDir: t.TempDir(), TOTPIssuer: "trapdoor", MgmtAddr: "127.0.0.1:1"}, log, p).Handler())
+	ag := httptest.NewServer(agent.NewHost("agent-secret", log, agent.New(config.Agent{Token: "agent-secret", OpenVPNDir: t.TempDir(), CCDDir: t.TempDir(), TOTPIssuer: "trapdoor", MgmtAddr: "127.0.0.1:1"}, log, p)).Handler())
 	t.Cleanup(ag.Close)
 	e := &testEnv{t: t, clock: now, agent: &fakeAgent{
 		Client: agent.NewClient(ag.URL, "agent-secret", 5*time.Second),
-		info:   api.AgentInfo{Hostname: "vpn1"}}}
-	e.col = &history.Collector{DB: db, Source: e.agent, Agent: "default", Log: log,
+		info:   api.AgentInfo{Hostname: "vpn1", Servers: []api.ServerInfo{{ID: "openvpn", Type: api.TypeOpenVPN}}}}}
+	e.col = &history.Collector{DB: db, Source: e.agent.Server("openvpn"), Agent: "openvpn", Log: log,
 		Now: func() time.Time { return e.clock }}
 	e.auth = auth.New(db, auth.Options{})
-	e.h = New(Deps{Agent: e.agent, Stats: &history.Stats{DB: db, Agent: "default"},
+	e.h = New(Deps{Agent: e.agent, Stats: &history.Stats{DB: db},
 		Auth: e.auth, Limiter: &auth.Limiter{MaxFailures: 3, MaxUserFailures: 5},
 		APIToken: apiToken, CookieSecure: true,
 		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
@@ -113,7 +122,7 @@ func TestTokenRequired(t *testing.T) {
 	if rec := e.get("/healthz", ""); rec.Code != http.StatusOK {
 		t.Errorf("healthz = %d", rec.Code)
 	}
-	for _, p := range []string{"/api/v1/status", "/api/v1/stats", "/api/v1/stats.csv", "/api/v1/history/sessions", "/api/v1/sessions"} {
+	for _, p := range []string{"/api/v1/status", "/api/v1/servers/openvpn/stats", "/api/v1/servers/openvpn/stats.csv", "/api/v1/servers/openvpn/history/sessions", "/api/v1/servers/openvpn/sessions"} {
 		for _, tok := range []string{"", "wrong"} {
 			if rec := e.get(p, tok); rec.Code != http.StatusUnauthorized {
 				t.Errorf("%s with %q: %d, want 401", p, tok, rec.Code)
@@ -141,7 +150,7 @@ func TestStatus(t *testing.T) {
 	if st.AgentOK || st.AgentError == "" {
 		t.Errorf("agent down: %+v", st)
 	}
-	if rec := e.get("/api/v1/sessions", token); rec.Code != http.StatusBadGateway {
+	if rec := e.get("/api/v1/servers/openvpn/sessions", token); rec.Code != http.StatusBadGateway {
 		t.Errorf("live sessions with agent down = %d, want 502", rec.Code)
 	}
 }
@@ -157,7 +166,7 @@ func TestStatsEndpoints(t *testing.T) {
 	e.poll(day.Add(time.Minute))
 
 	// Default range = this month (now is 2026-11-18).
-	rep := decode[history.Report](t, e.get("/api/v1/stats", token))
+	rep := decode[history.Report](t, e.get("/api/v1/servers/openvpn/stats", token))
 	if rep.From != "2026-11-01" || rep.To != "2026-11-18" || rep.Total.Upload != 1000 || rep.Total.Download != 5000 {
 		t.Errorf("default report = %+v", rep.Total)
 	}
@@ -165,23 +174,23 @@ func TestStatsEndpoints(t *testing.T) {
 		t.Errorf("users = %+v", rep.Users)
 	}
 
-	rep = decode[history.Report](t, e.get("/api/v1/stats?preset=this_year&group=month&name=alice", token))
+	rep = decode[history.Report](t, e.get("/api/v1/servers/openvpn/stats?preset=this_year&group=month&name=alice", token))
 	if len(rep.Series) != 11 || rep.Series[10].Period != "2026-11" || rep.Series[10].Download != 5000 {
 		t.Errorf("monthly = %+v", rep.Series)
 	}
-	rep = decode[history.Report](t, e.get("/api/v1/stats?from=2026-10-01&to=2026-10-31", token))
+	rep = decode[history.Report](t, e.get("/api/v1/servers/openvpn/stats?from=2026-10-01&to=2026-10-31", token))
 	if rep.Total.Upload != 0 || len(rep.Series) != 31 {
 		t.Errorf("october = %+v (%d points)", rep.Total, len(rep.Series))
 	}
 
 	for _, bad := range []string{"?from=2026-11-01", "?from=x&to=y", "?preset=forever", "?group=week",
 		"?from=2026-11-05&to=2026-11-01", "?name=../x"} {
-		if rec := e.get("/api/v1/stats"+bad, token); rec.Code != http.StatusBadRequest {
+		if rec := e.get("/api/v1/servers/openvpn/stats"+bad, token); rec.Code != http.StatusBadRequest {
 			t.Errorf("%s: %d, want 400", bad, rec.Code)
 		}
 	}
 
-	rec := e.get("/api/v1/stats.csv?from=2026-11-01&to=2026-11-30", token)
+	rec := e.get("/api/v1/servers/openvpn/stats.csv?from=2026-11-01&to=2026-11-30", token)
 	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "trapdoor-2026-11-01_2026-11-30.csv") {
 		t.Errorf("Content-Disposition = %q", cd)
 	}
@@ -197,7 +206,7 @@ func TestStatsEndpoints(t *testing.T) {
 		t.Errorf("csv = %v", records)
 	}
 
-	list := decode[[]history.Session](t, e.get("/api/v1/history/sessions?preset=this_month&name=alice", token))
+	list := decode[[]history.Session](t, e.get("/api/v1/servers/openvpn/history/sessions?preset=this_month&name=alice", token))
 	if len(list) != 1 || list[0].Upload != 1000 || list[0].DurationSec != 30 || list[0].DisconnectedAt == nil {
 		t.Errorf("history sessions = %+v", list)
 	}

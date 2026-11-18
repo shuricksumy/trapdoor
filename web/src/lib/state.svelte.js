@@ -41,6 +41,30 @@ addEventListener('click', (e) => {
 
 export const session = $state({ user: null, checked: false });
 
+// VPN servers (from /api/v1/status) and the one the pages show.
+export const servers = $state({ list: [], current: '' });
+
+export function selectServer(id) {
+  servers.current = id;
+  try {
+    localStorage.setItem('td-server', id);
+  } catch {
+    /* private mode: keep for this visit only */
+  }
+}
+
+/** Pick the remembered server if it still exists, else the first one. */
+export function setServers(list) {
+  servers.list = list;
+  let saved = '';
+  try {
+    saved = localStorage.getItem('td-server') || '';
+  } catch {
+    /* ignore */
+  }
+  servers.current = list.some((s) => s.id === saved) ? saved : (list[0]?.id ?? '');
+}
+
 // Server-side settings shown in the UI (from /api/v1/status).
 export const settings = $state({ expiryWarnDays: 30, setupNeeded: false });
 

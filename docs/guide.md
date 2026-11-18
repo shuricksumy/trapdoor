@@ -43,7 +43,7 @@ existing ones are reused, new ones are created with `openvpn --genkey` (`TD_OPEN
 
 ## Client two-factor login
 
-Per client, in the UI (Clients → More → Two-factor login) or `PUT /api/v1/certs/{name}/auth`:
+Per client, in the UI (Clients → More → Two-factor login) or `PUT /api/v1/servers/openvpn/certs/{name}/auth`:
 an authenticator code (TOTP, HMAC-SHA256, 6 digits, 30 s) and/or a static password. The
 device logs in with username = its certificate name and password = static password followed
 by the code. OpenVPN checks it with trapdoor:
@@ -71,7 +71,7 @@ Use an authenticator app that supports SHA-256 codes (some apps only do SHA-1).
 
 ## Server configuration
 
-**Server** page (or `/api/v1/server/config`): a form for the common options (port, protocol,
+**Server** page (or `/api/v1/servers/openvpn/server/config`): a form for the common options (port, protocol,
 VPN subnet, topology, DNS and search domain for clients, full tunnel, client-to-client,
 duplicate-cn, max clients, server routes, routes pushed to everyone) and a raw editor for
 the whole `server.conf`. Every other line and comment in the file is kept.
@@ -95,7 +95,7 @@ the whole `server.conf`. Every other line and comment in the file is kept.
   and logged by the web process at start and once a day; the CA is flagged 90 days ahead
   (when it expires, every client stops working at once).
 - Clients → select several (or "Select them" on the banner) → **Renew selected**, or
-  `POST /api/v1/certs/renew {"names":[…],"validity_days":…}` with a result per name.
+  `POST /api/v1/servers/openvpn/certs/renew {"names":[…],"validity_days":…}` with a result per name.
 - Renewing keeps each key; a client's old certificate is revoked, so every renewed device
   needs its new profile.
 - Renewing the **server** certificate keeps the old one valid (moved to `renewed/issued/`, as
@@ -103,7 +103,7 @@ the whole `server.conf`. Every other line and comment in the file is kept.
 
 ## Client network settings
 
-Per client, in the UI (Clients → More → Network) or `PUT /api/v1/certs/{name}/network`:
+Per client, in the UI (Clients → More → Network) or `PUT /api/v1/servers/openvpn/certs/{name}/network`:
 
 | Setting | Written to `ccd/<name>` |
 |---|---|

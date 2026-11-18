@@ -10,21 +10,21 @@ import (
 )
 
 func (s *Server) registerServerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/server/config", s.handleGetServerConfig)
-	mux.HandleFunc("POST /api/v1/server/config/check", s.handleCheckServerConfig)
-	mux.HandleFunc("PUT /api/v1/server/config", s.handleSaveServerConfig)
-	mux.HandleFunc("POST /api/v1/server/restart", s.handleRestartServer)
-	mux.HandleFunc("GET /api/v1/server/backups", s.handleConfigBackups)
-	mux.HandleFunc("GET /api/v1/server/backups/{name}", s.handleConfigBackup)
-	mux.HandleFunc("GET /api/v1/setup", s.handleSetupStatus)
-	mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
-	mux.HandleFunc("GET /api/v1/firewall", s.handleGetFirewall)
-	mux.HandleFunc("PUT /api/v1/firewall", s.handleSetFirewall)
-	mux.HandleFunc("POST /api/v1/firewall/addresses", s.handleAssignAddresses)
+	mux.HandleFunc("GET /api/v1/servers/{server}/server/config", s.handleGetServerConfig)
+	mux.HandleFunc("POST /api/v1/servers/{server}/server/config/check", s.handleCheckServerConfig)
+	mux.HandleFunc("PUT /api/v1/servers/{server}/server/config", s.handleSaveServerConfig)
+	mux.HandleFunc("POST /api/v1/servers/{server}/server/restart", s.handleRestartServer)
+	mux.HandleFunc("GET /api/v1/servers/{server}/server/backups", s.handleConfigBackups)
+	mux.HandleFunc("GET /api/v1/servers/{server}/server/backups/{name}", s.handleConfigBackup)
+	mux.HandleFunc("GET /api/v1/servers/{server}/setup", s.handleSetupStatus)
+	mux.HandleFunc("POST /api/v1/servers/{server}/setup", s.handleSetup)
+	mux.HandleFunc("GET /api/v1/servers/{server}/firewall", s.handleGetFirewall)
+	mux.HandleFunc("PUT /api/v1/servers/{server}/firewall", s.handleSetFirewall)
+	mux.HandleFunc("POST /api/v1/servers/{server}/firewall/addresses", s.handleAssignAddresses)
 }
 
 func (s *Server) handleGetServerConfig(w http.ResponseWriter, r *http.Request) {
-	c, err := s.Agent.ServerConfig(r.Context())
+	c, err := s.agent(r).ServerConfig(r.Context())
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -37,7 +37,7 @@ func (s *Server) handleCheckServerConfig(w http.ResponseWriter, r *http.Request)
 	if !decodeJSON(w, r, &u) {
 		return
 	}
-	c, err := s.Agent.CheckServerConfig(r.Context(), u)
+	c, err := s.agent(r).CheckServerConfig(r.Context(), u)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -51,7 +51,7 @@ func (s *Server) handleSaveServerConfig(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &u) {
 		return
 	}
-	chk, err := s.Agent.CheckServerConfig(r.Context(), u)
+	chk, err := s.agent(r).CheckServerConfig(r.Context(), u)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -65,7 +65,7 @@ func (s *Server) handleSaveServerConfig(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	c, err := s.Agent.SaveServerConfig(r.Context(), u)
+	c, err := s.agent(r).SaveServerConfig(r.Context(), u)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -80,7 +80,7 @@ func (s *Server) handleRestartServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "server.restart", "openvpn")
-	res, err := s.Agent.RestartServer(r.Context(), req)
+	res, err := s.agent(r).RestartServer(r.Context(), req)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -92,7 +92,7 @@ func (s *Server) handleRestartServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConfigBackups(w http.ResponseWriter, r *http.Request) {
-	list, err := s.Agent.ConfigBackups(r.Context())
+	list, err := s.agent(r).ConfigBackups(r.Context())
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -101,7 +101,7 @@ func (s *Server) handleConfigBackups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConfigBackup(w http.ResponseWriter, r *http.Request) {
-	raw, err := s.Agent.ConfigBackup(r.Context(), r.PathValue("name"))
+	raw, err := s.agent(r).ConfigBackup(r.Context(), r.PathValue("name"))
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -112,7 +112,7 @@ func (s *Server) handleConfigBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
-	st, err := s.Agent.SetupStatus(r.Context())
+	st, err := s.agent(r).SetupStatus(r.Context())
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -126,7 +126,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "server.setup", req.PublicHost)
-	res, err := s.Agent.Setup(r.Context(), req)
+	res, err := s.agent(r).Setup(r.Context(), req)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -135,7 +135,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetFirewall(w http.ResponseWriter, r *http.Request) {
-	st, err := s.Agent.Firewall(r.Context())
+	st, err := s.agent(r).Firewall(r.Context())
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -148,7 +148,7 @@ func (s *Server) handleSetFirewall(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &p) {
 		return
 	}
-	st, err := s.Agent.SetFirewall(r.Context(), p)
+	st, err := s.agent(r).SetFirewall(r.Context(), p)
 	if err != nil {
 		s.agentError(w, err)
 		return
@@ -162,7 +162,7 @@ func (s *Server) handleAssignAddresses(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	st, err := s.Agent.AssignAddresses(r.Context(), req.Names)
+	st, err := s.agent(r).AssignAddresses(r.Context(), req.Names)
 	if err != nil {
 		s.agentError(w, err)
 		return

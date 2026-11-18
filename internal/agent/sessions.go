@@ -23,9 +23,9 @@ type Management interface {
 }
 
 func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/sessions", s.handleSessions)
-	mux.HandleFunc("DELETE /v1/sessions/{id}", s.handleKillSession)
-	mux.HandleFunc("DELETE /v1/certs/{name}/sessions", s.handleKillName)
+	mux.HandleFunc("GET /sessions", s.handleSessions)
+	mux.HandleFunc("DELETE /sessions/{id}", s.handleKillSession)
+	mux.HandleFunc("DELETE /certs/{name}/sessions", s.handleKillName)
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {

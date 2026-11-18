@@ -28,9 +28,9 @@ func certClient(t *testing.T, withPKI bool) *Client {
 		p = s
 	}
 	cfg := config.Agent{Token: "secret"}
-	srv := httptest.NewServer(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), p).Handler())
+	srv := httptest.NewServer(serve(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), p)))
 	t.Cleanup(srv.Close)
-	return NewClient(srv.URL, "secret", 10*time.Second)
+	return NewClient(srv.URL, "secret", 10*time.Second).Server(DefaultServerID)
 }
 
 func TestCertLifecycleOverHTTP(t *testing.T) {
@@ -110,7 +110,7 @@ func TestCertRawRequests(t *testing.T) {
 		{`not json`, http.StatusBadRequest},
 		{`{"name":"x"}`, http.StatusCreated},
 	} {
-		req, _ := http.NewRequest(http.MethodPost, c.base+"/v1/certs", strings.NewReader(tc.body))
+		req, _ := http.NewRequest(http.MethodPost, c.base+"/v1/servers/openvpn/certs", strings.NewReader(tc.body))
 		req.Header.Set(api.HeaderToken, "secret")
 		resp, err := c.http.Do(req)
 		if err != nil {
@@ -128,7 +128,7 @@ func TestCertsWithoutPKI(t *testing.T) {
 	if _, err := c.ListCerts(context.Background()); !IsStatus(err, http.StatusServiceUnavailable) {
 		t.Errorf("err = %v, want 503", err)
 	}
-	info, err := c.Info(context.Background())
+	info, err := c.ServerInfo(context.Background())
 	if err != nil || info.PKIReady {
 		t.Errorf("info = %+v, %v", info, err)
 	}
@@ -141,9 +141,9 @@ func TestProfileDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Agent{Token: "secret", OpenVPNDir: ovpnDir}
-	srv := httptest.NewServer(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), s).Handler())
+	srv := httptest.NewServer(serve(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), s)))
 	t.Cleanup(srv.Close)
-	c := NewClient(srv.URL, "secret", 10*time.Second)
+	c := NewClient(srv.URL, "secret", 10*time.Second).Server(DefaultServerID)
 	ctx := context.Background()
 
 	if _, err := c.IssueCert(ctx, api.IssueCertRequest{Name: "alice"}); err != nil {
@@ -172,7 +172,7 @@ func TestProfileDownload(t *testing.T) {
 		}
 	}
 
-	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/v1/certs/alice/ovpn", nil)
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/v1/servers/openvpn/certs/alice/ovpn", nil)
 	req.Header.Set(api.HeaderToken, "secret")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

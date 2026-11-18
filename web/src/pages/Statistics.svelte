@@ -1,5 +1,5 @@
 <script>
-  import { api } from '../lib/api.js';
+  import { api, apiURL } from '../lib/api.js';
   import { bytes, duration } from '../lib/format.js';
   import { route, setQuery } from '../lib/state.svelte.js';
   import BarChart from '../lib/BarChart.svelte';
@@ -81,7 +81,7 @@
     <p class="muted">How much each client sent and received, per {group}.</p>
   </div>
   {#if report}
-    <a class="btn" href="/api/v1/stats.csv?{params}" download>Export CSV</a>
+    <a class="btn" href={apiURL(`/stats.csv?${params}`)} download>Export CSV</a>
   {/if}
 </header>
 

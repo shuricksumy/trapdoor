@@ -61,9 +61,9 @@ func sessionClient(t *testing.T, fm *fakeMgmt) *Client {
 	}
 	s := New(config.Agent{Token: "secret"}, slog.New(slog.NewTextHandler(io.Discard, nil)), p)
 	s.mgmt = fm
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(serve(s))
 	t.Cleanup(srv.Close)
-	return NewClient(srv.URL, "secret", 5*time.Second)
+	return NewClient(srv.URL, "secret", 5*time.Second).Server(DefaultServerID)
 }
 
 func TestSessions(t *testing.T) {
@@ -87,7 +87,7 @@ func TestSessions(t *testing.T) {
 	if _, err := c.KillName(ctx, "a b"); !IsStatus(err, http.StatusBadRequest) {
 		t.Errorf("bad name: err = %v", err)
 	}
-	info, err := c.Info(ctx)
+	info, err := c.ServerInfo(ctx)
 	if err != nil || info.OpenVPNVersion != "OpenVPN 2.6.19" {
 		t.Errorf("info = %+v, %v", info, err)
 	}
@@ -123,7 +123,7 @@ func TestRevokeAndRemoveDisconnect(t *testing.T) {
 	if _, err := c.Sessions(ctx); !IsStatus(err, http.StatusBadGateway) {
 		t.Errorf("sessions with mgmt down: err = %v, want 502", err)
 	}
-	info, err := c.Info(ctx)
+	info, err := c.ServerInfo(ctx)
 	if err != nil || info.MgmtError == "" || info.OpenVPNVersion != "" {
 		t.Errorf("info with mgmt down = %+v, %v", info, err)
 	}
