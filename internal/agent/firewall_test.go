@@ -125,7 +125,10 @@ func TestFirewallFile(t *testing.T) {
 			case <-time.After(50 * time.Millisecond):
 			}
 			if data, err := os.ReadFile(filepath.Join(dir, "trapdoor-firewall.rules")); err == nil {
-				_ = os.WriteFile(filepath.Join(dir, "trapdoor-firewall.status"), []byte("ok "+firewall.Hash(string(data))+"\n"), 0o644)
+				// Atomically, like the entrypoint (tmp + mv): the agent must never see a half-written file.
+				status := filepath.Join(dir, "trapdoor-firewall.status")
+				_ = os.WriteFile(status+".tmp", []byte("ok "+firewall.Hash(string(data))+"\n"), 0o644)
+				_ = os.Rename(status+".tmp", status)
 			}
 		}
 	}()
