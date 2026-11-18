@@ -34,6 +34,16 @@ func TestHealthzNoToken(t *testing.T) {
 	}
 }
 
+func TestHealthCommand(t *testing.T) {
+	srv := testServer(t)
+	if err := NewClient(srv.URL, "", time.Second).Health(context.Background()); err != nil {
+		t.Errorf("health: %v", err)
+	}
+	if err := NewClient("http://127.0.0.1:1", "", time.Second).Health(context.Background()); err == nil {
+		t.Error("health of a dead address must fail")
+	}
+}
+
 func TestV1RequiresToken(t *testing.T) {
 	srv := testServer(t)
 	for _, tok := range []string{"", "wrong"} {
