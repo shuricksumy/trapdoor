@@ -20,6 +20,16 @@ import (
 type AgentClient interface {
 	Info(ctx context.Context) (api.AgentInfo, error)
 	Sessions(ctx context.Context) (api.Sessions, error)
+	ListCerts(ctx context.Context) ([]api.Cert, error)
+	GetCert(ctx context.Context, name string) (api.Cert, error)
+	IssueCert(ctx context.Context, req api.IssueCertRequest) (api.Cert, error)
+	RevokeCert(ctx context.Context, name string) (api.Cert, error)
+	UnrevokeCert(ctx context.Context, name string) (api.Cert, error)
+	RenewCert(ctx context.Context, name string, validityDays int) (api.Cert, error)
+	RemoveCert(ctx context.Context, name string) error
+	Profile(ctx context.Context, name string) ([]byte, error)
+	KillSession(ctx context.Context, clientID int64) error
+	KillName(ctx context.Context, name string) (int, error)
 }
 
 // Deps are the web server's dependencies.
@@ -66,6 +76,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/stats", s.handleStats)
 	api.HandleFunc("GET /api/v1/stats.csv", s.handleStatsCSV)
 	api.HandleFunc("GET /api/v1/history/sessions", s.handleHistorySessions)
+	s.registerCertRoutes(api)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

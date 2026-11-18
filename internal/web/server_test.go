@@ -15,13 +15,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shuricksumy/tunnelward/internal/agent"
 	"github.com/shuricksumy/tunnelward/internal/api"
 	"github.com/shuricksumy/tunnelward/internal/auth"
+	"github.com/shuricksumy/tunnelward/internal/config"
 	"github.com/shuricksumy/tunnelward/internal/history"
+	"github.com/shuricksumy/tunnelward/internal/pki"
 	"github.com/shuricksumy/tunnelward/internal/store"
 )
 
+// fakeAgent overrides Info/Sessions; certificate calls go to a real agent
+// with a real PKI.
 type fakeAgent struct {
+	*agent.Client
 	info     api.AgentInfo
 	err      error
 	sessions []api.Session
@@ -53,7 +59,15 @@ func newTestEnv(t *testing.T, apiToken string) *testEnv {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	e := &testEnv{t: t, agent: &fakeAgent{info: api.AgentInfo{Hostname: "vpn1"}}, clock: now}
+	p, err := pki.Init(filepath.Join(t.TempDir(), "pki"), pki.InitOptions{}, pki.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ag := httptest.NewServer(agent.New(config.Agent{Token: "agent-secret", OpenVPNDir: t.TempDir(), MgmtAddr: "127.0.0.1:1"}, log, p).Handler())
+	t.Cleanup(ag.Close)
+	e := &testEnv{t: t, clock: now, agent: &fakeAgent{
+		Client: agent.NewClient(ag.URL, "agent-secret", 5*time.Second),
+		info:   api.AgentInfo{Hostname: "vpn1"}}}
 	e.col = &history.Collector{DB: db, Source: e.agent, Agent: "default", Log: log,
 		Now: func() time.Time { return e.clock }}
 	e.auth = auth.New(db, auth.Options{})
