@@ -485,6 +485,42 @@ func (s *Store) GenCRL(_ context.Context) error {
 	})
 }
 
+// Bundle implements PKI.
+func (s *Store) Bundle(_ context.Context, name string) (Bundle, error) {
+	var out Bundle
+	err := s.withLock(false, func() error {
+		entries, err := s.readIndex()
+		if err != nil {
+			return err
+		}
+		i := current(entries, name)
+		if i < 0 {
+			return fmt.Errorf("%w: %s", ErrNotFound, name)
+		}
+		if st := entries[i].status(s.now()); st != StatusValid {
+			return fmt.Errorf("%w: %s is %s", ErrNotValid, name, st)
+		}
+		cert, err := s.readCert(s.path("issued", name+".crt"))
+		if err != nil {
+			return err
+		}
+		if serialHex(cert.SerialNumber) != entries[i].Serial {
+			return fmt.Errorf("issued/%s.crt does not match index.txt serial %s", name, entries[i].Serial)
+		}
+		key, err := os.ReadFile(s.path("private", name+".key"))
+		if err != nil {
+			return fmt.Errorf("read key for %s: %w", name, err)
+		}
+		ca, err := os.ReadFile(s.path("ca.crt"))
+		if err != nil {
+			return err
+		}
+		out = Bundle{CA: ca, Cert: encodeCert(cert.Raw), Key: key}
+		return nil
+	})
+	return out, err
+}
+
 // ---- internals (callers hold the lock) ----
 
 func (s *Store) genCRL(entries []indexEntry) error {

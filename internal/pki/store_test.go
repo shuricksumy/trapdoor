@@ -398,3 +398,30 @@ func samePub(a, b crypto.PublicKey) bool {
 	k, ok := a.(interface{ Equal(crypto.PublicKey) bool })
 	return ok && k.Equal(b)
 }
+
+func TestBundle(t *testing.T) {
+	s, c := newTestStore(t, Options{})
+	if _, err := s.Issue(ctx(), IssueRequest{Name: "alice", Validity: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.Bundle(ctx(), "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if block, rest := pem.Decode(b.Cert); block == nil || block.Type != "CERTIFICATE" || len(rest) != 0 {
+		t.Error("Cert must be a single clean PEM block")
+	}
+	if _, err := decodeKey(b.Key, ""); err != nil {
+		t.Errorf("key: %v", err)
+	}
+	if _, err := decodeCert(b.CA); err != nil {
+		t.Errorf("CA: %v", err)
+	}
+	c.Add(2 * time.Hour)
+	if _, err := s.Bundle(ctx(), "alice"); !errors.Is(err, ErrNotValid) {
+		t.Errorf("expired: err = %v, want ErrNotValid", err)
+	}
+	if _, err := s.Bundle(ctx(), "nobody"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown: err = %v", err)
+	}
+}

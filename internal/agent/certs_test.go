@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -130,5 +131,65 @@ func TestCertsWithoutPKI(t *testing.T) {
 	info, err := c.Info(context.Background())
 	if err != nil || info.PKIReady {
 		t.Errorf("info = %+v, %v", info, err)
+	}
+}
+
+func TestProfileDownload(t *testing.T) {
+	ovpnDir := t.TempDir()
+	s, err := pki.Init(filepath.Join(ovpnDir, "easy-rsa/pki"), pki.InitOptions{}, pki.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Agent{Token: "secret", OpenVPNDir: ovpnDir}
+	srv := httptest.NewServer(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), s).Handler())
+	t.Cleanup(srv.Close)
+	c := NewClient(srv.URL, "secret", 10*time.Second)
+	ctx := context.Background()
+
+	if _, err := c.IssueCert(ctx, api.IssueCertRequest{Name: "alice"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Profile(ctx, "alice"); !IsStatus(err, http.StatusServiceUnavailable) {
+		t.Errorf("no template: err = %v, want 503", err)
+	}
+
+	for name, content := range map[string]string{
+		"client-template.txt": "client\nremote vpn.example.com 1194\n",
+		"server.conf":         "tls-crypt tc.key\n",
+		"tc.key":              "TC-KEY\n",
+	} {
+		if err := os.WriteFile(filepath.Join(ovpnDir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	profile, err := c.Profile(ctx, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"remote vpn.example.com 1194", "<cert>", "BEGIN PRIVATE KEY", "<tls-crypt>\nTC-KEY"} {
+		if !strings.Contains(string(profile), want) {
+			t.Errorf("profile missing %q", want)
+		}
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/v1/certs/alice/ovpn", nil)
+	req.Header.Set(api.HeaderToken, "secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if cd := resp.Header.Get("Content-Disposition"); cd != `attachment; filename="alice.ovpn"` {
+		t.Errorf("Content-Disposition = %q", cd)
+	}
+
+	if _, err := c.RevokeCert(ctx, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Profile(ctx, "alice"); !IsStatus(err, http.StatusConflict) {
+		t.Errorf("revoked: err = %v, want 409", err)
+	}
+	if _, err := c.Profile(ctx, "nobody"); !IsStatus(err, http.StatusNotFound) {
+		t.Errorf("unknown: err = %v, want 404", err)
 	}
 }

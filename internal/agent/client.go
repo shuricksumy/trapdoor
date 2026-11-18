@@ -104,6 +104,13 @@ func (c *Client) RemoveCert(ctx context.Context, name string) error {
 	return c.doJSON(ctx, http.MethodDelete, "/v1/certs/"+url.PathEscape(name), nil, nil)
 }
 
+// Profile returns the .ovpn client profile for name.
+func (c *Client) Profile(ctx context.Context, name string) ([]byte, error) {
+	var out []byte
+	err := c.doJSON(ctx, http.MethodGet, "/v1/certs/"+url.PathEscape(name)+"/ovpn", nil, &out)
+	return out, err
+}
+
 // GenCRL regenerates the CRL.
 func (c *Client) GenCRL(ctx context.Context) error {
 	return c.doJSON(ctx, http.MethodPost, "/v1/crl", nil, nil)
@@ -150,6 +157,10 @@ func (c *Client) doJSON(ctx context.Context, method, path string, in, out any) e
 	}
 	if out == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
+	}
+	if raw, ok := out.(*[]byte); ok {
+		*raw, err = io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		return err
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }

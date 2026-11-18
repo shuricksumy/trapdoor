@@ -61,6 +61,7 @@ Errors are JSON `{"error": "..."}` with 400 / 401 / 404 / 409 / 503.
 | POST | `/v1/certs/{name}/unrevoke` | – | cert |
 | POST | `/v1/certs/{name}/renew` | `{"validity_days"?}` | new cert (same key; old one revoked as superseded) |
 | DELETE | `/v1/certs/{name}` | – | 204; revokes and deletes key material, stays in CRL |
+| GET | `/v1/certs/{name}/ovpn` | – | `.ovpn` profile (409 unless the cert is valid) |
 | POST | `/v1/crl` | – | 204; regenerates `crl.pem` |
 
 Try it with a throw-away PKI:
@@ -71,6 +72,23 @@ export TW_AGENT_TOKEN=dev TW_PKI_DIR=/tmp/tw/pki TW_CRL_COPIES=-
 ./bin/tunnelward agent &
 curl -H "X-Tunnelward-Token: dev" -d '{"name":"alice"}' localhost:9090/v1/certs
 ```
+
+### Client profiles
+
+`.ovpn` files are built like openvpn-ui did, so existing servers produce the same files:
+`<TW_OPENVPN_DIR>/client-template.txt` + inline `<ca>`, `<cert>`, `<key>` + the
+control-channel key matching `server.conf` (`tls-crypt`, `tls-auth` with `key-direction 1`,
+or a per-client `tls-crypt-v2` key). tls-crypt-v2 client keys live in `keys-v2/<name>.key`;
+existing ones are reused, new ones are created with `openvpn --genkey` (`TW_OPENVPN_BIN`).
+
+## Tests
+
+```
+make test                # unit tests
+sudo test/e2e/run.sh     # real OpenVPN server + client on localhost (needs openvpn)
+```
+
+CI also runs PKI compatibility tests against real easyrsa + openssl.
 
 ## Configuration
 
