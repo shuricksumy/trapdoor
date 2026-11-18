@@ -57,3 +57,16 @@ test/docker/smoke.sh <image>   # the compose setup with a real VPN client
 
 Actions → Release → Run workflow on `main` → version, e.g. `1.0.0`. Release notes come from
 `docs/releases/v1.0.0.md` if it exists, otherwise GitHub writes them from the merged PRs.
+
+## Keeping the VPN software current
+
+- **OpenVPN, wireguard-tools, iptables and the Alpine base packages** come from Alpine
+  and have no pin. The *Rebuild for new OpenVPN / Alpine packages* workflow runs daily: it
+  asks the published `:latest` image whether Alpine has newer packages and, if so, starts
+  *Build and publish Docker image* without cache. The smoke test (real OpenVPN, WireGuard
+  and AmneziaWG clients) runs before the new `:latest` is pushed. The run summary shows
+  the versions in the image and the latest OpenVPN release upstream.
+- **AmneziaWG** (`amneziawg-go`, `amneziawg-tools`) is pinned in the Dockerfile
+  (`AMNEZIAWG_*_VERSION`, marked `# renovate:`). Renovate opens a PR for each new release
+  and merges it when CI is green; the push to `main` publishes `:latest`.
+- Released images (`X.Y.Z`, `X.Y`) are not rebuilt; a new release picks everything up.

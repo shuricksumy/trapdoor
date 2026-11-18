@@ -2,5 +2,31 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "github>shuricksumy/renovate-config"
+  ],
+  "customManagers": [
+    {
+      "description": "Versions pinned with a '# renovate:' comment above an ARG in the Dockerfile (AmneziaWG)",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\nARG \\w+=(?<currentValue>\\S+)"
+      ],
+      "versioningTemplate": "loose"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "AmneziaWG releases merge themselves once CI is green (the smoke test connects a real AmneziaWG client), so :latest follows them",
+      "matchDepNames": [
+        "amnezia-vpn/amneziawg-go",
+        "amnezia-vpn/amneziawg-tools"
+      ],
+      "labels": [
+        "amneziawg"
+      ],
+      "automerge": true
+    }
   ]
 }
