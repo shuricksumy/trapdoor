@@ -97,3 +97,28 @@ type Sessions struct {
 type Killed struct {
 	Killed int `json:"killed"`
 }
+
+// ClientAuth is a client's second-factor status. Secrets are never returned,
+// except Secret/URI right after a new TOTP key was created.
+type ClientAuth struct {
+	TOTP     bool   `json:"totp"`
+	TOTPUser string `json:"totp_user,omitempty"`
+	Static   bool   `json:"static_password"`
+	// LegacyStatic: the static password is stored in plain text (openvpn-ui);
+	// setting a new one stores it hashed.
+	LegacyStatic bool `json:"legacy_static,omitempty"`
+
+	Secret string `json:"secret,omitempty"`      // base32, only when just created
+	URI    string `json:"otpauth_uri,omitempty"` // for the QR code, only when just created
+}
+
+// ClientAuthUpdate is the body of PUT /v1/certs/{name}/auth.
+type ClientAuthUpdate struct {
+	// TOTP: "enable" (new key if none), "reset" (always a new key),
+	// "disable", or empty to keep as is.
+	TOTP string `json:"totp,omitempty"`
+	// StaticPassword sets a new static password (stored hashed).
+	StaticPassword string `json:"static_password,omitempty"`
+	// RemoveStatic removes the static password.
+	RemoveStatic bool `json:"remove_static,omitempty"`
+}

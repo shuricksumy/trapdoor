@@ -143,6 +143,9 @@ func (s *Server) handleRemoveCert(w http.ResponseWriter, r *http.Request) {
 	if err := s.gen.RemoveClient(name); err != nil {
 		s.log.Warn("remove client files", "name", name, "err", err)
 	}
+	if err := s.auth.Remove(name); err != nil {
+		s.log.Warn("remove ccd file", "name", name, "err", err)
+	}
 	s.log.Info("certificate removed", "name", name)
 	s.disconnect(r.Context(), name)
 	w.WriteHeader(http.StatusNoContent)

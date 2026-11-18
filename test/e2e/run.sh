@@ -175,6 +175,69 @@ curl -fsS -b "$JAR" "$WEB/api/v1/certs/carol/ovpn" >"$WORK/carol.ovpn" || fail "
 connect "$WORK/carol.ovpn" "$WORK/client7.log" || fail "carol could not connect"
 grep -q '"action":"cert.issue"\|action=cert.issue' "$WORK/web.log" || fail "no audit log line"
 
+log "2FA: second server checks logins with tunnelward auth-verify"
+mkdir -p "$WORK/ccd"
+cat >"$WORK/server-2fa.conf" <<CONF
+port 11941
+proto udp
+dev tun
+topology subnet
+server 10.98.0.0 255.255.255.0
+ca pki/ca.crt
+cert pki/issued/server.crt
+key pki/private/server.key
+dh none
+tls-crypt-v2 tls-crypt-v2.key
+crl-verify pki/crl.pem
+script-security 2
+auth-user-pass-verify "$BIN auth-verify --ccd $WORK/ccd" via-file
+keepalive 2 6
+verb 3
+CONF
+(cd "$WORK" && openvpn --config server-2fa.conf >"$WORK/server-2fa.log" 2>&1) &
+PIDS+=($!)
+wait_for 10 grep -q "Initialization Sequence Completed" "$WORK/server-2fa.log" || fail "2FA server did not start"
+
+# totp <key> hex|b32: current 6-digit code (HMAC-SHA256, 30 s), computed independently of tunnelward
+totp() {
+	python3 - "$1" "$2" <<'PY'
+import sys, hmac, hashlib, struct, time, base64
+k, fmt = sys.argv[1], sys.argv[2]
+key = bytes.fromhex(k) if fmt == "hex" else base64.b32decode(k + "=" * (-len(k) % 8))
+h = hmac.new(key, struct.pack(">Q", int(time.time()) // 30), hashlib.sha256).digest()
+o = h[-1] & 15
+print("%06d" % ((struct.unpack(">I", h[o:o + 4])[0] & 0x7FFFFFFF) % 1000000))
+PY
+}
+# profile2fa <name> <user> <password>: the name's profile for the 2FA server with credentials
+profile2fa() {
+	printf '%s\n%s\n' "$2" "$3" >"$WORK/$1-$2.creds"
+	sed 's/^remote 127.0.0.1 .*/remote 127.0.0.1 11941/' "$WORK/$1.ovpn" >"$WORK/$1-2fa.ovpn"
+	printf 'auth-user-pass %s\nauth-retry none\n' "$WORK/$1-$2.creds" >>"$WORK/$1-2fa.ovpn"
+	echo "$WORK/$1-2fa.ovpn"
+}
+
+webput() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT -d "$2" "$WEB/api/v1/certs/$1/auth"; }
+webput carol '{"totp":"enable","static_password":"carolpin"}' >"$WORK/carol-2fa.json" || fail "enable 2FA via web"
+SECRET=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["secret"])' "$WORK/carol-2fa.json")
+grep -q '"otpauth_uri":"otpauth://totp/' "$WORK/carol-2fa.json" || fail "no otpauth URI"
+
+connect "$(profile2fa carol carol "carolpin$(totp "$SECRET" b32)")" "$WORK/c2fa-ok.log" || fail "carol with password + code could not connect"
+log "carol connected with static password + authenticator code"
+connect "$(profile2fa carol carol "carolpin000000")" "$WORK/c2fa-bad.log" && fail "wrong code accepted"
+grep -q AUTH_FAILED "$WORK/c2fa-bad.log" || fail "wrong code: no AUTH_FAILED"
+log "wrong code refused"
+
+curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -d '{"name":"dan"}' "$WEB/api/v1/certs" >/dev/null
+curl -fsS -b "$JAR" "$WEB/api/v1/certs/dan/ovpn" >"$WORK/dan.ovpn"
+connect "$(profile2fa dan carol "carolpin$(totp "$SECRET" b32)")" "$WORK/c2fa-cross.log" && fail "carol's credentials worked with dan's certificate"
+log "carol's credentials refused on dan's certificate"
+
+HEXKEY=$(python3 -c 'import os; print(os.urandom(32).hex())')
+printf '#2FA OTP and/or static pass for auth.\n#2FA_KEY:%s\n#2FA_USER:dan\n#STATIC_PASS:danpin\n' "$HEXKEY" >"$WORK/ccd/dan"
+connect "$(profile2fa dan dan "danpin$(totp "$HEXKEY" hex)")" "$WORK/c2fa-legacy.log" || fail "openvpn-ui style ccd login failed"
+log "openvpn-ui style 2FA entry (hex key, plain static password) still works"
+
 log "session history: alice's sessions and traffic were recorded"
 sleep 6
 curl -fsS -b "$JAR" "$WEB/api/v1/stats?preset=today" >"$WORK/stats.json" # as logged-in admin

@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/shuricksumy/tunnelward/internal/api"
+	"github.com/shuricksumy/tunnelward/internal/clientauth"
 	"github.com/shuricksumy/tunnelward/internal/config"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
 	"github.com/shuricksumy/tunnelward/internal/mgmt"
@@ -24,6 +25,7 @@ type Server struct {
 	pki  pki.PKI // nil until the PKI is initialized
 	gen  Profiles
 	mgmt Management
+	auth *clientauth.Store
 }
 
 // Profiles builds client .ovpn files; *ovpn.Generator implements it.
@@ -37,7 +39,8 @@ type Profiles interface {
 func New(cfg config.Agent, log *slog.Logger, p pki.PKI) *Server {
 	return &Server{cfg: cfg, log: log, pki: p,
 		gen:  &ovpn.Generator{Dir: cfg.OpenVPNDir, OpenVPNBin: cfg.OpenVPNBin},
-		mgmt: &mgmt.Client{Addr: cfg.MgmtAddr, Password: cfg.MgmtPassword}}
+		mgmt: &mgmt.Client{Addr: cfg.MgmtAddr, Password: cfg.MgmtPassword},
+		auth: &clientauth.Store{Dir: cfg.CCDDir}}
 }
 
 // Handler returns the agent's HTTP handler.
@@ -49,6 +52,7 @@ func (s *Server) Handler() http.Handler {
 	v1.HandleFunc("GET /v1/info", s.handleInfo)
 	s.registerCertRoutes(v1)
 	s.registerSessionRoutes(v1)
+	s.registerAuthRoutes(v1)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

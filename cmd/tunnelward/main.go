@@ -16,6 +16,7 @@ import (
 
 	"github.com/shuricksumy/tunnelward/internal/agent"
 	"github.com/shuricksumy/tunnelward/internal/auth"
+	"github.com/shuricksumy/tunnelward/internal/clientauth"
 	"github.com/shuricksumy/tunnelward/internal/config"
 	"github.com/shuricksumy/tunnelward/internal/history"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
@@ -33,6 +34,8 @@ commands:
   init-pki  create a new CA in TW_PKI_DIR (CA name from TW_CA_NAME)
   user add|passwd|del|list [name]
             manage admin users in TW_DB_PATH (password from TW_ADMIN_PASSWORD or stdin)
+  auth-verify [--ccd DIR] <file>
+            OpenVPN auth-user-pass-verify (via-file) for client 2FA
   health    <url>  exit 0 if GET <url>/healthz answers 200 (http://... or unix:/path)
   version   print version
 `
@@ -61,6 +64,8 @@ func main() {
 		fmt.Println(version.String())
 	case "health":
 		err = runHealth(ctx, os.Args[2:])
+	case "auth-verify":
+		os.Exit(runAuthVerify(os.Args[2:]))
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:
@@ -255,4 +260,45 @@ func runHealth(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	return agent.NewClient(args[0], "", 5*time.Second).Health(ctx)
+}
+
+// runAuthVerify is called by OpenVPN for every login:
+//
+//	script-security 2
+//	auth-user-pass-verify "/usr/local/bin/tunnelward auth-verify" via-file
+//
+// Exit 0 allows the client, anything else denies it. Messages go to stderr,
+// which ends up in OpenVPN's log; passwords are never printed.
+func runAuthVerify(args []string) int {
+	ccd := env("TW_CCD_DIR", env("TW_OPENVPN_DIR", "/etc/openvpn")+"/ccd")
+	var file string
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "--ccd" && i+1 < len(args):
+			ccd = args[i+1]
+			i++
+		case strings.HasPrefix(args[i], "--ccd="):
+			ccd = strings.TrimPrefix(args[i], "--ccd=")
+		default:
+			file = args[i]
+		}
+	}
+	if file == "" {
+		fmt.Fprintln(os.Stderr, "auth-verify: usage: tunnelward auth-verify [--ccd DIR] <credentials file>")
+		return 2
+	}
+	user, err := clientauth.VerifyFile(ccd, file, os.Getenv("common_name"), time.Now())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "auth-verify: DENIED %q: %v\n", user, err)
+		return 1
+	}
+	fmt.Fprintf(os.Stderr, "auth-verify: OK %q\n", user)
+	return 0
+}
+
+func env(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

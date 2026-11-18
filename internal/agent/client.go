@@ -131,6 +131,20 @@ func (c *Client) KillName(ctx context.Context, name string) (int, error) {
 	return out.Killed, err
 }
 
+// ClientAuth returns a client's second-factor status.
+func (c *Client) ClientAuth(ctx context.Context, name string) (api.ClientAuth, error) {
+	var out api.ClientAuth
+	err := c.doJSON(ctx, http.MethodGet, "/v1/certs/"+url.PathEscape(name)+"/auth", nil, &out)
+	return out, err
+}
+
+// UpdateClientAuth changes a client's second factor.
+func (c *Client) UpdateClientAuth(ctx context.Context, name string, req api.ClientAuthUpdate) (api.ClientAuth, error) {
+	var out api.ClientAuth
+	err := c.doJSON(ctx, http.MethodPut, "/v1/certs/"+url.PathEscape(name)+"/auth", req, &out)
+	return out, err
+}
+
 // GenCRL regenerates the CRL.
 func (c *Client) GenCRL(ctx context.Context) error {
 	return c.doJSON(ctx, http.MethodPost, "/v1/crl", nil, nil)

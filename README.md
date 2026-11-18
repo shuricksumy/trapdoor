@@ -150,6 +150,34 @@ control-channel key matching `server.conf` (`tls-crypt`, `tls-auth` with `key-di
 or a per-client `tls-crypt-v2` key). tls-crypt-v2 client keys live in `keys-v2/<name>.key`;
 existing ones are reused, new ones are created with `openvpn --genkey` (`TW_OPENVPN_BIN`).
 
+## Client two-factor login
+
+Per client, in the UI (Clients → More → Two-factor login) or `PUT /api/v1/certs/{name}/auth`:
+an authenticator code (TOTP, HMAC-SHA256, 6 digits, 30 s) and/or a static password. The
+device logs in with username = its certificate name and password = static password followed
+by the code. OpenVPN checks it with tunnelward:
+
+```
+# server.conf
+script-security 2
+auth-user-pass-verify "/usr/local/bin/tunnelward auth-verify" via-file
+# client-template.txt
+auth-user-pass
+```
+
+The settings live in `ccd/<name>` exactly as openvpn-ui wrote them (`#2FA_KEY:` hex secret,
+`#2FA_USER:`, `#STATIC_PASS:`), so existing enrolments keep working without `oathtool` or
+`auth_client.sh`. Differences from openvpn-ui's script:
+
+- the username must match the certificate: one client's password and code cannot be used with
+  another client's certificate (the old script allowed that)
+- new static passwords are stored hashed (`#STATIC_PASS_HASH:`); old plain ones still work
+- codes from the previous and next 30-second step are accepted (clock drift)
+- other lines in `ccd/<name>` (routes, `ifconfig-push`) are never touched; deleting the client
+  deletes its `ccd` file
+
+Use an authenticator app that supports SHA-256 codes (some apps only do SHA-1).
+
 ## Web API
 
 The web process records session history (polling the agent every `TW_POLL_INTERVAL`,
@@ -191,6 +219,7 @@ tunnelward user list | passwd <name> | del <name>
 | POST | `/api/v1/certs/{name}/revoke`, `/unrevoke`, `/renew` | |
 | GET | `/api/v1/certs/{name}/ovpn` | download the `.ovpn` profile |
 | DELETE | `/api/v1/certs/{name}/sessions`, `/api/v1/sessions/{client_id}` | disconnect |
+| GET, PUT | `/api/v1/certs/{name}/auth` | 2FA status / change: `{"totp":"enable\|reset\|disable","static_password":"…","remove_static":true}`; a new key's secret and `otpauth://` URI are returned once |
 
 Certificate and session calls are passed to the agent; every change is logged as
 `audit action=... target=... by=<user>`.

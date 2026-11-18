@@ -18,7 +18,7 @@
       any date range with day / month / year grouping per user and for the whole server,
       presets, CSV export, gaps marked as estimated
 - [x] Statistics page in the UI: date range with presets, day/month/year chart, per-client table with share, CSV export
-- [ ] Client 2FA: TOTP and/or static password, `tunnelward auth-verify` for OpenVPN
+- [x] Client 2FA: TOTP and/or static password, `tunnelward auth-verify` for OpenVPN, compatible with openvpn-ui's ccd format, QR enrolment in the UI
 - [x] Web: SQLite + migrations
 - [x] Web: admin login (users CLI, secure session cookie, throttling, CSRF protection)
 - [x] Web: certificate and session management endpoints (proxy to the agent, audit log lines)
