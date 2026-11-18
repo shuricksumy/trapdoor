@@ -2,16 +2,20 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 	_ "time/tzdata" // TW_TZ works in minimal containers without zoneinfo
 
 	"github.com/shuricksumy/tunnelward/internal/agent"
+	"github.com/shuricksumy/tunnelward/internal/auth"
 	"github.com/shuricksumy/tunnelward/internal/config"
 	"github.com/shuricksumy/tunnelward/internal/history"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
@@ -27,6 +31,8 @@ commands:
   agent     run the privileged agent (PKI, OpenVPN control)
   web       run the web UI and API
   init-pki  create a new CA in TW_PKI_DIR (CA name from TW_CA_NAME)
+  user add|passwd|del|list [name]
+            manage admin users in TW_DB_PATH (password from TW_ADMIN_PASSWORD or stdin)
   version   print version
 `
 
@@ -48,6 +54,8 @@ func main() {
 		err = runWeb(ctx, log)
 	case "init-pki":
 		err = runInitPKI(log)
+	case "user":
+		err = runUser(ctx, os.Args[2:])
 	case "version":
 		fmt.Println(version.String())
 	case "-h", "--help", "help":
@@ -111,12 +119,17 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 	col := &history.Collector{DB: db, Source: client, Agent: agentID, Interval: cfg.PollInterval, Log: log}
 	go col.Run(ctx)
 
-	if cfg.APIToken == "" {
-		log.Warn("TW_WEB_API_TOKEN not set: /api/v1 is disabled")
+	authSvc := auth.New(db, auth.Options{IdleTimeout: cfg.SessionIdle})
+	if n, err := authSvc.CountUsers(ctx); err == nil && n == 0 {
+		log.Warn("no admin user yet: create one with 'tunnelward user add <name>'")
+	}
+	if !cfg.CookieSecure {
+		log.Warn("TW_COOKIE_SECURE=false: login cookie is sent over plain HTTP")
 	}
 	srv := web.New(web.Deps{
 		Agent: client, Stats: &history.Stats{DB: db, Agent: agentID},
-		APIToken: cfg.APIToken, Location: cfg.Location, Log: log,
+		Auth: authSvc, APIToken: cfg.APIToken, CookieSecure: cfg.CookieSecure,
+		TrustedProxies: cfg.TrustedProxies, Location: cfg.Location, Log: log,
 	})
 	log.Info("listening", "addr", cfg.Listen, "agent", cfg.AgentURL, "db", cfg.DBPath,
 		"tz", cfg.Location.String(), "version", version.Version)
@@ -135,4 +148,93 @@ func runInitPKI(log *slog.Logger) error {
 	}
 	log.Info("PKI created", "dir", cfg.PKIDir)
 	return nil
+}
+
+func runUser(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: tunnelward user add|passwd|del|list [name]")
+	}
+	cfg, err := config.LoadWeb()
+	if err != nil && !errors.Is(err, config.ErrNoToken) {
+		return err
+	}
+	db, err := store.Open(ctx, cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+	svc := auth.New(db, auth.Options{})
+
+	name := ""
+	if len(args) > 1 {
+		name = args[1]
+	}
+	need := func() error {
+		if name == "" {
+			return fmt.Errorf("usage: tunnelward user %s <name>", args[0])
+		}
+		return nil
+	}
+	switch args[0] {
+	case "list":
+		users, err := svc.Users(ctx)
+		if err != nil {
+			return err
+		}
+		for _, u := range users {
+			fmt.Printf("%s\tcreated %s\n", u.Username, u.CreatedAt.Format(time.DateOnly))
+		}
+		return nil
+	case "add":
+		if err := need(); err != nil {
+			return err
+		}
+		pw, err := readPassword()
+		if err != nil {
+			return err
+		}
+		if _, err := svc.CreateUser(ctx, name, pw); err != nil {
+			return err
+		}
+		fmt.Printf("user %s created\n", name)
+		return nil
+	case "passwd":
+		if err := need(); err != nil {
+			return err
+		}
+		pw, err := readPassword()
+		if err != nil {
+			return err
+		}
+		if err := svc.SetPassword(ctx, name, pw); err != nil {
+			return err
+		}
+		fmt.Printf("password of %s changed; their sessions were logged out\n", name)
+		return nil
+	case "del":
+		if err := need(); err != nil {
+			return err
+		}
+		if err := svc.DeleteUser(ctx, name); err != nil {
+			return err
+		}
+		fmt.Printf("user %s deleted\n", name)
+		return nil
+	default:
+		return fmt.Errorf("unknown user command %q", args[0])
+	}
+}
+
+// readPassword takes TW_ADMIN_PASSWORD, else the first line of stdin, so it
+// works in scripts and with "docker exec -i ... tunnelward user add admin".
+func readPassword() (string, error) {
+	if pw := os.Getenv("TW_ADMIN_PASSWORD"); pw != "" {
+		return pw, nil
+	}
+	fmt.Fprint(os.Stderr, "password: ")
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && line == "" {
+		return "", fmt.Errorf("read password: %w", err)
+	}
+	return strings.TrimRight(line, "\r\n"), nil
 }
