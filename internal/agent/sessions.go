@@ -19,6 +19,7 @@ type Management interface {
 	Version(ctx context.Context) (string, error)
 	KillClient(ctx context.Context, clientID int64) error
 	KillName(ctx context.Context, name string) (int, error)
+	Signal(ctx context.Context, sig string) error
 }
 
 func (s *Server) registerSessionRoutes(mux *http.ServeMux) {

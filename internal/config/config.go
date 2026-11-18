@@ -38,6 +38,9 @@ type Agent struct {
 	TOTPIssuer string
 	// OpenVPNBin is the openvpn binary (tls-crypt-v2 keys). TW_OPENVPN_BIN
 	OpenVPNBin string
+	// RestartSignal restarts OpenVPN via management: SIGHUP (re-read config)
+	// or SIGTERM when a supervisor starts it again (Docker image). TW_OPENVPN_RESTART
+	RestartSignal string
 	// CAPassphrase unlocks an encrypted CA key.            TW_CA_PASSPHRASE
 	CAPassphrase string
 	// CRLCopies get a copy of crl.pem after every change
@@ -91,18 +94,22 @@ func LoadAgent() (Agent, error) {
 		gid = n
 	}
 	c := Agent{
-		SocketGID:    gid,
-		Listen:       env("TW_AGENT_LISTEN", "127.0.0.1:9090"),
-		Token:        os.Getenv("TW_AGENT_TOKEN"),
-		OpenVPNDir:   openvpnDir,
-		PKIDir:       env("TW_PKI_DIR", openvpnDir+"/easy-rsa/pki"),
-		MgmtAddr:     env("TW_OPENVPN_MGMT", "127.0.0.1:2080"),
-		OpenVPNBin:   env("TW_OPENVPN_BIN", "openvpn"),
-		CCDDir:       env("TW_CCD_DIR", openvpnDir+"/ccd"),
-		TOTPIssuer:   env("TW_TOTP_ISSUER", "tunnelward"),
-		MgmtPassword: os.Getenv("TW_OPENVPN_MGMT_PASSWORD"),
-		CAPassphrase: os.Getenv("TW_CA_PASSPHRASE"),
-		CRLCopies:    list(env("TW_CRL_COPIES", openvpnDir+"/crl.pem")),
+		SocketGID:     gid,
+		Listen:        env("TW_AGENT_LISTEN", "127.0.0.1:9090"),
+		Token:         os.Getenv("TW_AGENT_TOKEN"),
+		OpenVPNDir:    openvpnDir,
+		PKIDir:        env("TW_PKI_DIR", openvpnDir+"/easy-rsa/pki"),
+		MgmtAddr:      env("TW_OPENVPN_MGMT", "127.0.0.1:2080"),
+		OpenVPNBin:    env("TW_OPENVPN_BIN", "openvpn"),
+		CCDDir:        env("TW_CCD_DIR", openvpnDir+"/ccd"),
+		RestartSignal: env("TW_OPENVPN_RESTART", "SIGHUP"),
+		TOTPIssuer:    env("TW_TOTP_ISSUER", "tunnelward"),
+		MgmtPassword:  os.Getenv("TW_OPENVPN_MGMT_PASSWORD"),
+		CAPassphrase:  os.Getenv("TW_CA_PASSPHRASE"),
+		CRLCopies:     list(env("TW_CRL_COPIES", openvpnDir+"/crl.pem")),
+	}
+	if c.RestartSignal != "SIGHUP" && c.RestartSignal != "SIGTERM" {
+		return c, fmt.Errorf("TW_OPENVPN_RESTART must be SIGHUP or SIGTERM")
 	}
 	if c.Token == "" {
 		return c, ErrNoToken

@@ -127,6 +127,22 @@ func (c *Client) KillName(ctx context.Context, name string) (int, error) {
 	return 1, nil
 }
 
+// Signal sends a signal to OpenVPN: SIGHUP re-reads the config, SIGTERM
+// exits (a supervisor then starts it again). SIGTERM may close the
+// connection before the answer arrives; that counts as success.
+func (c *Client) Signal(ctx context.Context, sig string) error {
+	switch sig {
+	case "SIGHUP", "SIGTERM", "SIGUSR1":
+	default:
+		return fmt.Errorf("unsupported signal %q", sig)
+	}
+	_, err := c.exec(ctx, "signal "+sig, false)
+	if err != nil && sig == "SIGTERM" && errors.Is(err, ErrUnavailable) && strings.Contains(err.Error(), "reading") {
+		return nil
+	}
+	return err
+}
+
 // exec runs one command. multiline commands end with "END"; the others
 // answer with a single SUCCESS:/ERROR: line.
 func (c *Client) exec(ctx context.Context, cmd string, multiline bool) ([]string, error) {

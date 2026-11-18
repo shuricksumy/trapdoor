@@ -178,6 +178,26 @@ The settings live in `ccd/<name>` exactly as openvpn-ui wrote them (`#2FA_KEY:` 
 
 Use an authenticator app that supports SHA-256 codes (some apps only do SHA-1).
 
+## Server configuration
+
+**Server** page (or `/api/v1/server/config`): a form for the common options (port, protocol,
+VPN subnet, topology, DNS and search domain for clients, full tunnel, client-to-client,
+duplicate-cn, max clients, server routes, routes pushed to everyone) and a raw editor for
+the whole `server.conf`. Every other line and comment in the file is kept.
+
+- Before saving, the config is checked: OpenVPN itself parses it, plus tunnelward's checks
+  (values OpenVPN only checks at startup, referenced key/cert files and directories exist,
+  missing `management` / `crl-verify` / `client-config-dir` are pointed out)
+- A preview shows exactly which lines change; saving keeps a backup (last 10, in
+  `tunnelward-backups/`) and is refused if the file changed in the meantime
+- "Networks behind clients" offers the LANs set on clients that still lack a `route` line
+- **Apply and restart** restarts OpenVPN through the management interface and waits for it;
+  if it does not come back within 30 s, the config it ran with before is restored and it is
+  started again
+- Restart method `TW_OPENVPN_RESTART`: `SIGHUP` (default; OpenVPN re-reads its config) or
+  `SIGTERM` when a supervisor starts it again — the Docker image's `openvpn` service does
+  that inside the same container, so the agent keeps its shared network
+
 ## Expiring certificates
 
 - Client certificates expiring within `TW_EXPIRY_WARN_DAYS` (default 30) are flagged in the UI
@@ -244,6 +264,10 @@ tunnelward user list | passwd <name> | del <name>
 | GET | `/api/v1/stats.csv` | same, as CSV: period, name, upload, download, estimated |
 | GET | `/api/v1/history/sessions` | recorded sessions, newest first (`limit`, default 100) |
 | GET, POST | `/api/v1/certs` | list / issue certificates (same bodies as the agent API) |
+| GET, PUT | `/api/v1/server/config` | server.conf as `raw` + `settings`; save with `{"base_version", "raw"\|"settings"}` (422 with `problems`, 409 if changed) |
+| POST | `/api/v1/server/config/check` | dry run: resulting `raw` + `problems` |
+| POST | `/api/v1/server/restart` | `{"rollback":true}` → `{"ok","seconds","rolled_back","error"}` |
+| GET | `/api/v1/server/backups`, `/api/v1/server/backups/{name}` | earlier versions |
 | POST | `/api/v1/certs/renew` | bulk renew: `{"names":[…],"validity_days":…}` → result per name |
 | GET, DELETE | `/api/v1/certs/{name}` | get / delete |
 | POST | `/api/v1/certs/{name}/revoke`, `/unrevoke`, `/renew` | |

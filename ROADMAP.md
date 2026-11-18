@@ -29,7 +29,7 @@
 ## v2 — setup and configuration
 
 - [ ] Setup wizard: CA, server cert, cipher, port/proto, DNS, tls-crypt
-- [ ] Server config editor: forms for common options + validated raw editor
+- [x] Server config editor: form for common options + raw editor, OpenVPN-checked before saving, diff preview, backups, restart with automatic rollback
 - [x] Routing: per-client routes (`push route`), LAN behind a client (`iroute`), static client IPs, full/split tunnel
 - [ ] Named networks reusable across clients (openvpn-ui "routes")
 - [x] Certificate expiry warnings (clients, server, CA; UI + daily log) and bulk renew
