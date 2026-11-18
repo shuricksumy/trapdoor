@@ -14,11 +14,13 @@
 - [x] End-to-end test with a real OpenVPN server and client in CI
 - [ ] QR code for `.ovpn` (web UI)
 - [x] Live sessions via OpenVPN management interface: list, traffic, kick; revoke/delete disconnects
-- [ ] Session history & traffic statistics (web): sessions table + hourly traffic per user,
-      any date range with daily / monthly / yearly views per user and for the whole server,
-      presets (this month, last month, last 30 days, this year), CSV export, gaps marked as estimated
+- [x] Session history & traffic statistics API (web): sessions + hourly traffic per user in SQLite,
+      any date range with day / month / year grouping per user and for the whole server,
+      presets, CSV export, gaps marked as estimated
+- [ ] Statistics page in the UI: date picker with presets, daily chart, per-user table
 - [ ] Client 2FA: TOTP and/or static password, `tunnelward auth-verify` for OpenVPN
-- [ ] Web: admin login, SQLite + migrations
+- [x] Web: SQLite + migrations
+- [ ] Web: admin login (replaces the temporary `TW_WEB_API_TOKEN`)
 - [ ] Frontend (SvelteKit, embedded in the binary): dashboard, clients, certificates
 - [ ] Docker image + two-service `docker-compose` example
 - [ ] Migration from openvpn-ui (`tunnelward migrate --from-openvpn-ui`, dry-run, backup)

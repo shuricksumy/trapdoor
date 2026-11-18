@@ -44,3 +44,22 @@ func TestLoadWebTimeout(t *testing.T) {
 		t.Error("expected error for invalid duration")
 	}
 }
+
+func TestLoadWebTZAndPoll(t *testing.T) {
+	t.Setenv("TW_AGENT_TOKEN", "x")
+	t.Setenv("TW_TZ", "Europe/Dublin")
+	t.Setenv("TW_POLL_INTERVAL", "1m")
+	c, err := LoadWeb()
+	if err != nil || c.Location.String() != "Europe/Dublin" || c.PollInterval != time.Minute {
+		t.Fatalf("c = %+v, %v", c, err)
+	}
+	t.Setenv("TW_TZ", "Mars/Olympus")
+	if _, err := LoadWeb(); err == nil {
+		t.Error("bad TZ accepted")
+	}
+	t.Setenv("TW_TZ", "")
+	t.Setenv("TW_POLL_INTERVAL", "1s")
+	if _, err := LoadWeb(); err == nil {
+		t.Error("poll interval below 5s accepted")
+	}
+}

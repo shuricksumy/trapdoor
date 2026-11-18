@@ -49,6 +49,13 @@ type Web struct {
 	DBPath string
 	// AgentTimeout bounds each call to the agent.           TW_AGENT_TIMEOUT
 	AgentTimeout time.Duration
+	// APIToken protects /api/v1/* (Authorization: Bearer)
+	// until admin login exists; API disabled if empty.    TW_WEB_API_TOKEN
+	APIToken string
+	// Location for day/month/year boundaries in reports.  TW_TZ (IANA, default local)
+	Location *time.Location
+	// PollInterval for recording session history.         TW_POLL_INTERVAL
+	PollInterval time.Duration
 }
 
 // ErrNoToken is returned when the shared agent token is not set.
@@ -80,12 +87,25 @@ func LoadWeb() (Web, error) {
 	if err != nil {
 		return Web{}, fmt.Errorf("TW_AGENT_TIMEOUT: %w", err)
 	}
+	poll, err := time.ParseDuration(env("TW_POLL_INTERVAL", "30s"))
+	if err != nil || poll < 5*time.Second {
+		return Web{}, fmt.Errorf("TW_POLL_INTERVAL must be a duration of at least 5s")
+	}
+	loc := time.Local
+	if tz := os.Getenv("TW_TZ"); tz != "" {
+		if loc, err = time.LoadLocation(tz); err != nil {
+			return Web{}, fmt.Errorf("TW_TZ: %w", err)
+		}
+	}
 	c := Web{
 		Listen:       env("TW_WEB_LISTEN", ":8080"),
 		AgentURL:     env("TW_AGENT_URL", "http://127.0.0.1:9090"),
 		AgentToken:   os.Getenv("TW_AGENT_TOKEN"),
 		DBPath:       env("TW_DB_PATH", "./data/tunnelward.db"),
 		AgentTimeout: timeout,
+		APIToken:     os.Getenv("TW_WEB_API_TOKEN"),
+		Location:     loc,
+		PollInterval: poll,
 	}
 	if c.AgentToken == "" {
 		return c, ErrNoToken
