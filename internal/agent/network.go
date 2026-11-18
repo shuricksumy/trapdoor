@@ -145,6 +145,8 @@ func (s *Server) handleSetClientNetwork(w http.ResponseWriter, r *http.Request) 
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.netMu.Lock()
+	defer s.netMu.Unlock()
 	warnings, err := ccdnet.Validate(name, n, srv, ips)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
@@ -157,6 +159,7 @@ func (s *Server) handleSetClientNetwork(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.log.Info("client network updated", "name", name, "static_ip", req.StaticIP, "routes", len(n.Routes), "lan", len(n.LAN))
+	s.refreshFirewall(r.Context())
 	out := toClientNetwork(n)
 	out.Warnings = warnings
 	httpx.WriteJSON(w, http.StatusOK, out)

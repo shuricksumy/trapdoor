@@ -35,6 +35,12 @@ type Server struct {
 	auth  *clientauth.Store
 	conf  *serverconf.File
 
+	netMu sync.Mutex // static address changes
+
+	fwMu      sync.Mutex
+	fwApplied string // hash of the rules applied in direct mode
+	fwError   string
+
 	restartMu   sync.Mutex
 	restartWait time.Duration // tests shorten it
 }
@@ -70,6 +76,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerNetworkRoutes(v1)
 	s.registerServerConfigRoutes(v1)
 	s.registerSetupRoutes(v1)
+	s.registerFirewallRoutes(v1)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

@@ -1,7 +1,9 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/shuricksumy/tunnelward/internal/api"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
@@ -16,6 +18,9 @@ func (s *Server) registerServerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/server/backups/{name}", s.handleConfigBackup)
 	mux.HandleFunc("GET /api/v1/setup", s.handleSetupStatus)
 	mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
+	mux.HandleFunc("GET /api/v1/firewall", s.handleGetFirewall)
+	mux.HandleFunc("PUT /api/v1/firewall", s.handleSetFirewall)
+	mux.HandleFunc("POST /api/v1/firewall/addresses", s.handleAssignAddresses)
 }
 
 func (s *Server) handleGetServerConfig(w http.ResponseWriter, r *http.Request) {
@@ -127,4 +132,41 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (s *Server) handleGetFirewall(w http.ResponseWriter, r *http.Request) {
+	st, err := s.Agent.Firewall(r.Context())
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleSetFirewall(w http.ResponseWriter, r *http.Request) {
+	var p api.FirewallPolicy
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	st, err := s.Agent.SetFirewall(r.Context(), p)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	s.audit(r, "firewall.save", fmt.Sprintf("enabled=%t default=%s rules=%d", p.Enabled, p.Default, len(p.Rules)))
+	httpx.WriteJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleAssignAddresses(w http.ResponseWriter, r *http.Request) {
+	var req api.AssignAddresses
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	st, err := s.Agent.AssignAddresses(r.Context(), req.Names)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	s.audit(r, "firewall.addresses", strings.Join(req.Names, ","))
+	httpx.WriteJSON(w, http.StatusOK, st)
 }

@@ -210,6 +210,27 @@ func (c *Client) Setup(ctx context.Context, req api.SetupRequest) (api.SetupResu
 	return out, err
 }
 
+// Firewall returns the access rules and whether they are active.
+func (c *Client) Firewall(ctx context.Context) (api.Firewall, error) {
+	var out api.Firewall
+	err := c.doJSON(ctx, http.MethodGet, "/v1/firewall", nil, &out)
+	return out, err
+}
+
+// SetFirewall saves and applies the access rules.
+func (c *Client) SetFirewall(ctx context.Context, p api.FirewallPolicy) (api.Firewall, error) {
+	var out api.Firewall
+	err := c.doJSON(ctx, http.MethodPut, "/v1/firewall", p, &out)
+	return out, err
+}
+
+// AssignAddresses gives clients fixed VPN addresses (for access rules).
+func (c *Client) AssignAddresses(ctx context.Context, names []string) (api.Firewall, error) {
+	var out api.Firewall
+	err := c.doJSON(ctx, http.MethodPost, "/v1/firewall/addresses", api.AssignAddresses{Names: names}, &out)
+	return out, err
+}
+
 // ConfigBackups lists saved earlier server.conf versions.
 func (c *Client) ConfigBackups(ctx context.Context) ([]api.ConfigBackup, error) {
 	var out []api.ConfigBackup

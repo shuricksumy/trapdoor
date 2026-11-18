@@ -269,3 +269,38 @@ type SetupResult struct {
 	Warnings       []ConfigProblem `json:"warnings,omitempty"`
 	ServerConf     string          `json:"server_conf"`
 }
+
+// FirewallPolicy holds the access rules for VPN clients.
+type FirewallPolicy struct {
+	Enabled bool           `json:"enabled"`
+	Default string         `json:"default"` // allow or deny: what happens when no rule matches
+	Rules   []FirewallRule `json:"rules"`
+}
+
+// FirewallRule matches traffic from a client (or all clients) to a network.
+// The first matching rule decides.
+type FirewallRule struct {
+	Client string `json:"client,omitempty"` // client name; empty = all clients
+	To     string `json:"to,omitempty"`     // network or address; empty = anywhere
+	Proto  string `json:"proto,omitempty"`  // any (default), tcp, udp, tcp+udp, icmp
+	Ports  string `json:"ports,omitempty"`  // "22", "80,443", "8000-8100" (tcp/udp only)
+	Action string `json:"action"`           // allow or deny
+	Note   string `json:"note,omitempty"`
+}
+
+// Firewall is the state of the access rules.
+type Firewall struct {
+	Policy   FirewallPolicy `json:"policy"`
+	Mode     string         `json:"mode"`    // direct, file (applied by the OpenVPN container) or off
+	Applied  bool           `json:"applied"` // the current rules are active
+	Error    string         `json:"error,omitempty"`
+	Warnings []string       `json:"warnings"`
+	Missing  []string       `json:"missing"` // clients in rules without a fixed VPN address
+	Subnet   string         `json:"subnet,omitempty"`
+	Rules    string         `json:"rules"` // the generated iptables rules
+}
+
+// AssignAddresses asks for fixed VPN addresses for clients.
+type AssignAddresses struct {
+	Names []string `json:"names"`
+}

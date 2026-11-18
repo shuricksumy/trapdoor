@@ -118,6 +118,8 @@ Errors are JSON `{"error": "..."}` with 400 / 401 / 404 / 409 / 503.
 | GET | `/healthz` | – | `{"status":"ok"}` (no token) |
 | GET | `/v1/info` | – | version, dirs, `pki_ready` |
 | GET | `/v1/setup` | – | `needed`, `has_pki`, defaults, container-fixed port/proto |
+| GET / PUT | `/v1/firewall` | access rules `{enabled, default, rules[]}` | rules, generated iptables text, `applied`, warnings |
+| POST | `/v1/firewall/addresses` | `{"names":[...]}` | gives clients fixed VPN addresses |
 | POST | `/v1/setup` | wizard answers (`public_host`, `port`, `proto`, `subnet`, `dns`, `tls`, …) | creates PKI, keys, `server.conf`; 409 when it exists |
 | GET | `/v1/certs` | – | all entries (history included; `current` marks the newest per name) |
 | POST | `/v1/certs` | `{"name","kind"?,"passphrase"?,"validity_days"?}` | 201 cert |
@@ -230,6 +232,28 @@ clients' static addresses. A LAN behind a client also needs `route <net> <mask>`
 `server.conf`: tunnelward warns with the exact line to add. `server.conf` needs
 `client-config-dir ccd`. Changes apply when the client reconnects (the UI offers to reconnect
 it). The 2FA lines and any other lines in the file are kept; openvpn-ui's files are read as they are.
+
+## Access rules
+
+The Access page decides which networks VPN clients can reach: rules from a client (or all
+clients) to a network or address, optionally limited to TCP/UDP ports or ping, checked from
+the top; the first match decides, then the default (allow or block). Replies to allowed
+traffic always pass.
+
+The agent renders them into the iptables chain `TW-FWD`, jumped to from `INPUT` and
+`FORWARD` for traffic from `tun` devices, so they cover the server itself and everything
+behind it. Rules match a client by its fixed VPN address; the page assigns free addresses
+(from the top of the subnet) to clients that have none. With `client-to-client` OpenVPN
+forwards traffic between clients itself, so the rules cannot see it.
+
+| `TW_FIREWALL` | |
+|---|---|
+| `direct` (default) | the agent runs `iptables-restore` itself (host install as root) |
+| `file` | the agent writes `tunnelward-firewall.rules`; the OpenVPN container (the one with `NET_ADMIN`) applies it and reports back — the compose default |
+| `off` | the agent never touches the firewall |
+
+Nothing is changed until rules are saved for the first time. In direct mode the agent
+restores them when it starts.
 
 ## Web API
 

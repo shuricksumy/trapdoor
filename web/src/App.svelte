@@ -10,12 +10,14 @@
   import Account from './pages/Account.svelte';
   import Server from './pages/Server.svelte';
   import Setup from './pages/Setup.svelte';
+  import Access from './pages/Access.svelte';
 
   const pages = [
     { path: '/', label: 'Overview', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', component: Dashboard },
     { path: '/certificates', label: 'Clients', icon: 'M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z', component: Certificates },
     { path: '/sessions', label: 'Connected', icon: 'M4 12h4l2-5 4 10 2-5h4', component: Sessions },
     { path: '/statistics', label: 'Traffic', icon: 'M5 20V11M10 20V5M15 20v-7M20 20V8', component: Statistics },
+    { path: '/access', label: 'Access', icon: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5zM12 15v2', component: Access },
     { path: '/server', label: 'Server', icon: 'M4 5h16v5H4zM4 14h16v5H4zM8 7.5h.01M8 16.5h.01', component: Server },
   ];
 

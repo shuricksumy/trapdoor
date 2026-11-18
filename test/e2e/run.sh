@@ -15,6 +15,10 @@ PIDS=()
 cleanup() {
 	for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null || true; done
 	wait 2>/dev/null || true
+	ip netns del twc 2>/dev/null || true
+	ip link del twh 2>/dev/null || true
+	for c in INPUT FORWARD; do iptables -D "$c" -i tun+ -j TW-FWD 2>/dev/null || true; done
+	iptables -F TW-FWD 2>/dev/null && iptables -X TW-FWD 2>/dev/null || true
 	[[ "${KEEP:-}" == 1 ]] || rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -189,6 +193,40 @@ code=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" -H "Origin: $WEB" -H "Co
 	-d '{"static_ip":"10.99.0.50","routes":[],"lan":[]}' "$WEB/api/v1/certs/carol/network")
 [[ $code == 400 ]] || fail "duplicate static address accepted ($code)"
 log "alice got 10.99.0.50 and the route; the same address for carol was refused"
+
+log "access rules: alice in her own network namespace, filtered by real iptables (direct mode)"
+ip netns add twc
+ip link add twh type veth peer name twn
+ip link set twn netns twc
+ip addr add 10.200.0.1/24 dev twh
+ip link set twh up
+ip netns exec twc ip addr add 10.200.0.2/24 dev twn
+ip netns exec twc ip link set twn up
+ip netns exec twc ip link set lo up
+sed "s/^remote .*/remote 10.200.0.1 $PORT/" "$WORK/alice.ovpn" >"$WORK/alice-ns.ovpn"
+ip netns exec twc openvpn --config "$WORK/alice-ns.ovpn" >"$WORK/client-ns.log" 2>&1 &
+NSCLIENT=$!
+PIDS+=($NSCLIENT)
+wait_for 20 grep -q "Initialization Sequence Completed" "$WORK/client-ns.log" || fail "alice could not connect from the namespace"
+nsping() { ip netns exec twc ping -c 1 -W 1 10.99.0.1 >/dev/null 2>&1; }
+wait_for 10 nsping || fail "no ping through the tunnel before any rules"
+fw() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT -d "$1" "$WEB/api/v1/firewall"; }
+fw '{"enabled":true,"default":"deny","rules":[]}' >"$WORK/fw1.json" || fail "save access rules"
+grep -q '"applied":true' "$WORK/fw1.json" || fail "rules not applied: $(cat "$WORK/fw1.json")"
+iptables -C INPUT -i tun+ -j TW-FWD && iptables -C FORWARD -i tun+ -j TW-FWD || fail "no jump to TW-FWD"
+! nsping || fail "ping passes although everything is blocked"
+fw '{"enabled":true,"default":"deny","rules":[{"client":"alice","to":"10.99.0.1","proto":"icmp","action":"allow"}]}' >"$WORK/fw2.json"
+grep -q '"missing":\[\]' "$WORK/fw2.json" || fail "alice reported without fixed address: $(cat "$WORK/fw2.json")"
+iptables -S TW-FWD | grep -q -- "-s 10.99.0.50/32 -d 10.99.0.1/32 -p icmp -j ACCEPT" || fail "alice's rule missing: $(iptables -S TW-FWD)"
+wait_for 5 nsping || fail "allowed ping blocked"
+fw '{"enabled":true,"default":"allow","rules":[{"client":"alice","proto":"icmp","action":"deny"}]}' >/dev/null
+! nsping || fail "ping passes although alice's ICMP is blocked"
+fw '{"enabled":false,"default":"deny","rules":[]}' >/dev/null
+wait_for 5 nsping || fail "ping blocked although the rules are off"
+[[ $(iptables -S TW-FWD | tail -1) == "-A TW-FWD -j RETURN" ]] || fail "disabled chain: $(iptables -S TW-FWD)"
+kill "$NSCLIENT"; wait "$NSCLIENT" 2>/dev/null || true
+wait_for 15 offline alice || fail "alice still online"
+log "rules block and allow alice's real traffic; off means pass-through"
 
 log "server config: push DNS + a route to everyone via the web, restart (SIGHUP), clients get them"
 webj() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" "$@"; }

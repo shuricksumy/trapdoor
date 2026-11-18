@@ -147,3 +147,22 @@ func TestParsePrefix(t *testing.T) {
 		t.Error("non-contiguous mask accepted")
 	}
 }
+
+func TestFreeAddress(t *testing.T) {
+	srv := Server{Subnet: netip.MustParsePrefix("10.8.0.0/29"), Topology: TopologySubnet}
+	used := map[string]netip.Addr{"a": netip.MustParseAddr("10.8.0.6")}
+	a, err := FreeAddress(srv, used)
+	if err != nil || a.String() != "10.8.0.5" {
+		t.Fatalf("got %v, %v", a, err)
+	}
+	for _, x := range []string{"10.8.0.5", "10.8.0.4", "10.8.0.3", "10.8.0.2"} {
+		used[x] = netip.MustParseAddr(x)
+	}
+	if _, err := FreeAddress(srv, used); err == nil {
+		t.Error("full subnet: expected error")
+	}
+	net30 := Server{Subnet: netip.MustParsePrefix("10.8.0.0/24"), Topology: TopologyNet30}
+	if a, _ := FreeAddress(net30, nil); a.String() != "10.8.0.253" {
+		t.Errorf("net30: %v", a)
+	}
+}

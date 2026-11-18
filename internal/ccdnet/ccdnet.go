@@ -286,3 +286,25 @@ func lastAddr(p netip.Prefix) netip.Addr {
 	v |= ^(^uint32(0) << (32 - p.Bits()))
 	return netip.AddrFrom4([4]byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)})
 }
+
+// FreeAddress picks an unused static address, from the top of the subnet
+// down (OpenVPN's dynamic pool hands out addresses from the bottom).
+func FreeAddress(srv Server, used map[string]netip.Addr) (netip.Addr, error) {
+	if !srv.Subnet.IsValid() {
+		return netip.Addr{}, fmt.Errorf("%w: server.conf has no \"server\" line", ErrInvalid)
+	}
+	taken := map[netip.Addr]bool{}
+	for _, a := range used {
+		taken[a] = true
+	}
+	for a := lastAddr(srv.Subnet).Prev(); srv.Subnet.Contains(a) && a != srv.ServerIP(); a = a.Prev() {
+		if taken[a] || srv.InPool(a) {
+			continue
+		}
+		if srv.Topology == TopologyNet30 && a.As4()[3]%4 != 1 {
+			continue
+		}
+		return a, nil
+	}
+	return netip.Addr{}, fmt.Errorf("%w: no free address left in %s", ErrInvalid, srv.Subnet)
+}

@@ -15,6 +15,7 @@ type Server struct {
 	Routes           []netip.Prefix // "route" lines (kernel routes into the tunnel)
 	ClientConfigDir  bool
 	PushesFullTunnel bool // push "redirect-gateway ..." for everyone
+	ClientToClient   bool // OpenVPN routes client-to-client traffic itself
 }
 
 // ServerIP is the server's own VPN address (first host).
@@ -58,6 +59,8 @@ func ParseServer(conf string) Server {
 			}
 		case "client-config-dir":
 			s.ClientConfigDir = true
+		case "client-to-client":
+			s.ClientToClient = true
 		case "ifconfig-pool":
 			if len(f) >= 3 {
 				s.PoolStart, _ = netip.ParseAddr(f[1])

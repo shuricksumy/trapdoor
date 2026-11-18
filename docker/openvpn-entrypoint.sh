@@ -18,6 +18,33 @@ if [ ! -c /dev/net/tun ]; then
 	chmod 600 /dev/net/tun
 fi
 
+# Access rules from tunnelward (TW_FIREWALL=file): the agent writes the
+# rules file, this container (the one with NET_ADMIN) applies it and reports
+# "ok <sha256>" or "error <sha256> <message>" in the status file.
+FW_RULES=$(dirname "$CONF")/tunnelward-firewall.rules
+FW_STATUS=$(dirname "$CONF")/tunnelward-firewall.status
+fw_sum=
+fw_apply() {
+	sum=$(sha256sum "$FW_RULES" | cut -d' ' -f1)
+	[ "$sum" = "$fw_sum" ] && return 0
+	if out=$(iptables-restore --noflush <"$FW_RULES" 2>&1) &&
+		out=$(for c in INPUT FORWARD; do
+			iptables -C "$c" -i tun+ -j TW-FWD 2>/dev/null || iptables -I "$c" 1 -i tun+ -j TW-FWD || exit 1
+		done 2>&1); then
+		echo "ok $sum" >"$FW_STATUS.tmp"
+		echo "openvpn: access rules applied"
+	else
+		echo "error $sum $(echo "$out" | tr '\n' ' ')" >"$FW_STATUS.tmp"
+		echo "openvpn: access rules failed: $out"
+	fi
+	mv "$FW_STATUS.tmp" "$FW_STATUS"
+	fw_sum=$sum
+}
+(while :; do
+	[ -f "$FW_RULES" ] && fw_apply
+	sleep 1
+done) &
+
 while [ ! -f "$CONF" ]; do
 	echo "openvpn: waiting for $CONF"
 	sleep 5
