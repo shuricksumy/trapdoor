@@ -47,6 +47,7 @@ fw_apply() {
 
 WG_DIR=${WG_DIR:-/etc/wireguard}
 WG_STATE=/run/trapdoor-wg
+rm -rf "$WG_STATE" # a restarted container has no interfaces or rules yet
 mkdir -p "$WG_STATE"
 wg_iface() { ip route | awk '/^default/ { print $5; exit }'; }
 wg_nat() { # add|del <address/bits>
@@ -99,6 +100,28 @@ wg_sync() {
 		wg show "$id" dump | awk -F'\t' -v OFS='\t' 'NR == 1 { $1 = "(hidden)" } NR > 1 { $2 = "(hidden)" } { print }' >"$WG_DIR/$id.dump.tmp" &&
 			mv "$WG_DIR/$id.dump.tmp" "$WG_DIR/$id.dump"
 	done
+	# Access rules per WireGuard server (TD_FIREWALL=file): chain TD-<id>,
+	# jumped to from INPUT and FORWARD for the interface; answered in
+	# <id>.fwstatus like trapdoor-firewall.status.
+	for rules in "$WG_DIR"/*.rules; do
+		[ -f "$rules" ] || continue
+		id=$(basename "$rules" .rules)
+		[ -f "$WG_DIR/$id.json" ] || continue
+		sum=$(sha256sum "$rules" | cut -d' ' -f1)
+		[ "$sum" = "$(cat "$WG_STATE/$id.fwsum" 2>/dev/null)" ] && continue
+		if out=$(iptables-restore --noflush <"$rules" 2>&1) &&
+			out=$(for c in INPUT FORWARD; do
+				iptables -C "$c" -i "$id" -j "TD-$id" 2>/dev/null || iptables -I "$c" 1 -i "$id" -j "TD-$id" || exit 1
+			done 2>&1); then
+			echo "ok $sum" >"$WG_DIR/$id.fwstatus.tmp"
+			echo "wireguard $id: access rules applied"
+		else
+			echo "error $sum $(echo "$out" | tr '\n' ' ')" >"$WG_DIR/$id.fwstatus.tmp"
+			echo "wireguard $id: access rules failed: $out"
+		fi
+		mv "$WG_DIR/$id.fwstatus.tmp" "$WG_DIR/$id.fwstatus"
+		echo "$sum" >"$WG_STATE/$id.fwsum"
+	done
 	# Servers removed in trapdoor: take their interfaces down.
 	for f in "$WG_STATE"/*.addr; do
 		[ -f "$f" ] || continue
@@ -106,8 +129,19 @@ wg_sync() {
 		[ -f "$WG_DIR/$id.conf" ] && continue
 		ip link del "$id" 2>/dev/null || true
 		wg_nat del "$(cat "$f")"
-		rm -f "$WG_STATE/$id".* "$WG_DIR/$id.dump" "$WG_DIR/$id.error"
+		for c in INPUT FORWARD; do iptables -D "$c" -i "$id" -j "TD-$id" 2>/dev/null || true; done
+		iptables -F "TD-$id" 2>/dev/null && iptables -X "TD-$id" 2>/dev/null || true
+		rm -f "$WG_STATE/$id".* "$WG_DIR/$id.dump" "$WG_DIR/$id.error" "$WG_DIR/$id.fwstatus"
 		echo "wireguard $id: removed"
+	done
+	# Rules of a server whose interface never came up.
+	for f in "$WG_STATE"/*.fwsum; do
+		[ -f "$f" ] || continue
+		id=$(basename "$f" .fwsum)
+		[ -f "$WG_DIR/$id.json" ] && continue
+		for c in INPUT FORWARD; do iptables -D "$c" -i "$id" -j "TD-$id" 2>/dev/null || true; done
+		iptables -F "TD-$id" 2>/dev/null && iptables -X "TD-$id" 2>/dev/null || true
+		rm -f "$f" "$WG_DIR/$id.fwstatus"
 	done
 }
 

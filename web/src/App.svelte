@@ -29,6 +29,7 @@
     { path: '/clients', label: 'Clients', icon: pages[1].icon, component: WireGuardClients },
     pages[2],
     pages[3],
+    pages[4],
   ];
 
   const isWG = $derived(currentServer()?.type === 'wireguard');

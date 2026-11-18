@@ -158,6 +158,16 @@ wgping || fail "no ping through WireGuard: $(dc logs --tail 20 openvpn)"
 ! sudo awk -F'\t' 'NR > 1 && $2 != "(hidden)"' "$WORK/wireguard/wg0.dump" | grep -q . || fail "preshared key in the dump file"
 for _ in $(seq 10); do api "$WEB/api/v1/servers/wg0/sessions" | grep -q '"name":"wgsmoke"' && break; sleep 1; done
 api "$WEB/api/v1/servers/wg0/sessions" | grep -q '"name":"wgsmoke"' || fail "wgsmoke not in live sessions"
+api -X PUT -H "Content-Type: application/json" -m 30 -d '{"enabled":true,"default":"deny","rules":[]}' \
+	"$WEB/api/v1/servers/wg0/firewall" >"$WORK/wgfw.json" || fail "save WireGuard rules"
+grep -q '"applied":true' "$WORK/wgfw.json" || fail "WireGuard rules not applied by the container: $(cat "$WORK/wgfw.json")"
+dc exec -T openvpn iptables -C FORWARD -i wg0 -j TD-wg0 || fail "no jump to TD-wg0 in the container"
+sleep 1
+! wgping || fail "ping passes although the WireGuard rules block everything"
+api -X PUT -H "Content-Type: application/json" -m 30 -d '{"enabled":true,"default":"deny","rules":[{"client":"wgsmoke","proto":"icmp","action":"allow"}]}' \
+	"$WEB/api/v1/servers/wg0/firewall" | grep -q '"applied":true' || fail "allow rule not applied"
+for _ in $(seq 5); do wgping && break; sleep 1; done
+wgping || fail "allowed ping blocked"
 api -X PUT -H "Content-Type: application/json" -d '{"disabled":true}' "$WEB/api/v1/servers/wg0/peers/wgsmoke" >/dev/null
 for _ in $(seq 10); do dc logs openvpn | grep -q "wireguard wg0: peers updated" && break; sleep 1; done
 sleep 1
@@ -166,6 +176,7 @@ sudo wg-quick down /etc/wireguard/tdsmoke.conf >/dev/null 2>&1 || true
 api -X DELETE "$WEB/api/v1/servers/wg0" || fail "remove WireGuard server"
 for _ in $(seq 10); do dc exec -T openvpn ip link show wg0 >/dev/null 2>&1 || break; sleep 1; done
 ! dc exec -T openvpn ip link show wg0 >/dev/null 2>&1 || fail "wg0 still up after remove"
+! dc exec -T openvpn iptables -S TD-wg0 >/dev/null 2>&1 || fail "TD-wg0 left after remove"
 log "WireGuard client connected through the container; disable and remove work"
 
 log "web container is locked down"

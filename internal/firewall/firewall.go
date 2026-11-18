@@ -177,22 +177,25 @@ func Hash(rules string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Render builds the chain for a normalized, valid policy.
-func Render(p Policy, c Clients) Result {
+// Render builds the OpenVPN chain (Chain) for a normalized, valid policy.
+func Render(p Policy, c Clients) Result { return RenderChain(Chain, p, c) }
+
+// RenderChain builds the named chain for a normalized, valid policy.
+func RenderChain(chain string, p Policy, c Clients) Result {
 	var b strings.Builder
 	var res Result
 	w := func(format string, a ...any) { fmt.Fprintf(&b, format+"\n", a...) }
 	w("# trapdoor access rules for VPN clients; written by the agent, do not edit")
 	w("*filter")
-	w(":%s - [0:0]", Chain)
-	w("-F %s", Chain)
+	w(":%s - [0:0]", chain)
+	w("-F %s", chain)
 	if !p.Enabled {
-		w("-A %s -j RETURN", Chain)
+		w("-A %s -j RETURN", chain)
 		w("COMMIT")
 		res.Rules = b.String()
 		return res
 	}
-	w("-A %s -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT", Chain)
+	w("-A %s -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT", chain)
 	missing := map[string]bool{}
 	for i, r := range p.Rules {
 		var src string
@@ -233,13 +236,13 @@ func Render(p Policy, c Clients) Result {
 					reject = " --reject-with tcp-reset"
 				}
 			}
-			w("-A %s%s%s%s -j %s%s", Chain, src, dst, m, target, reject)
+			w("-A %s%s%s%s -j %s%s", chain, src, dst, m, target, reject)
 		}
 	}
 	if p.Default == Deny {
-		w("-A %s -j REJECT --reject-with icmp-admin-prohibited", Chain)
+		w("-A %s -j REJECT --reject-with icmp-admin-prohibited", chain)
 	} else {
-		w("-A %s -j RETURN", Chain)
+		w("-A %s -j RETURN", chain)
 	}
 	w("COMMIT")
 	sort.Strings(res.Missing)

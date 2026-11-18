@@ -17,6 +17,8 @@ cleanup() {
 	wait 2>/dev/null || true
 	ip netns exec twc ip link del tdwc 2>/dev/null || true
 	ip link del tdwg0 2>/dev/null || true
+	for c in INPUT FORWARD; do iptables -D "$c" -i tdwg0 -j TD-tdwg0 2>/dev/null || true; done
+	iptables -F TD-tdwg0 2>/dev/null && iptables -X TD-tdwg0 2>/dev/null || true
 	rm -f /etc/wireguard/tdwg0.* /etc/wireguard/tdwc.conf
 	ip netns del twc 2>/dev/null || true
 	ip link del twh 2>/dev/null || true
@@ -372,6 +374,18 @@ a = next(u for u in r["users"] if u["name"] == "wgalice")
 assert a["upload"] > 20000 and a["download"] > 20000, a
 print("    wgalice:", a)
 PY
+	log "WireGuard access rules: chain TD-tdwg0 filters wgalice's real traffic"
+	wgfw() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT -d "$1" "$WEB/api/v1/servers/tdwg0/firewall"; }
+	wgfw '{"enabled":true,"default":"deny","rules":[]}' >"$WORK/wgfw1.json" || fail "save WireGuard rules"
+	grep -q '"applied":true' "$WORK/wgfw1.json" || fail "WireGuard rules not applied: $(cat "$WORK/wgfw1.json")"
+	iptables -C INPUT -i tdwg0 -j TD-tdwg0 && iptables -C FORWARD -i tdwg0 -j TD-tdwg0 || fail "no jump to TD-tdwg0"
+	! wgping || fail "ping passes although everything is blocked"
+	wgfw '{"enabled":true,"default":"deny","rules":[{"client":"wgalice","to":"10.97.0.1","proto":"icmp","action":"allow"}]}' >"$WORK/wgfw2.json"
+	iptables -S TD-tdwg0 | grep -q -- "-s 10.97.0.2/32 -d 10.97.0.1/32 -p icmp -j ACCEPT" || fail "wgalice's rule missing: $(iptables -S TD-tdwg0)"
+	wait_for 5 wgping || fail "allowed ping blocked"
+	wgfw '{"enabled":false,"default":"deny","rules":[]}' >/dev/null
+	wait_for 5 wgping || fail "ping blocked although the rules are off"
+	iptables -S TD-FWD | grep -q -- "-j RETURN" || fail "OpenVPN chain changed by WireGuard rules"
 	log "wgalice connected and shows up live; disable cuts her off without restarting the interface"
 	port_before=$(wg show tdwg0 listen-port)
 	api -X PUT -d '{"disabled":true}' "$API/v1/servers/tdwg0/peers/wgalice" >/dev/null || fail "disable"
@@ -383,6 +397,7 @@ PY
 	ip netns exec twc wg-quick down /etc/wireguard/tdwc.conf >/dev/null 2>&1 || true
 	api -X DELETE "$API/v1/servers/tdwg0" || fail "remove WireGuard server"
 	! ip link show tdwg0 >/dev/null 2>&1 || fail "tdwg0 still there after remove"
+	! iptables -S TD-tdwg0 >/dev/null 2>&1 || fail "TD-tdwg0 chain left after remove"
 	log "traffic recorded per server; removing the server takes the interface down"
 else
 	log "WireGuard tools not installed: skipping the WireGuard test"

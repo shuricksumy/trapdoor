@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
-  import { toast } from '../lib/state.svelte.js';
+  import { toast, currentServer } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
 
   let state = $state(null); // last answer from the agent
@@ -13,12 +13,38 @@
   let net = $state(null);
   let showRules = $state(false);
 
+  const isWG = currentServer()?.type === 'wireguard';
+
+  // WireGuard: every client has a fixed address; build the same shape as
+  // OpenVPN's /network from the client list.
+  function wgNetwork(peers, fw) {
+    const n = { static_ips: {}, client_lans: {}, routes: [] };
+    if (fw?.subnet) n.server_ip = fw.subnet.replace(/\.\d+\/\d+$/, '.1');
+    for (const p of peers) {
+      n.static_ips[p.name] = p.address;
+      if (p.lan?.length) n.client_lans[p.name] = p.lan;
+    }
+    return n;
+  }
+
+  async function loadNetwork(fw) {
+    if (!isWG) return api('/network').catch(() => null);
+    return wgNetwork(await api('/peers').catch(() => []), fw);
+  }
+
   async function load() {
     try {
-      const [fw, cs, n] = await Promise.all([api('/firewall'), api('/certs').catch(() => []), api('/network').catch(() => null)]);
-      take(fw);
-      clients = cs.filter((c) => c.current && c.kind !== 'server' && c.status !== 'revoked').map((c) => c.name).sort();
-      net = n;
+      if (isWG) {
+        const [fw, peers] = await Promise.all([api('/firewall'), api('/peers').catch(() => [])]);
+        take(fw);
+        clients = peers.filter((p) => !p.disabled).map((p) => p.name).sort();
+        net = wgNetwork(peers, fw);
+      } else {
+        const [fw, cs, n] = await Promise.all([api('/firewall'), api('/certs').catch(() => []), api('/network').catch(() => null)]);
+        take(fw);
+        clients = cs.filter((c) => c.current && c.kind !== 'server' && c.status !== 'revoked').map((c) => c.name).sort();
+        net = n;
+      }
       loadError = '';
     } catch (e) {
       loadError = e.message;
@@ -60,7 +86,7 @@
       const names = state.missing;
       take(await api('/firewall/addresses', { method: 'POST', body: { names } }));
       toast(`Fixed addresses given to ${names.join(', ')}. The rules apply when ${names.length === 1 ? 'it reconnects' : 'they reconnect'}.`);
-      net = await api('/network').catch(() => net);
+      net = (await loadNetwork(state)) ?? net;
     } catch (e) {
       toast(e.message, 'bad');
     } finally {
@@ -199,7 +225,10 @@
   <details class="generated" bind:open={showRules}>
     <summary>Generated iptables rules</summary>
     <pre class="mono">{state.rules}</pre>
-    <p class="hint">Chain TD-FWD, used for traffic coming from VPN clients (INPUT and FORWARD on tun devices). Shown as last saved.</p>
+    <p class="hint">
+      {#if isWG}Chain TD-{currentServer()?.id}, used for traffic coming from this server's clients (INPUT and FORWARD on its interface).{:else}Chain TD-FWD, used for traffic coming from VPN clients (INPUT and FORWARD on tun devices).{/if}
+      Shown as last saved.
+    </p>
   </details>
 
   {#if dirty}
