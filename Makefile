@@ -4,7 +4,13 @@ DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG     := github.com/shuricksumy/tunnelward/internal/version
 LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE)
 
-.PHONY: build test lint fmt clean
+.PHONY: all ui build test lint fmt clean
+
+all: ui build
+
+# Builds web/ into internal/webui/dist, which `build` embeds.
+ui:
+	cd web && npm ci && npm run check && npm run build
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/tunnelward ./cmd/tunnelward
@@ -20,3 +26,4 @@ fmt:
 
 clean:
 	rm -rf bin dist
+	find internal/webui/dist -mindepth 1 ! -name .gitkeep -delete

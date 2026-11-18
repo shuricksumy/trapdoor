@@ -42,6 +42,10 @@ log "start web (records session history every 5s)"
 PIDS+=($!)
 for _ in $(seq 50); do curl -fs "$WEB/healthz" >/dev/null 2>&1 && break; sleep 0.1; done
 curl -s -o /dev/null -w "%{http_code}" "$WEB/api/v1/stats" | grep -q 401 || fail "web API open without login"
+if curl -fsS "$WEB/" | grep -q 'id="app"'; then
+	curl -fsSI "$WEB/certificates" | grep -qi "content-security-policy: default-src 'self'" || fail "UI served without CSP"
+	log "web UI served (with CSP)"
+fi
 TW_ADMIN_PASSWORD=e2e-admin-password "$BIN" user add admin >/dev/null
 JAR=$WORK/cookies
 code=$(curl -s -o /dev/null -w "%{http_code}" -c "$JAR" -H "Content-Type: application/json" \

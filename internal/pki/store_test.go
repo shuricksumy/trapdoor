@@ -148,6 +148,13 @@ func TestIssueServer(t *testing.T) {
 	if _, err := s.Issue(ctx(), IssueRequest{Name: "server", Kind: KindServer}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.Issue(ctx(), IssueRequest{Name: "alice"}); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := s.List(ctx())
+	if len(list) != 2 || list[0].Kind != KindServer || list[1].Kind != KindClient {
+		t.Errorf("kinds = %+v", list)
+	}
 	cert, err := s.readCert(s.path("issued/server.crt"))
 	if err != nil {
 		t.Fatal(err)

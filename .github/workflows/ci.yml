@@ -25,6 +25,18 @@ jobs:
       - name: build
         run: make build && ./bin/tunnelward version
 
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Type-check and build
+        run: make ui
+
   # PKI compatibility against the real easyrsa + openssl CLIs.
   compat:
     runs-on: ubuntu-latest
@@ -56,12 +68,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - name: Install openvpn
         run: sudo apt-get update -qq && sudo apt-get install -y -qq openvpn
       - name: tls-crypt-v2 unit tests
         run: go test -count=1 -v -run TLSCryptV2 ./internal/ovpn/
-      - name: Build
-        run: make build
+      - name: Build (with UI)
+        run: make ui build
       - name: End-to-end
         run: sudo test/e2e/run.sh bin/tunnelward
 

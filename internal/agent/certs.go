@@ -228,5 +228,6 @@ func toAPICert(c pki.Cert) api.Cert {
 		RevokedAt:    c.RevokedAt,
 		RevokeReason: c.RevokeReason,
 		Current:      c.Current,
+		Kind:         string(c.Kind),
 	}
 }
