@@ -295,6 +295,26 @@ func TestWireGuardFileMode(t *testing.T) {
 	}
 }
 
+func TestWireGuardSubnetClashWithOpenVPN(t *testing.T) {
+	ovpn := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ovpn, "server.conf"), []byte("server 10.8.0.0 255.255.255.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewHost("secret", log, New(config.Agent{Token: "secret", OpenVPNDir: ovpn}, log, nil))
+	h.EnableWireGuard(config.Agent{WireGuard: "file", WireGuardDir: t.TempDir()}, nil)
+	srv := httptest.NewServer(h.Handler())
+	t.Cleanup(srv.Close)
+	c := NewClient(srv.URL, "secret", 5*time.Second)
+	ctx := context.Background()
+	if _, err := c.CreateServer(ctx, api.CreateServer{Type: api.TypeWireGuard, ID: "wg0", PublicHost: "h", Subnet: "10.8.0.0/16"}); !IsStatus(err, http.StatusConflict) {
+		t.Errorf("overlap with OpenVPN: %v", err)
+	}
+	if _, err := c.CreateServer(ctx, api.CreateServer{Type: api.TypeWireGuard, ID: "wg0", PublicHost: "h"}); err != nil {
+		t.Errorf("default subnet next to OpenVPN: %v", err)
+	}
+}
+
 func TestWireGuardOff(t *testing.T) {
 	c, _ := wgHost(t, config.Agent{WireGuard: "off", WireGuardDir: t.TempDir()})
 	if _, err := c.CreateServer(context.Background(), api.CreateServer{Type: api.TypeWireGuard, ID: "wg0", PublicHost: "h"}); !IsStatus(err, http.StatusBadRequest) {

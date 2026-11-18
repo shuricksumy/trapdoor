@@ -151,6 +151,12 @@ func (h *Host) handleCreate(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusConflict, "a server with id "+st.ID+" exists")
 			return
 		}
+		if o, ok := m.b.(*Server); ok {
+			if sc, err := o.serverConf(); err == nil && sc.Subnet.IsValid() && sc.Subnet.Overlaps(st.Address.Masked()) {
+				httpx.WriteError(w, http.StatusConflict, "subnet overlaps the OpenVPN server's "+sc.Subnet.String())
+				return
+			}
+		}
 		if o, ok := m.b.(*WGServer); ok {
 			if o.st.ListenPort == st.ListenPort {
 				httpx.WriteError(w, http.StatusConflict, "port "+strconv.Itoa(st.ListenPort)+" is used by "+o.st.Name)
