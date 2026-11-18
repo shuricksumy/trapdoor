@@ -25,13 +25,17 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
 # userspace implementation and its tools are built at pinned releases, so
 # the host needs no kernel module.
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS awg-go
-ARG TARGETOS TARGETARCH AMNEZIAWG_GO_VERSION=v3.1.20261116
+ARG TARGETOS TARGETARCH
+# Renovate opens a PR (built and smoke-tested by CI) for each new release.
+# renovate: datasource=github-tags depName=amnezia-vpn/amneziawg-go
+ARG AMNEZIAWG_GO_VERSION=v3.1.20261116
 RUN apk add --no-cache git \
  && git clone --depth 1 --branch "$AMNEZIAWG_GO_VERSION" https://github.com/amnezia-vpn/amneziawg-go /src
 WORKDIR /src
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w" -o /out/amneziawg-go .
 
 FROM alpine:3.22 AS awg-tools
+# renovate: datasource=github-tags depName=amnezia-vpn/amneziawg-tools
 ARG AMNEZIAWG_TOOLS_VERSION=v3.1.20260812
 RUN apk add --no-cache git make gcc musl-dev linux-headers bash \
  && git clone --depth 1 --branch "$AMNEZIAWG_TOOLS_VERSION" https://github.com/amnezia-vpn/amneziawg-tools /src

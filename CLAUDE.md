@@ -55,7 +55,7 @@ Run locally: `TD_AGENT_TOKEN=dev TD_OPENVPN_DIR=/tmp/td TD_CRL_COPIES=- TD_FIREW
 
 - Only `main` is long-lived. Work happens on a short-lived branch per step: push, open a PR, merge (squash) only when every check is green. The weekly Branch cleanup workflow deletes merged branches.
 - Commits and PRs explain the why; keep README.md, docs/ and ROADMAP.md up to date in the same PR.
-- CI: `ci.yml` (test, ui, compat, e2e, lint), `docker-publish.yml` (smoke on PRs; on `main` it publishes `ghcr.io/shuricksumy/trapdoor:latest` plus a short-sha tag for amd64 and arm64), `codeql.yml`, and cleanup workflows. Actions are pinned to commit SHAs.
+- CI: `ci.yml` (test, ui, compat, e2e, lint), `docker-publish.yml` (smoke on PRs; on `main` it publishes `ghcr.io/shuricksumy/trapdoor:latest` plus a short-sha tag for amd64 and arm64), `codeql.yml`, `upstream-rebuild.yml` (daily: rebuilds `:latest` without cache when Alpine has newer packages, e.g. OpenVPN), and cleanup workflows. AmneziaWG versions are Dockerfile ARGs tracked by Renovate (`# renovate:` comments, `renovate.json` custom manager). Actions are pinned to commit SHAs.
 - Releases: put the notes in `docs/releases/vX.Y.Z.md`, then Actions → Release → version `X.Y.Z` on `main`. It creates the tag, a GitHub release with Linux binaries, and the `X.Y.Z` / `X.Y` / `latest` images.
 - The owner prefers one step at a time for anything he has to do on his own server.
 - Next up (ROADMAP.md): first release v0.1.0, then v3 (servers as objects, WireGuard, AmneziaWG).

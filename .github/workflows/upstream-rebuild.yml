@@ -1,0 +1,60 @@
+name: Rebuild for new OpenVPN / Alpine packages
+
+# OpenVPN, wireguard-tools, iptables and the rest of the image come from
+# Alpine's packages, which have no version pin to bump. Once a day this asks
+# the published :latest image whether Alpine has newer packages; if so it
+# starts the publish workflow without cache: the smoke test (real OpenVPN,
+# WireGuard and AmneziaWG clients) runs first, then :latest is replaced.
+# Pinned versions (AmneziaWG, base image, Go modules) are Renovate's job.
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      actions: write # start docker-publish.yml
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}:latest
+    steps:
+      - name: Compare installed packages with Alpine's
+        id: cmp
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! docker pull -q "$IMAGE" >/dev/null 2>&1; then
+            echo "No $IMAGE yet; nothing to compare." >>"$GITHUB_STEP_SUMMARY"
+            echo "outdated=0" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Packages with a newer version in the image's Alpine repositories.
+          docker run --rm -u root --entrypoint sh "$IMAGE" -c \
+            'apk update -q >/dev/null && apk version -l "<" | tail -n +2' >outdated.txt
+          version() { docker run --rm --entrypoint sh "$IMAGE" -c "$1" 2>/dev/null | head -1; }
+          {
+            echo "### Image \`$IMAGE\`"
+            upstream=$(gh api repos/OpenVPN/openvpn/releases/latest -q .tag_name 2>/dev/null || echo unknown)
+            echo "- OpenVPN: $(version 'openvpn --version' | cut -d' ' -f2) (latest upstream release: $upstream; Alpine packages it after a while)"
+            echo "- wireguard-tools: $(version 'wg --version' | cut -d' ' -f2)"
+            echo "- AmneziaWG tools: $(version 'awg --version' | cut -d' ' -f2) (pinned, updated by Renovate)"
+            echo
+            if [ -s outdated.txt ]; then
+              echo "Newer Alpine packages, rebuilding:"
+              echo '```'; cat outdated.txt; echo '```'
+            else
+              echo "All packages are current."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+          echo "outdated=$(grep -c . outdated.txt || true)" >>"$GITHUB_OUTPUT"
+
+      - name: Rebuild and publish :latest
+        if: steps.cmp.outputs.outdated != '0'
+        run: gh workflow run docker-publish.yml --repo "$GITHUB_REPOSITORY" --ref main -f fresh=true
+        env:
+          GH_TOKEN: ${{ github.token }}
