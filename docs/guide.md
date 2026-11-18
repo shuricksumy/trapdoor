@@ -185,6 +185,9 @@ interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/2
 | `file` | the agent writes the files; the VPN container brings the interfaces up and reports `wg show` (coming with WireGuard in Docker) |
 | `off` | no WireGuard servers — the compose default for now |
 
+On Ubuntu, AppArmor lets `wg-quick` read configurations only from `/etc/wireguard`, so keep
+the default `TD_WIREGUARD_DIR` there.
+
 ## Admin login and security
 
 Create admins with the CLI (`trapdoor user add <name>`, also `passwd`, `del`, `list`); the

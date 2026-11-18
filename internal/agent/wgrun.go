@@ -106,10 +106,10 @@ func (f wgFile) Apply(context.Context, string, string, bool) error { return nil 
 func (f wgFile) Down(context.Context, string, string) error        { return nil }
 
 func (f wgFile) Dump(_ context.Context, id string) (string, error) {
-	if b, err := os.ReadFile(filepath.Join(f.dir, id+".error")); err == nil && len(bytes.TrimSpace(b)) > 0 {
+	if b, err := os.ReadFile(wgPath(f.dir, id, ".error")); err == nil && len(bytes.TrimSpace(b)) > 0 {
 		return "", errors.New(strings.TrimSpace(string(b)))
 	}
-	path := filepath.Join(f.dir, id+".dump")
+	path := wgPath(f.dir, id, ".dump")
 	fi, err := os.Stat(path)
 	if err != nil || f.now().Sub(fi.ModTime()) > wgDumpMaxAge {
 		return "", errors.New("the VPN container has not reported this WireGuard interface (is it running?)")

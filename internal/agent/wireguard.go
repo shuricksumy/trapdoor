@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -126,12 +127,17 @@ func LoadWireGuard(ctx context.Context, cfg config.Agent, log *slog.Logger) ([]*
 	return out, nil
 }
 
-// validWGID: the id is the interface name (IFNAMSIZ 16 with the NUL).
-func validWGID(id string) bool {
-	if id == "" || len(id) > 15 || id[0] < 'a' || id[0] > 'z' {
-		return false
+// wgIDPattern: the id is the interface name (IFNAMSIZ 16 with the NUL).
+var wgIDPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,14}$`)
+
+func validWGID(id string) bool { return wgIDPattern.MatchString(id) }
+
+// wgPath is <dir>/<id><ext>; the id check keeps the path inside dir.
+func wgPath(dir, id, ext string) string {
+	if !wgIDPattern.MatchString(id) {
+		panic("wireguard: invalid server id " + strconv.Quote(id)) // ids are checked on create and load
 	}
-	return strings.Trim(id, "abcdefghijklmnopqrstuvwxyz0123456789-") == ""
+	return filepath.Join(dir, id+ext)
 }
 
 // createWGServer validates req and returns the new server's state.
@@ -211,7 +217,7 @@ func (s *WGServer) endpoint() string {
 	return net.JoinHostPort(s.st.PublicHost, strconv.Itoa(s.st.PublicPort))
 }
 
-func (s *WGServer) confPath() string { return filepath.Join(s.dir, s.st.ID+".conf") }
+func (s *WGServer) confPath() string { return wgPath(s.dir, s.st.ID, ".conf") }
 
 // Info describes the server.
 func (s *WGServer) Info(ctx context.Context) api.ServerInfo {
@@ -236,7 +242,7 @@ func (s *WGServer) save(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := writeFileAtomic(filepath.Join(s.dir, s.st.ID+".json"), b); err != nil {
+	if err := writeFileAtomic(wgPath(s.dir, s.st.ID, ".json"), b); err != nil {
 		return err
 	}
 	s.applyLocked(ctx, false)
@@ -290,7 +296,7 @@ func (s *WGServer) remove(ctx context.Context) error {
 		return err
 	}
 	for _, ext := range []string{".conf", ".json", ".dump", ".error"} {
-		if err := os.Remove(filepath.Join(s.dir, s.st.ID+ext)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := os.Remove(wgPath(s.dir, s.st.ID, ext)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}
