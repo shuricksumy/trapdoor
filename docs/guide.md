@@ -164,7 +164,7 @@ traffic of the gap is spread over its hours and flagged `estimated` instead of o
 ## WireGuard servers
 
 Next to OpenVPN, the agent can run WireGuard servers (so far through the
-[agent API](api.md#wireguard); the web UI follows). Each server is a network
+[agent API](api.md#wireguard)). In the web UI, use "Add WireGuard server" to create one; its Clients page adds devices, shows the config with a QR code and disables or deletes them. Each server is a network
 interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/24`:
 
 - The agent keeps each server in `TD_WIREGUARD_DIR` (default `/etc/wireguard`):

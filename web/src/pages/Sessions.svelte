@@ -2,8 +2,9 @@
   import { onMount } from 'svelte';
   import { api, poll } from '../lib/api.js';
   import { bytes, duration, dateTime } from '../lib/format.js';
-  import { toast } from '../lib/state.svelte.js';
+  import { toast, currentServer } from '../lib/state.svelte.js';
 
+  const kickable = $derived(currentServer()?.type !== 'wireguard');
   let live = $state(null);
   let error = $state('');
   let recent = $state([]);
@@ -38,7 +39,7 @@
 
 <header class="head">
   <h1>Connected</h1>
-  <p class="muted">Live from OpenVPN, refreshed every 10 seconds.</p>
+  <p class="muted">Live from {kickable ? 'OpenVPN' : 'WireGuard (a client counts as connected while its last handshake is recent)'}, refreshed every 10 seconds.</p>
 </header>
 
 {#if error}<div class="banner bad" role="alert">Live sessions are unavailable: {error}</div>{/if}
@@ -57,7 +58,7 @@
             <th>Online for</th>
             <th class="num">Down</th>
             <th class="num">Up</th>
-            <th class="hide-s">Cipher</th>
+            {#if kickable}<th class="hide-s">Cipher</th>{/if}
             <th><span class="sr">Actions</span></th>
           </tr>
         </thead>
@@ -70,8 +71,8 @@
               <td title={dateTime(s.connected_since)}>{duration((now - new Date(s.connected_since)) / 1000)}</td>
               <td class="num">{bytes(s.bytes_sent)}</td>
               <td class="num">{bytes(s.bytes_received)}</td>
-              <td class="mono hide-s faint">{s.cipher}</td>
-              <td class="act"><button class="btn small" onclick={() => kick(s)}>Disconnect</button></td>
+              {#if kickable}<td class="mono hide-s faint">{s.cipher}</td>{/if}
+              <td class="act">{#if kickable}<button class="btn small" onclick={() => kick(s)}>Disconnect</button>{/if}</td>
             </tr>
           {/each}
         </tbody>

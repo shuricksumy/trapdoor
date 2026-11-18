@@ -1,5 +1,5 @@
 <script>
-  import { route, session, navigate, toasts, settings, servers, setServers, selectServer } from './lib/state.svelte.js';
+  import { route, session, navigate, toasts, settings, servers, setServers, selectServer, currentServer } from './lib/state.svelte.js';
   import { api } from './lib/api.js';
   import ThemeSwitch from './lib/ThemeSwitch.svelte';
   import Login from './pages/Login.svelte';
@@ -11,6 +11,9 @@
   import Server from './pages/Server.svelte';
   import Setup from './pages/Setup.svelte';
   import Access from './pages/Access.svelte';
+  import WireGuardOverview from './pages/WireGuardOverview.svelte';
+  import WireGuardClients from './pages/WireGuardClients.svelte';
+  import NewWireGuard from './pages/NewWireGuard.svelte';
 
   const pages = [
     { path: '/', label: 'Overview', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', component: Dashboard },
@@ -21,14 +24,26 @@
     { path: '/server', label: 'Server', icon: 'M4 5h16v5H4zM4 14h16v5H4zM8 7.5h.01M8 16.5h.01', component: Server },
   ];
 
+  const wgPages = [
+    { path: '/', label: 'Overview', icon: pages[0].icon, component: WireGuardOverview },
+    { path: '/clients', label: 'Clients', icon: pages[1].icon, component: WireGuardClients },
+    pages[2],
+    pages[3],
+  ];
+
+  const isWG = $derived(currentServer()?.type === 'wireguard');
+  const navPages = $derived(isWG ? wgPages : pages);
+
   const current = $derived(
     route.path === '/login'
       ? { component: Login }
       : route.path === '/account'
         ? { component: Account }
-        : route.path === '/setup'
-          ? { component: Setup }
-        : (pages.find((p) => p.path === route.path) ?? pages[0]),
+        : route.path === '/servers/new'
+          ? { component: NewWireGuard }
+          : route.path === '/setup' && !isWG
+            ? { component: Setup }
+            : (navPages.find((p) => p.path === route.path) ?? navPages[0]),
   );
 
   $effect(() => {
@@ -48,8 +63,7 @@
     api('/status')
       .then((st) => {
         if (st.expiry_warn_days) settings.expiryWarnDays = st.expiry_warn_days;
-        // WireGuard servers get their pages with the WireGuard UI.
-        setServers((st.agent?.servers ?? []).filter((s) => s.type === 'openvpn'));
+        setServers(st.agent?.servers ?? []);
       })
       .catch(() => {});
   });
@@ -57,6 +71,10 @@
   // Setup state of the selected server.
   $effect(() => {
     if (!session.user || !servers.current) return;
+    if (currentServer()?.type !== 'openvpn') {
+      settings.setupNeeded = false;
+      return;
+    }
     api('/setup')
       .then((st) => {
         settings.setupNeeded = st.needed;
@@ -66,8 +84,8 @@
   });
 
   $effect(() => {
-    const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup' };
-    const name = titles[route.path] ?? pages.find((p) => p.path === route.path)?.label ?? 'Overview';
+    const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup', '/servers/new': 'Add WireGuard server' };
+    const name = titles[route.path] ?? navPages.find((p) => p.path === route.path)?.label ?? 'Overview';
     document.title = `${name} · trapdoor`;
   });
 </script>
@@ -87,7 +105,7 @@
         <span>trapdoor</span>
       </a>
       <ul>
-        {#each pages as p (p.path)}
+        {#each navPages as p (p.path)}
           <li>
             <a href={p.path} class:active={route.path === p.path} aria-current={route.path === p.path ? 'page' : undefined}>
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
@@ -108,16 +126,19 @@
     </nav>
 
     <main>
-      {#if servers.list.length > 1}
-        <label class="server-switch">
-          <span>Server</span>
-          <select value={servers.current} onchange={(e) => selectServer(e.currentTarget.value)}>
-            {#each servers.list as sv (sv.id)}
-              <option value={sv.id}>{sv.name}</option>
-            {/each}
-          </select>
-        </label>
-      {/if}
+      <div class="server-bar">
+        {#if servers.list.length > 1}
+          <label class="server-switch">
+            <span>Server</span>
+            <select value={servers.current} onchange={(e) => { selectServer(e.currentTarget.value); navigate('/'); }}>
+              {#each servers.list as sv (sv.id)}
+                <option value={sv.id}>{sv.name}</option>
+              {/each}
+            </select>
+          </label>
+        {/if}
+        {#if route.path !== '/servers/new'}<a class="add-server small" href="/servers/new">Add WireGuard server</a>{/if}
+      </div>
       {#key servers.current}
         <current.component />
       {/key}
@@ -180,14 +201,23 @@
   }
   .rail-foot { margin-top: auto; display: grid; gap: var(--space-3); }
 
+  .server-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+  .server-bar:not(:has(.server-switch)) { justify-content: flex-end; }
   .server-switch {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-    margin-bottom: var(--space-4);
     color: var(--ink-2);
     font-size: 14px;
   }
+  .add-server { color: var(--ink-2); }
   .avatar {
     display: grid;
     place-items: center;

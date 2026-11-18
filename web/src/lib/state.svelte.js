@@ -53,9 +53,15 @@ export function selectServer(id) {
   }
 }
 
-/** Pick the remembered server if it still exists, else the first one. */
+/** The selected server (id, type, name, …), or undefined before the list is loaded. */
+export function currentServer() {
+  return servers.list.find((s) => s.id === servers.current);
+}
+
+/** Keep the selected server if it still exists, else the remembered one, else the first one. */
 export function setServers(list) {
   servers.list = list;
+  if (list.some((s) => s.id === servers.current)) return;
   let saved = '';
   try {
     saved = localStorage.getItem('td-server') || '';
