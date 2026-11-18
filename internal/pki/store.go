@@ -220,7 +220,7 @@ func (s *Store) Issue(_ context.Context, req IssueRequest) (Cert, error) {
 		req.Kind = KindClient
 	}
 	if req.Kind != KindClient && req.Kind != KindServer {
-		return Cert{}, fmt.Errorf("unknown certificate kind %q", req.Kind)
+		return Cert{}, fmt.Errorf("%w: %q", ErrInvalidKind, req.Kind)
 	}
 	name := req.Name
 

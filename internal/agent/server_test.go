@@ -17,7 +17,7 @@ import (
 func testServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	cfg := config.Agent{Token: "secret", OpenVPNDir: "/ovpn", PKIDir: "/ovpn/pki"}
-	srv := httptest.NewServer(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler())
+	srv := httptest.NewServer(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil).Handler())
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -62,7 +62,7 @@ func TestClientOverUnixSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Agent{Token: "secret", PKIDir: "/p"}
-	h := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
+	h := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil).Handler()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

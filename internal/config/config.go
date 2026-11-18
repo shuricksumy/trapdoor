@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -24,6 +25,11 @@ type Agent struct {
 	PKIDir string
 	// MgmtAddr is the OpenVPN management interface address. TW_OPENVPN_MGMT
 	MgmtAddr string
+	// CAPassphrase unlocks an encrypted CA key.            TW_CA_PASSPHRASE
+	CAPassphrase string
+	// CRLCopies get a copy of crl.pem after every change
+	// (comma-separated; "-" disables).                     TW_CRL_COPIES
+	CRLCopies []string
 }
 
 // Web is the configuration of the web/API process.
@@ -48,11 +54,13 @@ var ErrNoToken = errors.New("TW_AGENT_TOKEN must be set")
 func LoadAgent() (Agent, error) {
 	openvpnDir := env("TW_OPENVPN_DIR", "/etc/openvpn")
 	c := Agent{
-		Listen:     env("TW_AGENT_LISTEN", "127.0.0.1:9090"),
-		Token:      os.Getenv("TW_AGENT_TOKEN"),
-		OpenVPNDir: openvpnDir,
-		PKIDir:     env("TW_PKI_DIR", openvpnDir+"/easy-rsa/pki"),
-		MgmtAddr:   env("TW_OPENVPN_MGMT", "127.0.0.1:2080"),
+		Listen:       env("TW_AGENT_LISTEN", "127.0.0.1:9090"),
+		Token:        os.Getenv("TW_AGENT_TOKEN"),
+		OpenVPNDir:   openvpnDir,
+		PKIDir:       env("TW_PKI_DIR", openvpnDir+"/easy-rsa/pki"),
+		MgmtAddr:     env("TW_OPENVPN_MGMT", "127.0.0.1:2080"),
+		CAPassphrase: os.Getenv("TW_CA_PASSPHRASE"),
+		CRLCopies:    list(env("TW_CRL_COPIES", openvpnDir+"/crl.pem")),
 	}
 	if c.Token == "" {
 		return c, ErrNoToken
@@ -77,6 +85,20 @@ func LoadWeb() (Web, error) {
 		return c, ErrNoToken
 	}
 	return c, nil
+}
+
+// list splits a comma-separated value; "-" means an empty list.
+func list(v string) []string {
+	if v == "-" {
+		return nil
+	}
+	var out []string
+	for _, p := range strings.Split(v, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func env(key, def string) string {

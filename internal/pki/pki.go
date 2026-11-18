@@ -72,6 +72,7 @@ var (
 	ErrNotFound       = errors.New("certificate not found")
 	ErrAlreadyExists  = errors.New("certificate already exists")
 	ErrInvalidName    = errors.New("invalid certificate name")
+	ErrInvalidKind    = errors.New("invalid certificate kind")
 	ErrNotValid       = errors.New("certificate is not valid")
 	ErrNotRevoked     = errors.New("certificate is not revoked")
 	ErrNotInitialized = errors.New("PKI is not initialized")
