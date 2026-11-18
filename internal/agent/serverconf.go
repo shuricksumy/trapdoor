@@ -47,7 +47,7 @@ func (s *Server) handleGetServerConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, api.ServerConfig{
 		Raw: raw, Version: ver,
-		Settings: toSettings(serverconf.Parse(raw)),
+		Settings: toSettings(serverconf.ParseDefault(raw, string(s.defaultTopology()))),
 		Pending:  s.conf.Pending(),
 		Problems: toProblems(serverconf.Check(r.Context(), raw, s.cfg.OpenVPNDir, s.cfg.OpenVPNBin)),
 		Restart:  s.cfg.RestartSignal,

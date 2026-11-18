@@ -24,12 +24,12 @@ func (s *Server) registerNetworkRoutes(mux *http.ServeMux) {
 func (s *Server) serverConf() (ccdnet.Server, error) {
 	data, err := os.ReadFile(filepath.Join(s.cfg.OpenVPNDir, "server.conf"))
 	if errors.Is(err, fs.ErrNotExist) {
-		return ccdnet.Server{Topology: ccdnet.TopologyNet30}, nil
+		return ccdnet.Server{Topology: s.defaultTopology()}, nil
 	}
 	if err != nil {
 		return ccdnet.Server{}, err
 	}
-	return ccdnet.ParseServer(string(data)), nil
+	return ccdnet.ParseServerDefault(string(data), s.defaultTopology()), nil
 }
 
 // staticIPs returns the static address of every client with one.

@@ -166,3 +166,16 @@ func TestFreeAddress(t *testing.T) {
 		t.Errorf("net30: %v", a)
 	}
 }
+
+func TestParseServerDefaultTopology(t *testing.T) {
+	conf := "server 10.8.0.0 255.255.255.0\n"
+	if got := ParseServer(conf).Topology; got != TopologyNet30 {
+		t.Errorf("ParseServer default = %s", got)
+	}
+	if got := ParseServerDefault(conf, TopologySubnet).Topology; got != TopologySubnet {
+		t.Errorf("ParseServerDefault = %s", got)
+	}
+	if got := ParseServerDefault(conf+"topology net30\n", TopologySubnet).Topology; got != TopologyNet30 {
+		t.Errorf("explicit topology overridden: %s", got)
+	}
+}

@@ -34,7 +34,7 @@ RUN apk add --no-cache git \
 WORKDIR /src
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w" -o /out/amneziawg-go .
 
-FROM alpine:3.22 AS awg-tools
+FROM alpine:3.24 AS awg-tools
 # renovate: datasource=github-tags depName=amnezia-vpn/amneziawg-tools
 ARG AMNEZIAWG_TOOLS_VERSION=v3.1.20260812
 RUN apk add --no-cache git make gcc musl-dev linux-headers bash \
@@ -42,7 +42,7 @@ RUN apk add --no-cache git make gcc musl-dev linux-headers bash \
 WORKDIR /src/src
 RUN make && make install DESTDIR=/out WITH_WGQUICK=yes WITH_BASHCOMPLETION=no WITH_SYSTEMDUNITS=no
 
-FROM alpine:3.22
+FROM alpine:3.24
 # openvpn: the server itself, and `openvpn --genkey` for tls-crypt-v2 client keys (agent)
 # iptables: NAT for VPN clients (openvpn service only)
 # wireguard-tools: wg / wg-quick for WireGuard servers (the kernel module comes from the host;
