@@ -350,8 +350,8 @@ if command -v wg >/dev/null && command -v wg-quick >/dev/null; then
 	ip netns exec twc wg-quick up /etc/wireguard/tdwc.conf >"$WORK/wg-client.log" 2>&1 || fail "client wg-quick up"
 	wgping() { ip netns exec twc ping -c 1 -W 1 10.98.0.1 >/dev/null 2>&1; }
 	wgdiag() {
-		for c in "wg show tdwg0 dump" "ip netns exec twc wg show all dump" "ip netns exec twc ip route" "iptables -S INPUT" \
-			"ss -ulpn" "aa-status" "dmesg"; do
+		for c in "ip -br addr" "ip route" "ip route get 10.98.0.2" "ip rule" "sysctl net.ipv4.conf.all.rp_filter net.ipv4.conf.tdwg0.rp_filter" \
+			"wg show tdwg0 dump" "iptables -S" "iptables -t raw -S" "iptables -t mangle -S" "nft list ruleset" "dmesg"; do
 			echo "### $c"
 			$c 2>&1 | grep -v "^\s*$" | { [[ $c == dmesg ]] && grep -i apparmor | tail -20 || cat; } | cut -c1-220
 		done
