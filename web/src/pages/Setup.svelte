@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
-  import { navigate, settings, toast } from '../lib/state.svelte.js';
+  import { navigate, settings, toast, servers } from '../lib/state.svelte.js';
 
   let status = $state(null);
   let loadError = $state('');
@@ -79,7 +79,7 @@
       await new Promise((r) => setTimeout(r, 3000));
       try {
         const st = await api('/status');
-        if (st.agent?.openvpn_version) {
+        if (st.agent?.servers?.find((x) => x.id === servers.current)?.openvpn_version) {
           running = true;
           toast('OpenVPN is running.');
         }

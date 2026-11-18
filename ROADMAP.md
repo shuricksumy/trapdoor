@@ -53,6 +53,8 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
 - [ ] **Servers** as their own objects: each has a type (OpenVPN / WireGuard / AmneziaWG), name,
       port, subnet; clients, live sessions, traffic history and access rules belong to a server;
       server switcher in the UI; existing setups become the first OpenVPN server
+  - [x] API per server (`/v1/servers/{id}/…`, `/api/v1/servers/{id}/…`), history keyed by
+        server, existing setup is server `openvpn`, switcher shown when there are several
 - [ ] Agent backends behind one interface (create / remove client, sessions, traffic, apply config)
 - [ ] **WireGuard** server: setup, `wg0.conf` written by the agent and applied live with
       `wg syncconf` (no disconnects), peers with key pairs and addresses, AllowedIPs for routing

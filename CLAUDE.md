@@ -29,7 +29,7 @@ Run locally: `TD_AGENT_TOKEN=dev TD_OPENVPN_DIR=/tmp/td TD_CRL_COPIES=- TD_FIREW
 
 - `cmd/trapdoor`: subcommands `agent`, `web`, `user`, `init-pki`, `auth-verify` (OpenVPN 2FA hook), `health`, `version`.
 - `internal/api`: request/response types shared by agent and web. It must not import other internal packages; other packages alias its types (e.g. `setup.Request = api.SetupRequest`).
-- `internal/agent`: agent HTTP handlers. `Server.PKI()` is nil until setup creates the PKI. `restartMu` serializes restarts and setup; `netMu` guards static address changes; `fwMu` guards firewall applies.
+- `internal/agent`: agent HTTP handlers. `Host` serves `/v1/info` and routes `/v1/servers/{id}/…` to each `Server` (one OpenVPN server, id `openvpn`, from the `TD_*` settings); the web API mirrors it under `/api/v1/servers/{id}/…` and the UI prefixes per-server paths in `lib/api.js`. History rows are keyed by server id. `Server.PKI()` is nil until setup creates the PKI. `restartMu` serializes restarts and setup; `netMu` guards static address changes; `fwMu` guards firewall applies.
 - `internal/pki`: CA, issue/revoke/renew, CRL, `index.txt`. `compat_test.go` runs against real easyrsa when `TD_EASYRSA_DIR` is set (CI does this).
 - `internal/serverconf`: Parse/Apply keep every unrelated line of `server.conf`. Check runs `openvpn --config X --version` plus value checks that OpenVPN itself only does at start. File writes keep backups and use a version for optimistic locking.
 - `internal/setup`: wizard validation and rendering of `server.conf` / `client-template.txt`.

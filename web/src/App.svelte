@@ -1,5 +1,5 @@
 <script>
-  import { route, session, navigate, toasts, settings } from './lib/state.svelte.js';
+  import { route, session, navigate, toasts, settings, servers, setServers, selectServer } from './lib/state.svelte.js';
   import { api } from './lib/api.js';
   import ThemeSwitch from './lib/ThemeSwitch.svelte';
   import Login from './pages/Login.svelte';
@@ -42,12 +42,20 @@
       .finally(() => (session.checked = true));
   });
 
-  // Server settings, once per login.
+  // Servers and settings, once per login.
   $effect(() => {
     if (!session.user) return;
     api('/status')
-      .then((st) => st.expiry_warn_days && (settings.expiryWarnDays = st.expiry_warn_days))
+      .then((st) => {
+        if (st.expiry_warn_days) settings.expiryWarnDays = st.expiry_warn_days;
+        setServers(st.agent?.servers ?? []);
+      })
       .catch(() => {});
+  });
+
+  // Setup state of the selected server.
+  $effect(() => {
+    if (!session.user || !servers.current) return;
     api('/setup')
       .then((st) => {
         settings.setupNeeded = st.needed;
@@ -99,7 +107,19 @@
     </nav>
 
     <main>
-      <current.component />
+      {#if servers.list.length > 1}
+        <label class="server-switch">
+          <span>Server</span>
+          <select value={servers.current} onchange={(e) => selectServer(e.currentTarget.value)}>
+            {#each servers.list as sv (sv.id)}
+              <option value={sv.id}>{sv.name}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
+      {#key servers.current}
+        <current.component />
+      {/key}
     </main>
   </div>
 {/if}
@@ -158,6 +178,15 @@
     background: var(--accent-soft);
   }
   .rail-foot { margin-top: auto; display: grid; gap: var(--space-3); }
+
+  .server-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    color: var(--ink-2);
+    font-size: 14px;
+  }
   .avatar {
     display: grid;
     place-items: center;

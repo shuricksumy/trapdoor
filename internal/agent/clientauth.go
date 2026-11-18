@@ -13,8 +13,8 @@ import (
 )
 
 func (s *Server) registerAuthRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/certs/{name}/auth", s.handleGetClientAuth)
-	mux.HandleFunc("PUT /v1/certs/{name}/auth", s.handleUpdateClientAuth)
+	mux.HandleFunc("GET /certs/{name}/auth", s.handleGetClientAuth)
+	mux.HandleFunc("PUT /certs/{name}/auth", s.handleUpdateClientAuth)
 }
 
 func toClientAuth(st clientauth.Settings) api.ClientAuth {

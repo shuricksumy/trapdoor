@@ -1,7 +1,7 @@
 // Package history records VPN sessions and hourly traffic from the agent's
 // live session list, and answers statistics queries over any date range.
 //
-// The collector polls GET /v1/sessions (default every 30s). A session is
+// The collector polls each server's live sessions (default every 30s). A session is
 // identified by (client ID, connected-since). Each poll adds the byte-counter
 // delta to the hour it happened in. When polls were missed (web process down,
 // agent unreachable) the delta is spread over the hours of the gap and those
@@ -29,7 +29,7 @@ type Source interface {
 type Collector struct {
 	DB       *store.DB
 	Source   Source
-	Agent    string        // agent id, "default" for now (multi-server later)
+	Agent    string        // server id (the history key)
 	Interval time.Duration // default 30s
 	Log      *slog.Logger
 	Now      func() time.Time // nil = time.Now (tests)

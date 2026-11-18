@@ -1,4 +1,4 @@
-import { navigate, session } from './state.svelte.js';
+import { navigate, servers, session } from './state.svelte.js';
 
 export class ApiError extends Error {
   constructor(status, message) {
@@ -7,9 +7,21 @@ export class ApiError extends Error {
   }
 }
 
-/** Call /api/v1<path>. JSON in and out; 401 sends the user to the login page. */
+// Paths that do not belong to one VPN server.
+const hostPaths = /^\/(auth\/|status$|servers\/)/;
+
+/**
+ * URL of an API path. Per-server paths (everything but auth and status) go
+ * to the selected server: '/certs' → '/api/v1/servers/openvpn/certs'.
+ */
+export function apiURL(path) {
+  if (hostPaths.test(path)) return '/api/v1' + path;
+  return `/api/v1/servers/${encodeURIComponent(servers.current || 'openvpn')}${path}`;
+}
+
+/** Call an API path (see apiURL). JSON in and out; 401 sends the user to the login page. */
 export async function api(path, { method = 'GET', body, signal } = {}) {
-  const res = await fetch('/api/v1' + path, {
+  const res = await fetch(apiURL(path), {
     method,
     signal,
     credentials: 'same-origin',

@@ -89,6 +89,10 @@ var migrations = []string{
 		user_agent  TEXT    NOT NULL DEFAULT ''
 	) WITHOUT ROWID;
 	CREATE INDEX login_sessions_user ON login_sessions (user_id);`,
+
+	// 3: history is keyed by server id; the single server so far is "openvpn"
+	`UPDATE sessions SET agent = 'openvpn' WHERE agent = 'default';
+	UPDATE traffic_hourly SET agent = 'openvpn' WHERE agent = 'default';`,
 }
 
 func (db *DB) migrate(ctx context.Context) error {

@@ -15,10 +15,10 @@ func TestCertManagement(t *testing.T) {
 	c := sessionCookie(t, e.login("admin", "long-enough-pw"))
 	same := header("Origin", "https://vpn.example.com")
 
-	if rec := e.do(http.MethodPost, "/api/v1/certs", `{"name":"alice"}`); rec.Code != http.StatusUnauthorized {
+	if rec := e.do(http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"alice"}`); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("issue without login = %d", rec.Code)
 	}
-	if rec := e.do(http.MethodPost, "/api/v1/certs", `{"name":"alice"}`, cookie(c), header("Sec-Fetch-Site", "cross-site")); rec.Code != http.StatusForbidden {
+	if rec := e.do(http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"alice"}`, cookie(c), header("Sec-Fetch-Site", "cross-site")); rec.Code != http.StatusForbidden {
 		t.Fatalf("cross-site issue = %d", rec.Code)
 	}
 
@@ -27,30 +27,30 @@ func TestCertManagement(t *testing.T) {
 		want               int
 		contains           string
 	}{
-		{http.MethodPost, "/api/v1/certs", `{"name":"alice","validity_days":30}`, http.StatusCreated, `"status":"valid"`},
-		{http.MethodPost, "/api/v1/certs", `{"name":"alice"}`, http.StatusConflict, "exists"},
-		{http.MethodPost, "/api/v1/certs", `{"name":"../x"}`, http.StatusBadRequest, "invalid"},
-		{http.MethodPost, "/api/v1/certs", `{"name":"x","bogus":1}`, http.StatusBadRequest, ""},
-		{http.MethodGet, "/api/v1/certs", "", http.StatusOK, `"name":"alice"`},
-		{http.MethodGet, "/api/v1/certs/alice", "", http.StatusOK, `"current":true`},
-		{http.MethodGet, "/api/v1/certs/nobody", "", http.StatusNotFound, ""},
-		{http.MethodGet, "/api/v1/certs/alice/ovpn", "", http.StatusServiceUnavailable, "template"}, // no client-template.txt
-		{http.MethodPost, "/api/v1/certs/alice/revoke", "", http.StatusOK, `"status":"revoked"`},
-		{http.MethodPost, "/api/v1/certs/alice/revoke", "", http.StatusConflict, ""},
-		{http.MethodPost, "/api/v1/certs/alice/unrevoke", "", http.StatusOK, `"status":"valid"`},
-		{http.MethodPost, "/api/v1/certs/alice/renew", `{"validity_days":10}`, http.StatusOK, `"status":"valid"`},
-		{http.MethodDelete, "/api/v1/certs/alice/sessions", "", http.StatusBadGateway, ""}, // management unreachable
-		{http.MethodDelete, "/api/v1/sessions/abc", "", http.StatusBadRequest, ""},
-		{http.MethodGet, "/api/v1/certs/alice/auth", "", http.StatusOK, `"totp":false`},
-		{http.MethodPut, "/api/v1/certs/alice/auth", `{"totp":"enable","static_password":"pin1"}`, http.StatusOK, `"otpauth_uri":"otpauth://totp/`},
-		{http.MethodGet, "/api/v1/certs/alice/auth", "", http.StatusOK, `"totp":true`},
-		{http.MethodPut, "/api/v1/certs/alice/auth", `{"totp":"bogus"}`, http.StatusBadRequest, ""},
-		{http.MethodGet, "/api/v1/network", "", http.StatusOK, `"topology":"net30"`},
-		{http.MethodPut, "/api/v1/certs/alice/network", `{"routes":["192.168.1.0/24"],"lan":[],"full_tunnel":true}`, http.StatusOK, `"full_tunnel":true`},
-		{http.MethodGet, "/api/v1/certs/alice/network", "", http.StatusOK, `"192.168.1.0/24"`},
-		{http.MethodPut, "/api/v1/certs/alice/network", `{"routes":["bad"],"lan":[]}`, http.StatusBadRequest, ""},
-		{http.MethodDelete, "/api/v1/certs/alice", "", http.StatusNoContent, ""},
-		{http.MethodGet, "/api/v1/certs/alice", "", http.StatusOK, `"status":"revoked"`},
+		{http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"alice","validity_days":30}`, http.StatusCreated, `"status":"valid"`},
+		{http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"alice"}`, http.StatusConflict, "exists"},
+		{http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"../x"}`, http.StatusBadRequest, "invalid"},
+		{http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"x","bogus":1}`, http.StatusBadRequest, ""},
+		{http.MethodGet, "/api/v1/servers/openvpn/certs", "", http.StatusOK, `"name":"alice"`},
+		{http.MethodGet, "/api/v1/servers/openvpn/certs/alice", "", http.StatusOK, `"current":true`},
+		{http.MethodGet, "/api/v1/servers/openvpn/certs/nobody", "", http.StatusNotFound, ""},
+		{http.MethodGet, "/api/v1/servers/openvpn/certs/alice/ovpn", "", http.StatusServiceUnavailable, "template"}, // no client-template.txt
+		{http.MethodPost, "/api/v1/servers/openvpn/certs/alice/revoke", "", http.StatusOK, `"status":"revoked"`},
+		{http.MethodPost, "/api/v1/servers/openvpn/certs/alice/revoke", "", http.StatusConflict, ""},
+		{http.MethodPost, "/api/v1/servers/openvpn/certs/alice/unrevoke", "", http.StatusOK, `"status":"valid"`},
+		{http.MethodPost, "/api/v1/servers/openvpn/certs/alice/renew", `{"validity_days":10}`, http.StatusOK, `"status":"valid"`},
+		{http.MethodDelete, "/api/v1/servers/openvpn/certs/alice/sessions", "", http.StatusBadGateway, ""}, // management unreachable
+		{http.MethodDelete, "/api/v1/servers/openvpn/sessions/abc", "", http.StatusBadRequest, ""},
+		{http.MethodGet, "/api/v1/servers/openvpn/certs/alice/auth", "", http.StatusOK, `"totp":false`},
+		{http.MethodPut, "/api/v1/servers/openvpn/certs/alice/auth", `{"totp":"enable","static_password":"pin1"}`, http.StatusOK, `"otpauth_uri":"otpauth://totp/`},
+		{http.MethodGet, "/api/v1/servers/openvpn/certs/alice/auth", "", http.StatusOK, `"totp":true`},
+		{http.MethodPut, "/api/v1/servers/openvpn/certs/alice/auth", `{"totp":"bogus"}`, http.StatusBadRequest, ""},
+		{http.MethodGet, "/api/v1/servers/openvpn/network", "", http.StatusOK, `"topology":"net30"`},
+		{http.MethodPut, "/api/v1/servers/openvpn/certs/alice/network", `{"routes":["192.168.1.0/24"],"lan":[],"full_tunnel":true}`, http.StatusOK, `"full_tunnel":true`},
+		{http.MethodGet, "/api/v1/servers/openvpn/certs/alice/network", "", http.StatusOK, `"192.168.1.0/24"`},
+		{http.MethodPut, "/api/v1/servers/openvpn/certs/alice/network", `{"routes":["bad"],"lan":[]}`, http.StatusBadRequest, ""},
+		{http.MethodDelete, "/api/v1/servers/openvpn/certs/alice", "", http.StatusNoContent, ""},
+		{http.MethodGet, "/api/v1/servers/openvpn/certs/alice", "", http.StatusOK, `"status":"revoked"`},
 	}
 	for _, st := range steps {
 		rec := e.do(st.method, st.path, st.body, cookie(c), same)
@@ -64,11 +64,11 @@ func TestRenewMany(t *testing.T) {
 	e := newTestEnv(t, token)
 	bearer := header("Authorization", "Bearer "+token)
 	for _, n := range []string{"a1", "a2"} {
-		if rec := e.do(http.MethodPost, "/api/v1/certs", `{"name":"`+n+`"}`, bearer); rec.Code != http.StatusCreated {
+		if rec := e.do(http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"`+n+`"}`, bearer); rec.Code != http.StatusCreated {
 			t.Fatalf("issue %s: %d", n, rec.Code)
 		}
 	}
-	rec := e.do(http.MethodPost, "/api/v1/certs/renew", `{"names":["a1","a2","ghost","../x","a1"],"validity_days":90}`, bearer)
+	rec := e.do(http.MethodPost, "/api/v1/servers/openvpn/certs/renew", `{"names":["a1","a2","ghost","../x","a1"],"validity_days":90}`, bearer)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("renew many = %d %s", rec.Code, rec.Body.String())
 	}
@@ -79,7 +79,7 @@ func TestRenewMany(t *testing.T) {
 	if !strings.Contains(res[2].Error, "not found") || res[3].Error != "invalid certificate name" {
 		t.Errorf("errors = %q / %q", res[2].Error, res[3].Error)
 	}
-	if rec := e.do(http.MethodPost, "/api/v1/certs/renew", `{"names":[]}`, bearer); rec.Code != http.StatusBadRequest {
+	if rec := e.do(http.MethodPost, "/api/v1/servers/openvpn/certs/renew", `{"names":[]}`, bearer); rec.Code != http.StatusBadRequest {
 		t.Errorf("empty list = %d", rec.Code)
 	}
 }
@@ -87,17 +87,17 @@ func TestRenewMany(t *testing.T) {
 func TestServerConfigPassthrough(t *testing.T) {
 	e := newTestEnv(t, token)
 	bearer := header("Authorization", "Bearer "+token)
-	rec := e.do(http.MethodGet, "/api/v1/server/config", "", bearer)
+	rec := e.do(http.MethodGet, "/api/v1/servers/openvpn/server/config", "", bearer)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get = %d %s", rec.Code, rec.Body.String())
 	}
 	cfg := decode[api.ServerConfig](t, rec)
 	// The test agent has no server.conf: saving one without ca/cert/key is refused with the problems listed.
-	rec = e.do(http.MethodPut, "/api/v1/server/config", `{"base_version":"`+cfg.Version+`","raw":"port 1194\n"}`, bearer)
+	rec = e.do(http.MethodPut, "/api/v1/servers/openvpn/server/config", `{"base_version":"`+cfg.Version+`","raw":"port 1194\n"}`, bearer)
 	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), `"problems"`) {
 		t.Errorf("save invalid = %d %s", rec.Code, rec.Body.String())
 	}
-	if rec := e.do(http.MethodGet, "/api/v1/server/backups", "", bearer); rec.Code != http.StatusOK {
+	if rec := e.do(http.MethodGet, "/api/v1/servers/openvpn/server/backups", "", bearer); rec.Code != http.StatusOK {
 		t.Errorf("backups = %d", rec.Code)
 	}
 }

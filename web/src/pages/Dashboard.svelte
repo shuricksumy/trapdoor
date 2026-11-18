@@ -2,11 +2,13 @@
   import { onMount } from 'svelte';
   import { api, poll } from '../lib/api.js';
   import { bytes, duration, relative, certState, date } from '../lib/format.js';
-  import { settings, toast } from '../lib/state.svelte.js';
+  import { settings, toast, servers } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
   import TodayTrace from '../lib/TodayTrace.svelte';
 
   let status = $state(null);
+
+  const srv = $derived(status?.agent?.servers?.find((x) => x.id === servers.current));
   let live = $state(null);
   let liveError = $state('');
   let history = $state([]);
@@ -42,7 +44,7 @@
       .filter(({ st }) => st.key === 'expiring' || st.key === 'expired')
       .sort((a, b) => new Date(a.c.not_after) - new Date(b.c.not_after)),
   );
-  const caDays = $derived(status?.agent?.ca_not_after ? (new Date(status.agent.ca_not_after) - Date.now()) / 86400000 : Infinity);
+  const caDays = $derived(srv?.ca_not_after ? (new Date(srv?.ca_not_after) - Date.now()) / 86400000 : Infinity);
 
   let renewServer = $state({ open: false, name: '', busy: false });
   async function doRenewServer() {
@@ -60,7 +62,7 @@
   }
 
   const serverProblem = $derived(
-    !status ? '' : !status.agent_ok ? 'The agent is not reachable, so nothing can be changed right now.' : status.agent?.mgmt_error ? 'OpenVPN does not answer on its management interface. Live sessions and kicking are unavailable.' : '',
+    !status ? '' : !status.agent_ok ? 'The agent is not reachable, so nothing can be changed right now.' : srv?.mgmt_error ? 'OpenVPN does not answer on its management interface. Live sessions and kicking are unavailable.' : '',
   );
 </script>
 
@@ -70,7 +72,7 @@
     {#if status?.agent_ok}
       <p class="muted">
         {status.agent.hostname}
-        {#if status.agent.openvpn_version}running {status.agent.openvpn_version.split(' ').slice(0, 2).join(' ')}{/if}
+        {#if srv?.openvpn_version}running {srv?.openvpn_version.split(' ').slice(0, 2).join(' ')}{/if}
       </p>
     {/if}
   </div>
@@ -143,8 +145,8 @@
       <ul class="list">
         {#if caDays < 90}
           <li>
-            <span class="pill bad">CA: {status.agent.ca_name}</span>
-            <span class="muted small right">Expires {relative(status.agent.ca_not_after)} ({date(status.agent.ca_not_after)}). Every client stops working then.</span>
+            <span class="pill bad">CA: {srv?.ca_name}</span>
+            <span class="muted small right">Expires {relative(srv?.ca_not_after)} ({date(srv?.ca_not_after)}). Every client stops working then.</span>
           </li>
         {/if}
         {#each attention as { c, st } (c.serial)}

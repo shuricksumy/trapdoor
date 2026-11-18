@@ -46,9 +46,9 @@ func firewallClient(t *testing.T, cfg config.Agent) (*Client, string) {
 	s := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	s.mgmt = &fakeMgmt{}
 	s.restartWait = 2 * time.Second
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(serve(s))
 	t.Cleanup(srv.Close)
-	return NewClient(srv.URL, "secret", 10*time.Second), dir
+	return NewClient(srv.URL, "secret", 10*time.Second).Server(DefaultServerID), dir
 }
 
 func TestFirewallDirect(t *testing.T) {

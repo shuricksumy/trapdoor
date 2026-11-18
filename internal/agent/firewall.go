@@ -29,9 +29,9 @@ const (
 )
 
 func (s *Server) registerFirewallRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/firewall", s.handleGetFirewall)
-	mux.HandleFunc("PUT /v1/firewall", s.handleSetFirewall)
-	mux.HandleFunc("POST /v1/firewall/addresses", s.handleAssignAddresses)
+	mux.HandleFunc("GET /firewall", s.handleGetFirewall)
+	mux.HandleFunc("PUT /firewall", s.handleSetFirewall)
+	mux.HandleFunc("POST /firewall/addresses", s.handleAssignAddresses)
 }
 
 func (s *Server) fwPath(ext string) string {

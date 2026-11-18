@@ -21,15 +21,15 @@ const (
 )
 
 func (s *Server) registerCertRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/certs", s.withPKI(s.handleListCerts))
-	mux.HandleFunc("POST /v1/certs", s.withPKI(s.handleIssueCert))
-	mux.HandleFunc("GET /v1/certs/{name}", s.withPKI(s.handleGetCert))
-	mux.HandleFunc("DELETE /v1/certs/{name}", s.withPKI(s.handleRemoveCert))
-	mux.HandleFunc("POST /v1/certs/{name}/revoke", s.withPKI(s.handleRevokeCert))
-	mux.HandleFunc("POST /v1/certs/{name}/unrevoke", s.withPKI(s.handleUnrevokeCert))
-	mux.HandleFunc("POST /v1/certs/{name}/renew", s.withPKI(s.handleRenewCert))
-	mux.HandleFunc("GET /v1/certs/{name}/ovpn", s.withPKI(s.handleProfile))
-	mux.HandleFunc("POST /v1/crl", s.withPKI(s.handleGenCRL))
+	mux.HandleFunc("GET /certs", s.withPKI(s.handleListCerts))
+	mux.HandleFunc("POST /certs", s.withPKI(s.handleIssueCert))
+	mux.HandleFunc("GET /certs/{name}", s.withPKI(s.handleGetCert))
+	mux.HandleFunc("DELETE /certs/{name}", s.withPKI(s.handleRemoveCert))
+	mux.HandleFunc("POST /certs/{name}/revoke", s.withPKI(s.handleRevokeCert))
+	mux.HandleFunc("POST /certs/{name}/unrevoke", s.withPKI(s.handleUnrevokeCert))
+	mux.HandleFunc("POST /certs/{name}/renew", s.withPKI(s.handleRenewCert))
+	mux.HandleFunc("GET /certs/{name}/ovpn", s.withPKI(s.handleProfile))
+	mux.HandleFunc("POST /crl", s.withPKI(s.handleGenCRL))
 }
 
 // withPKI answers 503 until a PKI is available (e.g. before setup).

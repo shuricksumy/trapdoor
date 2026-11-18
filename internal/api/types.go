@@ -13,12 +13,28 @@ type Health struct {
 	Status string `json:"status"` // "ok"
 }
 
-// AgentInfo is returned by GET /v1/info on the agent.
+// Server types.
+const (
+	TypeOpenVPN = "openvpn"
+)
+
+// AgentInfo is returned by GET /v1/info on the agent: the host and the VPN
+// servers it manages.
 type AgentInfo struct {
-	Version    string `json:"version"`
-	Hostname   string `json:"hostname"`
-	OpenVPNDir string `json:"openvpn_dir"`
-	PKIDir     string `json:"pki_dir"`
+	Version  string       `json:"version"`
+	Hostname string       `json:"hostname"`
+	Servers  []ServerInfo `json:"servers"`
+}
+
+// ServerInfo describes one VPN server (GET /v1/servers/{id}/info).
+type ServerInfo struct {
+	// ID is the stable key used in URLs and in the history database.
+	ID   string `json:"id"`
+	Type string `json:"type"` // TypeOpenVPN
+	Name string `json:"name"` // shown in the UI
+
+	OpenVPNDir string `json:"openvpn_dir,omitempty"`
+	PKIDir     string `json:"pki_dir,omitempty"`
 	PKIReady   bool   `json:"pki_ready"`
 	// CA of the PKI (empty until it exists).
 	CAName     string    `json:"ca_name,omitempty"`

@@ -29,9 +29,9 @@ func TestClientNetwork(t *testing.T) {
 	}
 	ccdDir := filepath.Join(dir, "ccd")
 	cfg := config.Agent{Token: "secret", OpenVPNDir: dir, CCDDir: ccdDir, MgmtAddr: "127.0.0.1:1"}
-	srv := httptest.NewServer(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), p).Handler())
+	srv := httptest.NewServer(serve(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), p)))
 	t.Cleanup(srv.Close)
-	c := NewClient(srv.URL, "secret", 10*time.Second)
+	c := NewClient(srv.URL, "secret", 10*time.Second).Server(DefaultServerID)
 	ctx := context.Background()
 	for _, n := range []string{"nas", "phone"} {
 		if _, err := c.IssueCert(ctx, api.IssueCertRequest{Name: n}); err != nil {
