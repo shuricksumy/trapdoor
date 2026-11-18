@@ -53,7 +53,7 @@
 
 <header class="page-head">
   <h1>Overview</h1>
-  {#if srv}<p class="muted">{srv.name} · WireGuard interface <span class="mono">{srv.id}</span></p>{/if}
+  {#if srv}<p class="muted">{srv.name} · {srv.type === 'amneziawg' ? 'AmneziaWG' : 'WireGuard'} interface <span class="mono">{srv.id}</span></p>{/if}
 </header>
 
 {#if status && !status.agent_ok}
@@ -97,6 +97,25 @@
   </dl>
 </section>
 
+{#if srv?.obfuscation}
+  {@const o = srv.obfuscation}
+  <section class="panel">
+    <div class="panel-head"><h2>Hiding</h2><span class="small muted">AmneziaWG {o.level}</span></div>
+    <p class="panel-body muted small obf-note">
+      {o.level === '2.0' ? 'Strongest hiding: needs an up-to-date AmneziaWG app on every device.' : 'Most compatible: works with older AmneziaWG apps too.'}
+      Every client config carries these values; they cannot change without new configs for all clients.
+    </p>
+    <dl class="info">
+      <div><dt>Junk packets (Jc, Jmin–Jmax)</dt><dd class="mono">{o.jc} × {o.jmin}–{o.jmax} bytes</dd></div>
+      <div><dt>Padding (S1, S2{o.s3 || o.s4 ? ', S3, S4' : ''})</dt><dd class="mono">{[o.s1, o.s2, o.s3, o.s4].filter((v, i) => i < 2 || v).join(', ')}</dd></div>
+      <div><dt>Header values (H1–H4)</dt><dd class="mono hs">{o.h1}<br />{o.h2}<br />{o.h3}<br />{o.h4}</dd></div>
+      {#each ['i1', 'i2', 'i3', 'i4', 'i5'].filter((k) => o[k]) as k (k)}
+        <div><dt>Imitation packet {k.toUpperCase()}</dt><dd><code class="mono">{o[k]}</code></dd></div>
+      {/each}
+    </dl>
+  </section>
+{/if}
+
 <section class="panel">
   <div class="panel-head"><h2>Remove server</h2></div>
   <div class="panel-body row">
@@ -137,6 +156,8 @@
   dt { color: var(--ink-2); font-size: var(--step--1); }
   dd { margin: 0; display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
   dd code { word-break: break-all; font-size: 13px; }
+  .obf-note { margin: 0; padding: 0 var(--space-5) var(--space-2); }
+  .hs { display: block; line-height: 1.6; }
   .row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
   .row p { margin: 0; }
   .row .btn { flex: none; }

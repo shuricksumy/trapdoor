@@ -17,6 +17,7 @@ type Health struct {
 const (
 	TypeOpenVPN   = "openvpn"
 	TypeWireGuard = "wireguard"
+	TypeAmneziaWG = "amneziawg" // WireGuard with traffic obfuscation
 )
 
 // AgentInfo is returned by GET /v1/info on the agent: the host and the VPN
@@ -53,11 +54,51 @@ type ServerInfo struct {
 	Running    bool   `json:"running,omitempty"`
 	// Error is the last problem applying the configuration ("" = fine).
 	Error string `json:"error,omitempty"`
+	// Obfuscation of an AmneziaWG server (clients get the same values).
+	Obfuscation *Obfuscation `json:"obfuscation,omitempty"`
+}
+
+// AmneziaWG obfuscation levels.
+const (
+	// AWGLevel15 uses the settings every AmneziaWG app and the kernel
+	// module understand: junk packets, S1/S2 and single H1-H4 values.
+	AWGLevel15 = "1.5"
+	// AWGLevel20 adds S3/S4 and H1-H4 ranges: harder to detect, needs
+	// current AmneziaWG apps.
+	AWGLevel20 = "2.0"
+)
+
+// Obfuscation are AmneziaWG's [Interface] settings. Zero values are left
+// out (AmneziaWG then behaves like plain WireGuard for that mechanism).
+type Obfuscation struct {
+	Level string `json:"level"` // AWGLevel15 or AWGLevel20
+	// Junk packets before the handshake: count and size range.
+	Jc   int `json:"jc"`
+	Jmin int `json:"jmin"`
+	Jmax int `json:"jmax"`
+	// Random bytes in front of init (S1), response (S2), cookie (S3) and
+	// data (S4) packets.
+	S1 int `json:"s1"`
+	S2 int `json:"s2"`
+	S3 int `json:"s3,omitempty"`
+	S4 int `json:"s4,omitempty"`
+	// Message type values: one number each (1.5) or ranges "a-b" (2.0).
+	H1 string `json:"h1"`
+	H2 string `json:"h2"`
+	H3 string `json:"h3"`
+	H4 string `json:"h4"`
+	// I1-I5: optional packets imitating another protocol, sent by the
+	// client before the handshake (tags like <b 0x...>, <r 16>, <t>).
+	I1 string `json:"i1,omitempty"`
+	I2 string `json:"i2,omitempty"`
+	I3 string `json:"i3,omitempty"`
+	I4 string `json:"i4,omitempty"`
+	I5 string `json:"i5,omitempty"`
 }
 
 // CreateServer is the body of POST /v1/servers: a new WireGuard server.
 type CreateServer struct {
-	Type string `json:"type"` // TypeWireGuard
+	Type string `json:"type"` // TypeWireGuard or TypeAmneziaWG
 	// ID is also the network interface name (e.g. wg0): lower-case letters,
 	// digits and dashes, at most 15 characters.
 	ID   string `json:"id"`
@@ -77,6 +118,11 @@ type CreateServer struct {
 	AllowedIPs []string `json:"allowed_ips,omitempty"`
 	// Keepalive in seconds for clients behind NAT (default 25, -1 = off).
 	Keepalive int `json:"keepalive,omitempty"`
+	// AmneziaWG: obfuscation settings; nil generates random ones at
+	// AWGLevel (default AWGLevel20). With only I1-I5 set, the rest is
+	// generated.
+	Obfuscation *Obfuscation `json:"obfuscation,omitempty"`
+	AWGLevel    string       `json:"awg_level,omitempty"`
 }
 
 // Peer is a WireGuard client (GET /v1/servers/{id}/peers).

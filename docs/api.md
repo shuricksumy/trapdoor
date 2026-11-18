@@ -92,7 +92,7 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 
 | Method | Path | Body | Result |
 |---|---|---|---|
-| POST | `/v1/servers` | `{"type":"wireguard","id":"wg0","name","port","public_host","public_port","subnet","dns":[…],"mtu","allowed_ips":[…],"keepalive"}` | 201 server info; 409 for a used id, port or overlapping subnet |
+| POST | `/v1/servers` | `{"type":"wireguard"\|"amneziawg","id":"wg0","name","port","public_host","public_port","subnet","dns":[…],"mtu","allowed_ips":[…],"keepalive"}`; AmneziaWG also `"awg_level":"2.0"\|"1.5"` and optional `"obfuscation":{jc,jmin,jmax,s1…s4,h1…h4,i1…i5}` (only `i1`–`i5`: the rest is generated) | 201 server info (with `obfuscation`); 409 for a used id, port or overlapping subnet |
 | DELETE | `/v1/servers/{id}` | – | 204; takes the interface down and deletes its files (WireGuard only) |
 | GET | `…/peers` | – | clients with live state (`connected`, `endpoint`, `last_handshake`, bytes) |
 | POST | `…/peers` | `{"name","address"?,"lan"?:[cidr],"no_psk"?}` | 201 client (keys generated, next free address) |

@@ -30,6 +30,9 @@ import (
 // interface's .conf is rendered from it; client private keys are kept so
 // their configuration can be downloaded again.
 type wgState struct {
+	// Type is api.TypeWireGuard ("" in files from before AmneziaWG) or
+	// api.TypeAmneziaWG.
+	Type       string         `json:"type,omitempty"`
 	ID         string         `json:"id"`
 	Name       string         `json:"name"`
 	PrivateKey string         `json:"private_key"`
@@ -42,6 +45,8 @@ type wgState struct {
 	AllowedIPs []netip.Prefix `json:"allowed_ips"`
 	Keepalive  int            `json:"keepalive"`
 	Peers      []wgPeer       `json:"peers"`
+	// Obfuscation of an AmneziaWG server.
+	Obfuscation *api.Obfuscation `json:"obfuscation,omitempty"`
 	// Firewall is the server's access rules; nil until saved once.
 	Firewall *api.FirewallPolicy `json:"firewall,omitempty"`
 }
@@ -89,30 +94,65 @@ const (
 	wgDefaultKeepalive = 25
 )
 
+func (st wgState) amnezia() bool { return st.Type == api.TypeAmneziaWG }
+
+// wgDir is where servers of the type keep their files.
+func wgDir(cfg config.Agent, typ string) string {
+	if typ == api.TypeAmneziaWG {
+		return cfg.AmneziaWGDir
+	}
+	return cfg.WireGuardDir
+}
+
 func newWGServer(cfg config.Agent, log *slog.Logger, st wgState) *WGServer {
-	s := &WGServer{dir: cfg.WireGuardDir, mode: cfg.WireGuard, log: log.With("server", st.ID), st: st,
+	if st.Type == "" {
+		st.Type = api.TypeWireGuard
+	}
+	dir := wgDir(cfg, st.Type)
+	s := &WGServer{dir: dir, mode: cfg.WireGuard, log: log.With("server", st.ID), st: st,
 		now: time.Now, sess: map[string]*wgSession{}, last: map[string][2]int64{}}
 	fwMode := cfg.Firewall
 	if fwMode == "" {
 		fwMode = FirewallDirect
 	}
 	s.fw = &fwTarget{mode: fwMode, chain: "TD-" + st.ID, iface: st.ID, iptablesDir: cfg.IPTablesDir,
-		rulesPath: wgPath(cfg.WireGuardDir, st.ID, ".rules"), statusPath: wgPath(cfg.WireGuardDir, st.ID, ".fwstatus")}
+		rulesPath: wgPath(dir, st.ID, ".rules"), statusPath: wgPath(dir, st.ID, ".fwstatus")}
 	if cfg.WireGuard == "file" {
-		s.run = wgFile{dir: cfg.WireGuardDir, now: time.Now}
+		s.run = wgFile{dir: dir, now: time.Now}
 	} else {
-		s.run = wgDirect{toolsDir: cfg.WGToolsDir, iptablesDir: cfg.IPTablesDir, ipForward: ipForwardPath}
+		d := wgDirect{wg: "wg", quick: "wg-quick", toolsDir: cfg.WGToolsDir, iptablesDir: cfg.IPTablesDir, ipForward: ipForwardPath}
+		if st.amnezia() {
+			d.wg, d.quick = "awg", "awg-quick"
+		}
+		s.run = d
 	}
 	return s
 }
 
-// LoadWireGuard returns the WireGuard servers stored in cfg.WireGuardDir and
-// brings their interfaces up (direct mode). Nothing when WireGuard is off.
+// LoadWireGuard returns the WireGuard and AmneziaWG servers stored in
+// cfg.WireGuardDir and cfg.AmneziaWGDir and brings their interfaces up
+// (direct mode). Nothing when WireGuard is off.
 func LoadWireGuard(ctx context.Context, cfg config.Agent, log *slog.Logger) ([]*WGServer, error) {
 	if cfg.WireGuard == "off" {
 		return nil, nil
 	}
-	files, err := filepath.Glob(filepath.Join(cfg.WireGuardDir, "*.json"))
+	var out []*WGServer
+	for _, typ := range []string{api.TypeWireGuard, api.TypeAmneziaWG} {
+		dir := wgDir(cfg, typ)
+		if dir == "" {
+			continue
+		}
+		got, err := loadWGDir(ctx, cfg, log, dir, typ)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, got...)
+	}
+	return out, nil
+}
+
+func loadWGDir(ctx context.Context, cfg config.Agent, log *slog.Logger, dir, typ string) ([]*WGServer, error) {
+	files, err := filepath.Glob(filepath.Join(dir, "*.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +168,13 @@ func LoadWireGuard(ctx context.Context, cfg config.Agent, log *slog.Logger) ([]*
 		}
 		if st.ID+".json" != filepath.Base(f) || !validWGID(st.ID) {
 			log.Warn("ignoring WireGuard state file with a wrong id", "file", f)
+			continue
+		}
+		if st.Type == "" {
+			st.Type = api.TypeWireGuard
+		}
+		if st.Type != typ {
+			log.Warn("ignoring state file of another server type", "file", f, "type", st.Type)
 			continue
 		}
 		s := newWGServer(cfg, log, st)
@@ -158,10 +205,30 @@ func createWGServer(req api.CreateServer) (wgState, error) {
 	if !validWGID(req.ID) {
 		return wgState{}, errors.New("id must be a network interface name: lower-case letters, digits and dashes, starting with a letter, at most 15 characters (e.g. wg0)")
 	}
-	st := wgState{ID: req.ID, Name: strings.TrimSpace(req.Name), ListenPort: req.Port,
+	st := wgState{Type: req.Type, ID: req.ID, Name: strings.TrimSpace(req.Name), ListenPort: req.Port,
 		PublicHost: strings.TrimSpace(req.PublicHost), PublicPort: req.PublicPort, MTU: req.MTU, Keepalive: req.Keepalive}
+	if st.Type == api.TypeAmneziaWG {
+		if req.AWGLevel != "" && req.AWGLevel != api.AWGLevel15 && req.AWGLevel != api.AWGLevel20 {
+			return st, errors.New("awg_level must be 1.5 or 2.0")
+		}
+		o := wg.GenerateObfuscation(req.AWGLevel)
+		switch r := req.Obfuscation; {
+		case r != nil && r.H1 == "":
+			// Only the imitation packets given: random values for the rest.
+			o.I1, o.I2, o.I3, o.I4, o.I5 = r.I1, r.I2, r.I3, r.I4, r.I5
+		case r != nil:
+			o = *r
+			if o.Level == "" {
+				o.Level = api.AWGLevel20
+			}
+		}
+		if err := wg.ValidateObfuscation(o); err != nil {
+			return st, errors.New("obfuscation: " + err.Error())
+		}
+		st.Obfuscation = &o
+	}
 	if st.Name == "" {
-		st.Name = "WireGuard " + req.ID
+		st.Name = map[bool]string{true: "AmneziaWG ", false: "WireGuard "}[st.amnezia()] + req.ID
 	}
 	if st.ListenPort == 0 {
 		st.ListenPort = wgDefaultPort
@@ -230,6 +297,15 @@ func (s *WGServer) endpoint() string {
 	return net.JoinHostPort(s.st.PublicHost, strconv.Itoa(s.st.PublicPort))
 }
 
+// mtu is the configured MTU; AmneziaWG's S4 bytes in front of every data
+// packet come off WireGuard's default 1420 unless one is set.
+func (s *WGServer) mtu() int {
+	if s.st.MTU == 0 && s.st.Obfuscation != nil && s.st.Obfuscation.S4 > 0 {
+		return 1420 - s.st.Obfuscation.S4
+	}
+	return s.st.MTU
+}
+
 func (s *WGServer) confPath() string { return wgPath(s.dir, s.st.ID, ".conf") }
 
 // Info describes the server.
@@ -237,8 +313,9 @@ func (s *WGServer) Info(ctx context.Context) api.ServerInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	pub, _ := wg.PublicKey(s.st.PrivateKey)
-	info := api.ServerInfo{ID: s.st.ID, Type: api.TypeWireGuard, Name: s.st.Name, PublicKey: pub,
-		ListenPort: s.st.ListenPort, Subnet: s.subnet().String(), Endpoint: s.endpoint(), Error: s.applyErr}
+	info := api.ServerInfo{ID: s.st.ID, Type: s.st.Type, Name: s.st.Name, PublicKey: pub,
+		ListenPort: s.st.ListenPort, Subnet: s.subnet().String(), Endpoint: s.endpoint(), Error: s.applyErr,
+		Obfuscation: s.st.Obfuscation}
 	if _, err := s.run.Dump(ctx, s.st.ID); err == nil {
 		info.Running = true
 	} else if info.Error == "" {
@@ -265,7 +342,10 @@ func (s *WGServer) save(ctx context.Context) error {
 
 func (s *WGServer) serverConfig() string {
 	srv := wg.Server{PrivateKey: s.st.PrivateKey, Address: []netip.Prefix{s.st.Address},
-		ListenPort: s.st.ListenPort, MTU: s.st.MTU}
+		ListenPort: s.st.ListenPort, MTU: s.mtu()}
+	if o := s.st.Obfuscation; o != nil {
+		srv.Extra = wg.ObfuscationSettings(*o, false)
+	}
 	var peers []wg.Peer
 	for _, p := range s.st.Peers {
 		if p.Disabled {
@@ -644,9 +724,13 @@ func (s *WGServer) handlePeerConf(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	conf := wg.ClientConfig(wg.Client{PrivateKey: p.PrivateKey, Address: []netip.Prefix{netip.PrefixFrom(p.Address, 32)},
-		DNS: s.st.DNS, MTU: s.st.MTU, ServerKey: pub, PresharedKey: p.PSK, Endpoint: s.endpoint(),
-		AllowedIPs: s.st.AllowedIPs, Keepalive: s.st.Keepalive})
+	c := wg.Client{PrivateKey: p.PrivateKey, Address: []netip.Prefix{netip.PrefixFrom(p.Address, 32)},
+		DNS: s.st.DNS, MTU: s.mtu(), ServerKey: pub, PresharedKey: p.PSK, Endpoint: s.endpoint(),
+		AllowedIPs: s.st.AllowedIPs, Keepalive: s.st.Keepalive}
+	if o := s.st.Obfuscation; o != nil {
+		c.Extra = wg.ObfuscationSettings(*o, true)
+	}
+	conf := wg.ClientConfig(c)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+p.Name+`.conf"`)
 	_, _ = w.Write([]byte(conf))

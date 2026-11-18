@@ -12,6 +12,7 @@ for the HTTP API, [api.md](api.md).
 - [Access rules](#access-rules)
 - [Traffic history](#traffic-history)
 - [WireGuard servers](#wireguard-servers)
+- [AmneziaWG servers](#amneziawg-servers)
 - [Admin login and security](#admin-login-and-security)
 
 ## Setup
@@ -198,6 +199,31 @@ WireGuard module (Linux 5.6 or newer has it).
 
 On Ubuntu, AppArmor lets `wg-quick` read configurations only from `/etc/wireguard`, so keep
 the default `TD_WIREGUARD_DIR` there.
+
+## AmneziaWG servers
+
+[AmneziaWG](https://docs.amnezia.org/documentation/amnezia-wg/) is WireGuard with traffic
+that is hard to recognise and block: junk packets before the handshake, random bytes in
+front of every packet, other message type values and, optionally, packets that imitate
+another protocol. Clients use the AmneziaWG apps. In trapdoor an AmneziaWG server works
+like a WireGuard server (clients, QR codes, live state, traffic, access rules); pick
+AmneziaWG in *Add a server*.
+
+- Each server gets random obfuscation values, inside the limits the AmneziaWG
+  documentation gives (`Jc` 4–12, `Jmin` < `Jmax`, `S1`/`S2` 15–150 with S1 + 56 ≠ S2,
+  four distinct `H1`–`H4`). Every client config carries the same values; the Overview
+  shows them.
+- **Strongest** (AmneziaWG 2.0, the default) adds `S3`/`S4` and `H1`–`H4` ranges; every
+  device needs a current AmneziaWG app. **Most compatible** (1.5) leaves those out and
+  also works with older apps and the kernel module.
+- *Imitation packets* `I1`–`I5` are optional: packets the client sends before connecting
+  (tags `<b 0xHEX>`, `<r N>`, `<rc N>`, `<rd N>`, `<t>`). With `S4`, the MTU is lowered
+  by `S4` bytes unless one is set.
+- Files live in `TD_AMNEZIAWG_DIR` (default `/etc/amnezia/amneziawg`), run with `awg` /
+  `awg-quick`; `TD_WIREGUARD` (direct / file / off) applies to both.
+- The Docker image ships `amneziawg-go` (userspace), so the host needs no kernel module.
+  The compose file publishes `AWG_PORT` (default 51830), the same inside and outside:
+  create the first AmneziaWG server with that port.
 
 ## Admin login and security
 

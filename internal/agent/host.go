@@ -127,8 +127,8 @@ func (h *Host) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	if req.Type != api.TypeWireGuard {
-		httpx.WriteError(w, http.StatusBadRequest, "type must be "+api.TypeWireGuard)
+	if req.Type != api.TypeWireGuard && req.Type != api.TypeAmneziaWG {
+		httpx.WriteError(w, http.StatusBadRequest, "type must be "+api.TypeWireGuard+" or "+api.TypeAmneziaWG)
 		return
 	}
 	h.mu.RLock()
@@ -168,7 +168,7 @@ func (h *Host) handleCreate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if err := os.MkdirAll(cfg.WireGuardDir, 0o700); err != nil {
+	if err := os.MkdirAll(wgDir(cfg, st.Type), 0o700); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -181,7 +181,7 @@ func (h *Host) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.servers = append(h.servers, mounted{b: s, h: http.StripPrefix("/v1/servers/"+s.ID(), s.routes())})
-	h.log.Info("WireGuard server created", "server", st.ID, "port", st.ListenPort, "subnet", st.Address.Masked())
+	h.log.Info("WireGuard server created", "server", st.ID, "type", st.Type, "port", st.ListenPort, "subnet", st.Address.Masked())
 	httpx.WriteJSON(w, http.StatusCreated, s.Info(r.Context()))
 }
 

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Runs the VPN servers for the "openvpn" compose service.
-# - WireGuard (TD_WIREGUARD=file on the agent): brings up every interface the
-#   agent describes in $WG_DIR (<id>.json + <id>.conf), applies changes with
+# - WireGuard and AmneziaWG (TD_WIREGUARD=file on the agent): brings up every
+#   interface the agent describes in $WG_DIR or $AWG_DIR (<id>.json + <id>.conf;
+#   AmneziaWG runs in userspace with amneziawg-go), applies changes with
 #   `wg syncconf` (nobody is disconnected), adds NAT for its subnet, and
 #   writes `wg show <id> dump` to <id>.dump (<id>.error on failure).
 # - waits for the OpenVPN config instead of crash-looping (fresh installs)
@@ -46,9 +47,9 @@ fw_apply() {
 }
 
 WG_DIR=${WG_DIR:-/etc/wireguard}
-WG_STATE=/run/trapdoor-wg
-rm -rf "$WG_STATE" # a restarted container has no interfaces or rules yet
-mkdir -p "$WG_STATE"
+AWG_DIR=${AWG_DIR:-/etc/amnezia/amneziawg}
+WG_STATE_ROOT=/run/trapdoor-wg
+rm -rf "$WG_STATE_ROOT" # a restarted container has no interfaces or rules yet
 wg_iface() { ip route | awk '/^default/ { print $5; exit }'; }
 wg_nat() { # add|del <address/bits>
 	[ -n "$2" ] || return 0
@@ -60,94 +61,99 @@ wg_nat() { # add|del <address/bits>
 		iptables -t nat -D POSTROUTING -s "$2" -o "$ifc" -j MASQUERADE 2>/dev/null || true
 	fi
 }
-wg_fail() { # <id> <sum> <message>
-	echo "$3" >"$WG_DIR/$1.error"
-	echo "$2" >"$WG_STATE/$1.failed"
-	echo "wireguard $1: $3"
+wg_fail() { # <dir> <id> <sum> <message>
+	echo "$4" >"$1/$2.error"
+	echo "$3" >"$WG_STATE/$2.failed"
+	echo "$label $2: $4"
 }
-wg_sync() {
-	command -v wg >/dev/null || return 0
-	for conf in "$WG_DIR"/*.conf; do
+wg_sync() { # <dir> <wg tool> <wg-quick tool>: WireGuard or AmneziaWG
+	dir=$1 wgbin=$2 quick=$3 label=wireguard
+	[ "$wgbin" = awg ] && label=amneziawg
+	command -v "$wgbin" >/dev/null || return 0
+	WG_STATE=$WG_STATE_ROOT/$wgbin
+	mkdir -p "$WG_STATE"
+	for conf in "$dir"/*.conf; do
 		[ -f "$conf" ] || continue
 		id=$(basename "$conf" .conf)
-		[ -f "$WG_DIR/$id.json" ] || continue # only interfaces trapdoor manages
+		[ -f "$dir/$id.json" ] || continue # only interfaces trapdoor manages
 		sum=$(sha256sum "$conf" | cut -d' ' -f1)
 		[ "$sum" = "$(cat "$WG_STATE/$id.failed" 2>/dev/null)" ] && continue # retried when it changes
 		addr=$(awk -F' *= *' '$1 == "Address" { print $2; exit }' "$conf")
 		old_addr=$(cat "$WG_STATE/$id.addr" 2>/dev/null || true)
 		if ! ip link show "$id" >/dev/null 2>&1; then
-			out=$(wg-quick up "$conf" 2>&1) || { wg_fail "$id" "$sum" "$(echo "$out" | tail -1)"; continue; }
-			echo "wireguard $id: up ($addr)"
+			out=$("$quick" up "$conf" 2>&1) || { wg_fail "$dir" "$id" "$sum" "$(echo "$out" | tail -1)"; continue; }
+			echo "$label $id: up ($addr)"
 		elif [ "$sum" != "$(cat "$WG_STATE/$id.sum" 2>/dev/null)" ]; then
 			if [ "$addr" != "$old_addr" ]; then
-				wg-quick down "$conf" >/dev/null 2>&1 || ip link del "$id" 2>/dev/null || true
+				"$quick" down "$conf" >/dev/null 2>&1 || ip link del "$id" 2>/dev/null || true
 				wg_nat del "$old_addr"
-				out=$(wg-quick up "$conf" 2>&1) || { wg_fail "$id" "$sum" "$(echo "$out" | tail -1)"; continue; }
-				echo "wireguard $id: restarted ($addr)"
+				out=$("$quick" up "$conf" 2>&1) || { wg_fail "$dir" "$id" "$sum" "$(echo "$out" | tail -1)"; continue; }
+				echo "$label $id: restarted ($addr)"
 			else
-				out=$(wg-quick strip "$conf" >"$WG_STATE/$id.strip" 2>&1 && wg syncconf "$id" "$WG_STATE/$id.strip" 2>&1) ||
-					{ wg_fail "$id" "$sum" "$(echo "$out" | tail -1)"; continue; }
+				out=$("$quick" strip "$conf" >"$WG_STATE/$id.strip" 2>&1 && "$wgbin" syncconf "$id" "$WG_STATE/$id.strip" 2>&1) ||
+					{ wg_fail "$dir" "$id" "$sum" "$(echo "$out" | tail -1)"; continue; }
 				rm -f "$WG_STATE/$id.strip"
-				echo "wireguard $id: peers updated"
+				echo "$label $id: peers updated"
 			fi
 		fi
-		wg_nat add "$addr" || echo "wireguard $id: NAT setup failed"
+		wg_nat add "$addr" || echo "$label $id: NAT setup failed"
 		echo "$sum" >"$WG_STATE/$id.sum"
 		echo "$addr" >"$WG_STATE/$id.addr"
-		rm -f "$WG_STATE/$id.failed" "$WG_DIR/$id.error"
+		rm -f "$WG_STATE/$id.failed" "$dir/$id.error"
 		# Keys stay out of the dump: the private key (interface line) and the
 		# preshared keys (second column of the peer lines).
-		wg show "$id" dump | awk -F'\t' -v OFS='\t' 'NR == 1 { $1 = "(hidden)" } NR > 1 { $2 = "(hidden)" } { print }' >"$WG_DIR/$id.dump.tmp" &&
-			mv "$WG_DIR/$id.dump.tmp" "$WG_DIR/$id.dump"
+		"$wgbin" show "$id" dump | awk -F'\t' -v OFS='\t' 'NR == 1 { $1 = "(hidden)" } NR > 1 { $2 = "(hidden)" } { print }' >"$dir/$id.dump.tmp" &&
+			mv "$dir/$id.dump.tmp" "$dir/$id.dump"
 	done
 	# Access rules per WireGuard server (TD_FIREWALL=file): chain TD-<id>,
 	# jumped to from INPUT and FORWARD for the interface; answered in
 	# <id>.fwstatus like trapdoor-firewall.status.
-	for rules in "$WG_DIR"/*.rules; do
+	for rules in "$dir"/*.rules; do
 		[ -f "$rules" ] || continue
 		id=$(basename "$rules" .rules)
-		[ -f "$WG_DIR/$id.json" ] || continue
+		[ -f "$dir/$id.json" ] || continue
 		sum=$(sha256sum "$rules" | cut -d' ' -f1)
 		[ "$sum" = "$(cat "$WG_STATE/$id.fwsum" 2>/dev/null)" ] && continue
 		if out=$(iptables-restore --noflush <"$rules" 2>&1) &&
 			out=$(for c in INPUT FORWARD; do
 				iptables -C "$c" -i "$id" -j "TD-$id" 2>/dev/null || iptables -I "$c" 1 -i "$id" -j "TD-$id" || exit 1
 			done 2>&1); then
-			echo "ok $sum" >"$WG_DIR/$id.fwstatus.tmp"
-			echo "wireguard $id: access rules applied"
+			echo "ok $sum" >"$dir/$id.fwstatus.tmp"
+			echo "$label $id: access rules applied"
 		else
-			echo "error $sum $(echo "$out" | tr '\n' ' ')" >"$WG_DIR/$id.fwstatus.tmp"
-			echo "wireguard $id: access rules failed: $out"
+			echo "error $sum $(echo "$out" | tr '\n' ' ')" >"$dir/$id.fwstatus.tmp"
+			echo "$label $id: access rules failed: $out"
 		fi
-		mv "$WG_DIR/$id.fwstatus.tmp" "$WG_DIR/$id.fwstatus"
+		mv "$dir/$id.fwstatus.tmp" "$dir/$id.fwstatus"
 		echo "$sum" >"$WG_STATE/$id.fwsum"
 	done
 	# Servers removed in trapdoor: take their interfaces down.
 	for f in "$WG_STATE"/*.addr; do
 		[ -f "$f" ] || continue
 		id=$(basename "$f" .addr)
-		[ -f "$WG_DIR/$id.conf" ] && continue
+		[ -f "$dir/$id.conf" ] && continue
 		ip link del "$id" 2>/dev/null || true
 		wg_nat del "$(cat "$f")"
 		for c in INPUT FORWARD; do iptables -D "$c" -i "$id" -j "TD-$id" 2>/dev/null || true; done
 		iptables -F "TD-$id" 2>/dev/null && iptables -X "TD-$id" 2>/dev/null || true
-		rm -f "$WG_STATE/$id".* "$WG_DIR/$id.dump" "$WG_DIR/$id.error" "$WG_DIR/$id.fwstatus"
-		echo "wireguard $id: removed"
+		rm -f "$WG_STATE/$id".* "$dir/$id.dump" "$dir/$id.error" "$dir/$id.fwstatus"
+		echo "$label $id: removed"
 	done
 	# Rules of a server whose interface never came up.
 	for f in "$WG_STATE"/*.fwsum; do
 		[ -f "$f" ] || continue
 		id=$(basename "$f" .fwsum)
-		[ -f "$WG_DIR/$id.json" ] && continue
+		[ -f "$dir/$id.json" ] && continue
 		for c in INPUT FORWARD; do iptables -D "$c" -i "$id" -j "TD-$id" 2>/dev/null || true; done
 		iptables -F "TD-$id" 2>/dev/null && iptables -X "TD-$id" 2>/dev/null || true
-		rm -f "$f" "$WG_DIR/$id.fwstatus"
+		rm -f "$f" "$dir/$id.fwstatus"
 	done
 }
 
 (while :; do
 	[ -f "$FW_RULES" ] && fw_apply
-	wg_sync
+	wg_sync "$WG_DIR" wg wg-quick
+	wg_sync "$AWG_DIR" awg awg-quick
 	sleep 1
 done) &
 
