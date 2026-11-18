@@ -344,12 +344,18 @@ if command -v wg >/dev/null && command -v wg-quick >/dev/null; then
 	ip link show tdwg0 >/dev/null || fail "no tdwg0 interface"
 	api -d '{"name":"wgalice"}' "$API/v1/servers/tdwg0/peers" >/dev/null || fail "add peer"
 	! api "$API/v1/servers/tdwg0/info" | grep -q '"error"' || fail "peer not applied: $(api "$API/v1/servers/tdwg0/info")"
-	wg show tdwg0 peers | grep -q . || fail "peer not on the interface"
+	wg show tdwg0 peers | grep -q . || fail "peer not on the interface: $(wgdiag)"
 	# Ubuntu's AppArmor profile lets wg-quick read configs only from /etc/wireguard.
 	(umask 077 && api "$API/v1/servers/tdwg0/peers/wgalice/conf" >/etc/wireguard/tdwc.conf)
 	ip netns exec twc wg-quick up /etc/wireguard/tdwc.conf >"$WORK/wg-client.log" 2>&1 || fail "client wg-quick up"
 	wgping() { ip netns exec twc ping -c 1 -W 1 10.98.0.1 >/dev/null 2>&1; }
-	wgdiag() { wg show tdwg0; ip netns exec twc wg show; ip netns exec twc ip route; iptables -S INPUT; iptables -t nat -S POSTROUTING; ip -br addr; } 2>&1
+	wgdiag() {
+		for c in "wg show tdwg0 dump" "ip netns exec twc wg show all dump" "ip netns exec twc ip route" "iptables -S INPUT" \
+			"ss -ulpn" "aa-status" "dmesg"; do
+			echo "### $c"
+			$c 2>&1 | grep -v "^\s*$" | { [[ $c == dmesg ]] && grep -i apparmor | tail -20 || cat; } | cut -c1-220
+		done
+	}
 	wait_for 10 wgping || fail "no ping through the WireGuard tunnel: $(wgdiag)"
 	ip netns exec twc ping -c 20 -i 0.2 -s 1000 10.98.0.1 >/dev/null || true
 	wgonline() { api "$API/v1/servers/tdwg0/sessions" | grep -q '"name":"wgalice"'; }
