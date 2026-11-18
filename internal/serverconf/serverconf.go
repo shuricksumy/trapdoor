@@ -68,9 +68,14 @@ func (l line) push(kind ...string) bool {
 	return true
 }
 
-// Parse reads the form-level settings from server.conf.
-func Parse(raw string) Settings {
-	s := Settings{Topology: "net30", DNS: []string{}, Routes: []string{}, PushRoutes: []string{}}
+// Parse reads the form-level settings from server.conf, with OpenVPN 2.6's
+// default topology (net30) when the file has no topology line.
+func Parse(raw string) Settings { return ParseDefault(raw, "net30") }
+
+// ParseDefault is Parse with the default topology of the OpenVPN that runs
+// the file: net30 before 2.7, subnet from 2.7 on.
+func ParseDefault(raw, defTopology string) Settings {
+	s := Settings{Topology: defTopology, DNS: []string{}, Routes: []string{}, PushRoutes: []string{}}
 	for _, l := range parseLines(raw) {
 		switch {
 		case l.name == "port" && len(l.args) > 0:

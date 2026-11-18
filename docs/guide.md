@@ -7,6 +7,7 @@ for the HTTP API, [api.md](api.md).
 - [Client profiles](#client-profiles)
 - [Client two-factor login](#client-two-factor-login)
 - [Server configuration](#server-configuration)
+- [OpenVPN 2.7](#openvpn-27)
 - [Expiring certificates](#expiring-certificates)
 - [Client network settings](#client-network-settings)
 - [Access rules](#access-rules)
@@ -90,6 +91,26 @@ the whole `server.conf`. Every other line and comment in the file is kept.
 - Restart method `TD_OPENVPN_RESTART`: `SIGHUP` (default; OpenVPN re-reads its config) or
   `SIGTERM` when a supervisor starts it again — the Docker image's `openvpn` service does
   that inside the same container, so the agent keeps its shared network
+
+## OpenVPN 2.7
+
+The Docker image runs OpenVPN 2.7 (from Alpine). Configs written for 2.6 keep working,
+with one change to look at before updating an existing server:
+
+- **Topology:** a `server.conf` without a `topology` line used `net30` up to 2.6 and uses
+  `subnet` from 2.7 on. Clients then get addresses from a different scheme, and fixed
+  addresses in `ccd/` written for `net30` stop matching. The Server page warns about a
+  missing `topology` line: before updating, add `topology net30` to keep the old
+  behaviour (or move to `topology subnet` on purpose). Configs made by trapdoor's setup
+  always have `topology subnet`. trapdoor follows the installed OpenVPN for the default.
+- **Compression:** OpenVPN 2.7 no longer compresses what it sends; `comp-lzo` / `compress`
+  only keep receiving compressed packets working, with a warning. Old clients still
+  connect.
+- `persist-key` is always on now (the option prints a notice); `ncp-disable` was already
+  removed in 2.6.
+
+Updating the image on your server: `docker compose pull && docker compose up -d`. The
+Overview shows the running OpenVPN version.
 
 ## Expiring certificates
 

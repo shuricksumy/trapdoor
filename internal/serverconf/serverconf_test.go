@@ -147,3 +147,27 @@ func TestCheckWithOpenVPN(t *testing.T) {
 		t.Errorf("no management: %+v", ps)
 	}
 }
+
+func TestTopologyDefaultAndWarning(t *testing.T) {
+	raw := "port 1194\nserver 10.8.0.0 255.255.255.0\n"
+	if got := Parse(raw).Topology; got != "net30" {
+		t.Errorf("Parse default = %q", got)
+	}
+	if got := ParseDefault(raw, "subnet").Topology; got != "subnet" {
+		t.Errorf("ParseDefault = %q", got)
+	}
+	warned := func(raw string) bool {
+		for _, p := range Check(context.Background(), raw, t.TempDir(), "") {
+			if !p.Error && strings.Contains(p.Message, `no "topology" line`) {
+				return true
+			}
+		}
+		return false
+	}
+	if !warned(raw) {
+		t.Error("no warning for a missing topology line")
+	}
+	if warned(raw + "topology subnet\n") {
+		t.Error("warning although topology is set")
+	}
+}

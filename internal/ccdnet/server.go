@@ -31,9 +31,14 @@ func (s Server) HasRoute(p netip.Prefix) bool {
 	return false
 }
 
-// ParseServer reads the relevant directives of server.conf.
-func ParseServer(conf string) Server {
-	s := Server{Topology: TopologyNet30}
+// ParseServer reads the relevant directives of server.conf, with OpenVPN
+// 2.6's default topology (net30) when there is no topology line.
+func ParseServer(conf string) Server { return ParseServerDefault(conf, TopologyNet30) }
+
+// ParseServerDefault is ParseServer with the default topology of the OpenVPN
+// that runs the file (subnet from 2.7 on).
+func ParseServerDefault(conf string, def Topology) Server {
+	s := Server{Topology: def}
 	sc := bufio.NewScanner(strings.NewReader(conf))
 	for sc.Scan() {
 		f, ok := directive(sc.Text())

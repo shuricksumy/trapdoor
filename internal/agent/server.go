@@ -11,6 +11,7 @@ import (
 
 	"github.com/shuricksumy/trapdoor/internal/api"
 	"github.com/shuricksumy/trapdoor/internal/ccd"
+	"github.com/shuricksumy/trapdoor/internal/ccdnet"
 	"github.com/shuricksumy/trapdoor/internal/clientauth"
 	"github.com/shuricksumy/trapdoor/internal/config"
 	"github.com/shuricksumy/trapdoor/internal/httpx"
@@ -37,6 +38,9 @@ type Server struct {
 	conf  *serverconf.File
 
 	netMu sync.Mutex // static address changes
+
+	topoOnce sync.Once
+	topo     ccdnet.Topology // see defaultTopology
 
 	fwMu sync.Mutex
 	fw   *fwTarget // use firewallTarget()

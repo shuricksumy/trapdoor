@@ -130,6 +130,9 @@ func Check(ctx context.Context, raw, dir, openvpnBin string) []Problem {
 	if !have["client-config-dir"] {
 		add(false, `no "client-config-dir" line: per-client network settings are ignored`)
 	}
+	if have["server"] && !have["topology"] {
+		add(false, `no "topology" line: OpenVPN 2.7 and newer default to subnet, older versions to net30, so the client addresses change with an upgrade. Add "topology net30" to keep a config written for OpenVPN 2.6 working, or "topology subnet"`)
+	}
 	return out
 }
 
