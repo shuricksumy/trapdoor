@@ -132,10 +132,16 @@ behind it. Rules match a client by its fixed VPN address; the page assigns free 
 (from the top of the subnet) to clients that have none. With `client-to-client` OpenVPN
 forwards traffic between clients itself, so the rules cannot see it.
 
+Each WireGuard server has its own rules on the same page (pick the server first): chain
+`TD-<id>` (e.g. `TD-wg0`), jumped to from `INPUT` and `FORWARD` for its interface. Every
+WireGuard client has a fixed address, so rules always match; traffic between WireGuard
+clients goes through the kernel and is filtered too. The rules are re-applied when clients
+are added or removed.
+
 | `TD_FIREWALL` | |
 |---|---|
 | `direct` (default) | the agent runs `iptables-restore` itself (host install as root) |
-| `file` | the agent writes `trapdoor-firewall.rules`; the OpenVPN container (the one with `NET_ADMIN`) applies it and reports back — the compose default |
+| `file` | the agent writes `trapdoor-firewall.rules` (WireGuard: `<id>.rules` in `TD_WIREGUARD_DIR`); the VPN container (the one with `NET_ADMIN`) applies it and reports back — the compose default |
 | `off` | the agent never touches the firewall |
 
 Nothing is changed until rules are saved for the first time. In direct mode the agent

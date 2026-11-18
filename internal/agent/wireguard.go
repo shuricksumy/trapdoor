@@ -42,6 +42,8 @@ type wgState struct {
 	AllowedIPs []netip.Prefix `json:"allowed_ips"`
 	Keepalive  int            `json:"keepalive"`
 	Peers      []wgPeer       `json:"peers"`
+	// Firewall is the server's access rules; nil until saved once.
+	Firewall *api.FirewallPolicy `json:"firewall,omitempty"`
 }
 
 type wgPeer struct {
@@ -66,6 +68,7 @@ type WGServer struct {
 	mu       sync.Mutex
 	st       wgState
 	applied  netip.Prefix // address the interface was brought up with
+	fw       *fwTarget    // access rules: chain TD-<id> for the interface
 	applyErr string
 	sess     map[string]*wgSession // by public key, while connected
 	last     map[string][2]int64   // last rx/tx seen per public key
@@ -89,6 +92,12 @@ const (
 func newWGServer(cfg config.Agent, log *slog.Logger, st wgState) *WGServer {
 	s := &WGServer{dir: cfg.WireGuardDir, mode: cfg.WireGuard, log: log.With("server", st.ID), st: st,
 		now: time.Now, sess: map[string]*wgSession{}, last: map[string][2]int64{}}
+	fwMode := cfg.Firewall
+	if fwMode == "" {
+		fwMode = FirewallDirect
+	}
+	s.fw = &fwTarget{mode: fwMode, chain: "TD-" + st.ID, iface: st.ID, iptablesDir: cfg.IPTablesDir,
+		rulesPath: wgPath(cfg.WireGuardDir, st.ID, ".rules"), statusPath: wgPath(cfg.WireGuardDir, st.ID, ".fwstatus")}
 	if cfg.WireGuard == "file" {
 		s.run = wgFile{dir: cfg.WireGuardDir, now: time.Now}
 	} else {
@@ -124,6 +133,7 @@ func LoadWireGuard(ctx context.Context, cfg config.Agent, log *slog.Logger) ([]*
 		s := newWGServer(cfg, log, st)
 		s.mu.Lock()
 		s.applyLocked(ctx, false)
+		s.refreshFirewallLocked(ctx) // the kernel forgets the rules on reboot
 		s.mu.Unlock()
 		out = append(out, s)
 	}
@@ -249,6 +259,7 @@ func (s *WGServer) save(ctx context.Context) error {
 		return err
 	}
 	s.applyLocked(ctx, false)
+	s.refreshFirewallLocked(ctx) // client addresses may have changed
 	return nil
 }
 
@@ -287,6 +298,7 @@ func (s *WGServer) remove(ctx context.Context) error {
 	if err := s.run.Down(ctx, s.st.ID, s.confPath(), s.subnet()); err != nil {
 		return err
 	}
+	s.fw.remove(ctx)
 	for _, ext := range []string{".conf", ".json", ".dump", ".error", ".sync"} {
 		if err := os.Remove(wgPath(s.dir, s.st.ID, ext)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
@@ -318,6 +330,9 @@ func (s *WGServer) routes() http.Handler {
 	mux.HandleFunc("PUT /peers/{name}", s.handleUpdatePeer)
 	mux.HandleFunc("DELETE /peers/{name}", s.handleRemovePeer)
 	mux.HandleFunc("GET /peers/{name}/conf", s.handlePeerConf)
+	mux.HandleFunc("GET /firewall", s.handleGetFirewall)
+	mux.HandleFunc("PUT /firewall", s.handleSetFirewall)
+	mux.HandleFunc("POST /firewall/addresses", s.handleAssignAddresses)
 	return mux
 }
 

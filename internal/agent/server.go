@@ -38,9 +38,8 @@ type Server struct {
 
 	netMu sync.Mutex // static address changes
 
-	fwMu      sync.Mutex
-	fwApplied string // hash of the rules applied in direct mode
-	fwError   string
+	fwMu sync.Mutex
+	fw   *fwTarget // use firewallTarget()
 
 	restartMu   sync.Mutex
 	restartWait time.Duration // tests shorten it

@@ -42,12 +42,24 @@ show) [ -f ` + tools + `/up-$2 ] || { echo "Unable to access interface: No such 
 syncconf) cp "$3" ` + tools + `/synced-$2 ;;
 esac
 `
-	// -C fails until the rule was inserted, like the real iptables.
+	// Keeps the inserted rules (without the position) so -C and -D behave
+	// like the real iptables.
 	ipt := `#!/bin/sh
 echo iptables "$@" >>` + calls + `
-if [ "$1" = -C ] || [ "$3" = -C ]; then grep -qF -- "$(echo "$@" | sed 's/-C/-I/')" ` + calls + `; exit $?; fi
+rules=` + tools + `/rules
+tbl=; [ "$1" = -t ] && { tbl="-t $2 "; shift 2; }
+op=$1 chain=$2; shift 2
+case $op in -I) case $1 in [0-9]*) shift ;; esac ;; esac
+rule="$tbl$chain $*"
+touch "$rules"
+case $op in
+-I|-A) echo "$rule" >>"$rules" ;;
+-C) grep -qxF -- "$rule" "$rules" ;;
+-D) grep -qxF -- "$rule" "$rules" || exit 1; grep -vxF -- "$rule" "$rules" >"$rules.new"; mv "$rules.new" "$rules" ;;
+esac
 `
-	for name, body := range map[string]string{"wg-quick": wgq, "wg": wgs, "iptables": ipt} {
+	restore := "#!/bin/sh\necho iptables-restore \"$@\" >>" + calls + "\ncat >" + tools + "/restored\n"
+	for name, body := range map[string]string{"wg-quick": wgq, "wg": wgs, "iptables": ipt, "iptables-restore": restore} {
 		if err := os.WriteFile(filepath.Join(tools, name), []byte(body), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -241,6 +253,36 @@ func TestWireGuardServer(t *testing.T) {
 		t.Errorf("reloaded peers = %+v", ps)
 	}
 
+	// Access rules: chain TD-wg0 for the interface, clients by their address.
+	fw, err := s.Firewall(ctx)
+	if err != nil || !fw.Applied || fw.Subnet != "10.9.0.0/24" || !strings.Contains(fw.Rules, ":TD-wg0 - [0:0]") {
+		t.Fatalf("firewall before = %+v, %v", fw, err)
+	}
+	if _, err := os.Stat(filepath.Join(tools, "restored")); err == nil {
+		t.Error("rules applied before any were saved")
+	}
+	fw, err = s.SetFirewall(ctx, api.FirewallPolicy{Enabled: true, Default: "deny", Rules: []api.FirewallRule{
+		{Client: "alice", To: "10.9.0.1", Proto: "icmp", Action: "allow"}, {Client: "nobody", Action: "allow"}}})
+	if err != nil || !fw.Applied || fmt.Sprint(fw.Missing) != "[nobody]" {
+		t.Fatalf("set firewall = %+v, %v", fw, err)
+	}
+	if got := read(t, filepath.Join(tools, "restored")); !strings.Contains(got, "-A TD-wg0 -s 10.9.0.2/32 -d 10.9.0.1/32 -p icmp -j ACCEPT") ||
+		!strings.HasSuffix(got, "-A TD-wg0 -j REJECT --reject-with icmp-admin-prohibited\nCOMMIT\n") {
+		t.Errorf("rules:\n%s", got)
+	}
+	for _, want := range []string{"iptables -I INPUT 1 -i wg0 -j TD-wg0", "iptables -I FORWARD 1 -i wg0 -j TD-wg0"} {
+		if strings.Count(read(t, calls), want) != 1 {
+			t.Errorf("want %q once", want)
+		}
+	}
+	if _, err := s.AssignAddresses(ctx, []string{"nobody"}); !IsStatus(err, http.StatusBadRequest) {
+		t.Errorf("assign unknown client: %v", err)
+	}
+	c3, _ := wgHost(t, cfg)
+	if fw, err := c3.Server("wg0").Firewall(ctx); err != nil || !fw.Policy.Enabled || len(fw.Policy.Rules) != 2 {
+		t.Errorf("policy after restart = %+v, %v", fw, err)
+	}
+
 	if err := s.RemovePeer(ctx, "alice"); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +295,8 @@ func TestWireGuardServer(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "wg0.json")); !os.IsNotExist(err) {
 		t.Errorf("state left behind: %v", err)
 	}
-	if log := read(t, calls); !strings.Contains(log, "wg-quick down") || !strings.Contains(log, "iptables -t nat -D POSTROUTING -s 10.9.0.0/24 ! -o wg0 -j MASQUERADE") {
+	if log := read(t, calls); !strings.Contains(log, "wg-quick down") || !strings.Contains(log, "iptables -t nat -D POSTROUTING -s 10.9.0.0/24 ! -o wg0 -j MASQUERADE") ||
+		!strings.Contains(log, "iptables -X TD-wg0") {
 		t.Errorf("interface not taken down or NAT left:\n%s", log)
 	}
 	if all, _ := c.Info(ctx); len(all.Servers) != 0 {
