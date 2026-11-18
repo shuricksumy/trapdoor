@@ -42,14 +42,12 @@ export function relative(s) {
   return rtf.format(Math.round(days / 30), 'month');
 }
 
-export const EXPIRING_DAYS = 30;
-
 /** Effective state for display: valid / expiring / expired / revoked. */
-export function certState(c) {
+export function certState(c, warnDays = 30) {
   if (c.status === 'revoked') return { key: 'revoked', label: 'Revoked', tone: 'bad' };
   if (c.status === 'expired') return { key: 'expired', label: 'Expired', tone: 'bad' };
   const days = (new Date(c.not_after) - Date.now()) / 86400000;
-  if (days < EXPIRING_DAYS) return { key: 'expiring', label: 'Expires soon', tone: 'warn' };
+  if (days < warnDays) return { key: 'expiring', label: 'Expires soon', tone: 'warn' };
   return { key: 'valid', label: 'Valid', tone: 'ok' };
 }
 

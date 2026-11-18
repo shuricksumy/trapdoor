@@ -77,6 +77,11 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		PKIDir:     s.cfg.PKIDir,
 		PKIReady:   s.pki != nil,
 	}
+	if s.pki != nil {
+		if ca, err := s.pki.CAInfo(r.Context()); err == nil {
+			info.CAName, info.CANotAfter = ca.Name, ca.NotAfter
+		}
+	}
 	if v, err := s.mgmt.Version(r.Context()); err != nil {
 		info.MgmtError = err.Error()
 	} else {

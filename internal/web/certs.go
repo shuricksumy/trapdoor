@@ -14,6 +14,7 @@ import (
 func (s *Server) registerCertRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/certs", s.handleListCerts)
 	mux.HandleFunc("POST /api/v1/certs", s.handleIssueCert)
+	mux.HandleFunc("POST /api/v1/certs/renew", s.handleRenewMany)
 	mux.HandleFunc("GET /api/v1/certs/{name}", s.handleGetCert)
 	mux.HandleFunc("DELETE /api/v1/certs/{name}", s.handleRemoveCert)
 	mux.HandleFunc("POST /api/v1/certs/{name}/revoke", s.handleRevokeCert)
@@ -220,6 +221,47 @@ func (s *Server) handleRenewCert(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "cert.renew", name)
 	httpx.WriteJSON(w, http.StatusOK, c)
+}
+
+// handleRenewMany renews several certificates; each result is reported
+// separately, so one failure does not stop the others.
+func (s *Server) handleRenewMany(w http.ResponseWriter, r *http.Request) {
+	var req api.RenewManyRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if len(req.Names) == 0 || len(req.Names) > 500 {
+		httpx.WriteError(w, http.StatusBadRequest, "names must list 1-500 certificates")
+		return
+	}
+	seen := map[string]bool{}
+	results := make([]api.RenewResult, 0, len(req.Names))
+	for _, name := range req.Names {
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		res := api.RenewResult{Name: name}
+		if !pki.ValidName(name) {
+			res.Error = "invalid certificate name"
+			results = append(results, res)
+			continue
+		}
+		c, err := s.Agent.RenewCert(r.Context(), name, req.ValidityDays)
+		if err != nil {
+			var ae *agent.APIError
+			if errors.As(err, &ae) {
+				res.Error = ae.Message
+			} else {
+				res.Error = err.Error()
+			}
+		} else {
+			res.OK, res.Cert = true, &c
+			s.audit(r, "cert.renew", name)
+		}
+		results = append(results, res)
+	}
+	httpx.WriteJSON(w, http.StatusOK, results)
 }
 
 func (s *Server) handleRemoveCert(w http.ResponseWriter, r *http.Request) {

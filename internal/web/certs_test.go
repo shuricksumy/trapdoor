@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+
+	"github.com/shuricksumy/tunnelward/internal/api"
 	"net/http"
 	"strings"
 	"testing"
@@ -55,5 +57,29 @@ func TestCertManagement(t *testing.T) {
 		if rec.Code != st.want || !strings.Contains(rec.Body.String(), st.contains) {
 			t.Errorf("%s %s %s: %d %s; want %d containing %q", st.method, st.path, st.body, rec.Code, rec.Body.String(), st.want, st.contains)
 		}
+	}
+}
+
+func TestRenewMany(t *testing.T) {
+	e := newTestEnv(t, token)
+	bearer := header("Authorization", "Bearer "+token)
+	for _, n := range []string{"a1", "a2"} {
+		if rec := e.do(http.MethodPost, "/api/v1/certs", `{"name":"`+n+`"}`, bearer); rec.Code != http.StatusCreated {
+			t.Fatalf("issue %s: %d", n, rec.Code)
+		}
+	}
+	rec := e.do(http.MethodPost, "/api/v1/certs/renew", `{"names":["a1","a2","ghost","../x","a1"],"validity_days":90}`, bearer)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("renew many = %d %s", rec.Code, rec.Body.String())
+	}
+	res := decode[[]api.RenewResult](t, rec)
+	if len(res) != 4 || !res[0].OK || !res[1].OK || res[2].OK || res[3].OK || res[0].Cert == nil {
+		t.Fatalf("results = %+v", res)
+	}
+	if !strings.Contains(res[2].Error, "not found") || res[3].Error != "invalid certificate name" {
+		t.Errorf("errors = %q / %q", res[2].Error, res[3].Error)
+	}
+	if rec := e.do(http.MethodPost, "/api/v1/certs/renew", `{"names":[]}`, bearer); rec.Code != http.StatusBadRequest {
+		t.Errorf("empty list = %d", rec.Code)
 	}
 }

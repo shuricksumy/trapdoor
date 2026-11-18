@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api, poll } from '../lib/api.js';
   import { date, relative, certState } from '../lib/format.js';
-  import { toast, route, setQuery } from '../lib/state.svelte.js';
+  import { toast, route, setQuery, settings } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
   import TwoFactor from '../lib/TwoFactor.svelte';
   import NetworkDialog from '../lib/NetworkDialog.svelte';
@@ -59,7 +59,7 @@
   const rows = $derived(
     clientCerts
       .filter((c) => showHistory || c.current)
-      .map((c) => ({ ...c, st: certState(c) }))
+      .map((c) => ({ ...c, st: certState(c, settings.expiryWarnDays) }))
       .filter((c) => filter === 'all' || c.st.key === filter)
       .filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => a.name.localeCompare(b.name) || (b.current - a.current)),
@@ -68,10 +68,48 @@
     const n = { all: 0, valid: 0, expiring: 0, expired: 0, revoked: 0 };
     for (const c of clientCerts.filter((c) => c.current)) {
       n.all++;
-      n[certState(c).key]++;
+      n[certState(c, settings.expiryWarnDays).key]++;
     }
     return n;
   });
+
+  // Selection for bulk renew: current, not revoked.
+  let selected = $state(new Set());
+  const selectable = $derived(rows.filter((c) => c.current && c.status !== 'revoked'));
+  const allSelected = $derived(selectable.length > 0 && selectable.every((c) => selected.has(c.name)));
+  function toggle(name) {
+    const s = new Set(selected);
+    s.has(name) ? s.delete(name) : s.add(name);
+    selected = s;
+  }
+  function toggleAll() {
+    selected = allSelected ? new Set() : new Set(selectable.map((c) => c.name));
+  }
+  function selectAttention() {
+    filter = 'all';
+    selected = new Set(
+      clientCerts
+        .filter((c) => c.current && ['expiring', 'expired'].includes(certState(c, settings.expiryWarnDays).key))
+        .map((c) => c.name),
+    );
+  }
+
+  let bulk = $state({ open: false, validity: 825, busy: false, results: null });
+  async function renewSelected() {
+    bulk.busy = true;
+    try {
+      const res = await api('/certs/renew', { method: 'POST', body: { names: [...selected], validity_days: Number(bulk.validity) } });
+      bulk.results = res;
+      const ok = res.filter((r) => r.ok).length;
+      toast(`Renewed ${ok} of ${res.length}. Each device needs its new profile.`, ok === res.length ? 'ok' : 'bad');
+      selected = new Set(res.filter((r) => !r.ok).map((r) => r.name));
+      await load();
+    } catch (e) {
+      toast(e.message, 'bad');
+    } finally {
+      bulk.busy = false;
+    }
+  }
 
   // Create
   let createOpen = $state(false);
@@ -169,6 +207,24 @@
 
 {#if loadError}<div class="banner bad" role="alert">Could not load clients: {loadError}</div>{/if}
 
+{#if counts.expiring + counts.expired > 0 && selected.size === 0}
+  <div class="banner warn attention">
+    <span>
+      {counts.expiring + counts.expired} client {counts.expiring + counts.expired === 1 ? 'certificate needs' : 'certificates need'} renewing
+      ({counts.expired ? `${counts.expired} expired, ` : ''}{counts.expiring} within {settings.expiryWarnDays} days).
+    </span>
+    <button class="btn small" onclick={selectAttention}>Select them</button>
+  </div>
+{/if}
+
+{#if selected.size > 0}
+  <div class="bulkbar" role="region" aria-label="Selected clients">
+    <span><strong>{selected.size}</strong> selected</span>
+    <button class="btn small primary" onclick={() => { bulk.results = null; bulk.open = true; }}>Renew selected</button>
+    <button class="btn small ghost" onclick={() => (selected = new Set())}>Clear</button>
+  </div>
+{/if}
+
 <section class="panel">
   {#if loaded && rows.length === 0}
     <div class="empty">
@@ -183,6 +239,7 @@
       <table>
         <thead>
           <tr>
+            <th class="sel"><input type="checkbox" checked={allSelected} disabled={selectable.length === 0} onchange={toggleAll} aria-label="Select all shown" /></th>
             <th>Name</th>
             <th>Status</th>
             <th>Valid until</th>
@@ -192,7 +249,12 @@
         </thead>
         <tbody>
           {#each rows as c (c.serial)}
-            <tr class:old={!c.current}>
+            <tr class:old={!c.current} class:picked={selected.has(c.name) && c.current}>
+              <td class="sel">
+                {#if c.current && c.status !== 'revoked'}
+                  <input type="checkbox" checked={selected.has(c.name)} onchange={() => toggle(c.name)} aria-label="Select {c.name}" />
+                {/if}
+              </td>
               <td class="c-name">
                 <span class="name">
                   {#if online.has(c.name) && c.current}<i class="dot" title="Connected now"></i>{/if}
@@ -280,6 +342,37 @@
   {/snippet}
 </Dialog>
 
+<Dialog bind:open={bulk.open} title="Renew {selected.size} {selected.size === 1 ? 'certificate' : 'certificates'}">
+  {#if bulk.results}
+    <ul class="results">
+      {#each bulk.results as r (r.name)}
+        <li><span class="pill {r.ok ? 'ok' : 'bad'}">{r.name}</span> <span class="small muted">{r.ok ? 'renewed' : r.error}</span></li>
+      {/each}
+    </ul>
+    <p class="hint">Renewed devices stop working with their old profile: download the new one for each.</p>
+  {:else}
+    <p>New certificates are issued with the same keys. The old ones stop working, so each device needs its new profile.</p>
+    <p class="small muted names">{[...selected].join(', ')}</p>
+    <label class="field">
+      <span>Valid for</span>
+      <select bind:value={bulk.validity}>
+        <option value={90}>90 days</option>
+        <option value={365}>1 year</option>
+        <option value={825}>825 days (default)</option>
+        <option value={1825}>5 years</option>
+      </select>
+    </label>
+  {/if}
+  {#snippet actions()}
+    {#if bulk.results}
+      <button class="btn" onclick={() => (bulk.open = false)}>Done</button>
+    {:else}
+      <button class="btn" onclick={() => (bulk.open = false)}>Cancel</button>
+      <button class="btn primary" disabled={bulk.busy} onclick={renewSelected}>{bulk.busy ? 'Renewing…' : `Renew ${selected.size}`}</button>
+    {/if}
+  {/snippet}
+</Dialog>
+
 <TwoFactor bind:open={twoFactor.open} name={twoFactor.name} />
 <NetworkDialog bind:open={network.open} name={network.name} online={online.has(network.name)} onsaved={load} />
 
@@ -322,6 +415,24 @@
   .name { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
   .ip { margin-left: var(--space-2); }
+  th.sel, td.sel { width: 36px; padding-right: 0; }
+  td.sel input, th.sel input { height: auto; }
+  tr.picked td { background: color-mix(in srgb, var(--accent-soft) 60%, transparent); }
+  .attention { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
+  .bulkbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-s);
+    background: var(--accent-soft);
+  }
+  .results { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 40vh; overflow: auto; }
+  .names { max-height: 6em; overflow: auto; }
   tr.old td { color: var(--ink-3); }
   tr.old .name { font-weight: 400; }
   td.actions { text-align: right; white-space: nowrap; }
@@ -381,6 +492,8 @@
     tbody tr:last-child { border-bottom: 0; }
     tbody td { display: block; padding: 0; border: 0; }
     tbody tr:hover td { background: none; }
+    tbody tr { grid-template-columns: auto 1fr auto; grid-template-areas: 'sel name status' 'sel valid valid' 'sel act act'; }
+    td.sel { grid-area: sel; width: auto; }
     .c-name { grid-area: name; }
     .c-status { grid-area: status; }
     .c-valid { grid-area: valid; font-size: var(--step--1); }

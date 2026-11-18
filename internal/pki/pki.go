@@ -87,6 +87,12 @@ type Bundle struct {
 	Key  []byte // private key, encrypted if it was issued with a passphrase
 }
 
+// CAInfo describes the certificate authority.
+type CAInfo struct {
+	Name     string    `json:"name"`
+	NotAfter time.Time `json:"not_after"`
+}
+
 // PKI is the set of operations the agent performs on the certificate authority.
 type PKI interface {
 	// List returns every index entry, oldest first.
@@ -97,8 +103,9 @@ type PKI interface {
 	Revoke(ctx context.Context, name string) error
 	Unrevoke(ctx context.Context, name string) error
 	// Renew issues a new certificate for an existing name with the same key,
-	// also when the current one has expired. The old certificate is revoked
-	// as superseded.
+	// also when the current one has expired. A client's old certificate is
+	// revoked as superseded; a server's stays valid until it expires (OpenVPN
+	// uses it until restarted).
 	Renew(ctx context.Context, name string, validity time.Duration) (Cert, error)
 	// Remove revokes the certificate if needed and deletes its key material.
 	Remove(ctx context.Context, name string) error
@@ -107,6 +114,8 @@ type PKI interface {
 	// Bundle returns CA, certificate and key of the current certificate for
 	// name. It fails with ErrNotValid unless that certificate is valid.
 	Bundle(ctx context.Context, name string) (Bundle, error)
+	// CAInfo returns the CA's name and expiry.
+	CAInfo(ctx context.Context) (CAInfo, error)
 }
 
 var validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}$`)

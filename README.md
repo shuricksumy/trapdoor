@@ -178,6 +178,18 @@ The settings live in `ccd/<name>` exactly as openvpn-ui wrote them (`#2FA_KEY:` 
 
 Use an authenticator app that supports SHA-256 codes (some apps only do SHA-1).
 
+## Expiring certificates
+
+- Client certificates expiring within `TW_EXPIRY_WARN_DAYS` (default 30) are flagged in the UI
+  and logged by the web process at start and once a day; the CA is flagged 90 days ahead
+  (when it expires, every client stops working at once).
+- Clients → select several (or "Select them" on the banner) → **Renew selected**, or
+  `POST /api/v1/certs/renew {"names":[…],"validity_days":…}` with a result per name.
+- Renewing keeps each key; a client's old certificate is revoked, so every renewed device
+  needs its new profile.
+- Renewing the **server** certificate keeps the old one valid (moved to `renewed/issued/`, as
+  easyrsa does): OpenVPN uses it until it is restarted with the new one.
+
 ## Client network settings
 
 Per client, in the UI (Clients → More → Network) or `PUT /api/v1/certs/{name}/network`:
@@ -232,6 +244,7 @@ tunnelward user list | passwd <name> | del <name>
 | GET | `/api/v1/stats.csv` | same, as CSV: period, name, upload, download, estimated |
 | GET | `/api/v1/history/sessions` | recorded sessions, newest first (`limit`, default 100) |
 | GET, POST | `/api/v1/certs` | list / issue certificates (same bodies as the agent API) |
+| POST | `/api/v1/certs/renew` | bulk renew: `{"names":[…],"validity_days":…}` → result per name |
 | GET, DELETE | `/api/v1/certs/{name}` | get / delete |
 | POST | `/api/v1/certs/{name}/revoke`, `/unrevoke`, `/renew` | |
 | GET | `/api/v1/certs/{name}/ovpn` | download the `.ovpn` profile |

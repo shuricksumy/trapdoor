@@ -65,6 +65,9 @@ type Web struct {
 	CookieSecure bool
 	// TrustedProxies may set X-Forwarded-For (CIDRs).     TW_TRUSTED_PROXIES
 	TrustedProxies []netip.Prefix
+	// ExpiryWarnDays flags client certificates expiring
+	// within this many days.                              TW_EXPIRY_WARN_DAYS (default 30)
+	ExpiryWarnDays int
 	// SessionIdle logs out inactive admins.               TW_SESSION_IDLE (default 12h)
 	SessionIdle time.Duration
 	// Location for day/month/year boundaries in reports.  TW_TZ (IANA, default local)
@@ -126,6 +129,10 @@ func LoadWeb() (Web, error) {
 	idle, err := time.ParseDuration(env("TW_SESSION_IDLE", "12h"))
 	if err != nil || idle < time.Minute {
 		return Web{}, fmt.Errorf("TW_SESSION_IDLE must be a duration of at least 1m")
+	}
+	warnDays, err := strconv.Atoi(env("TW_EXPIRY_WARN_DAYS", "30"))
+	if err != nil || warnDays < 1 || warnDays > 365 {
+		return Web{}, fmt.Errorf("TW_EXPIRY_WARN_DAYS must be 1-365")
 	}
 	var proxies []netip.Prefix
 	for _, p := range list(env("TW_TRUSTED_PROXIES", "-")) {

@@ -432,3 +432,29 @@ func TestBundle(t *testing.T) {
 		t.Errorf("unknown: err = %v", err)
 	}
 }
+
+func TestRenewServerKeepsOldValid(t *testing.T) {
+	s, _ := newTestStore(t, Options{})
+	old, err := s.Issue(ctx(), IssueRequest{Name: "server", Kind: KindServer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	renewed, err := s.Renew(ctx(), "server", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, _ := s.List(ctx())
+	if len(list) != 2 || list[0].Status != StatusValid || list[0].Current || list[1].Serial != renewed.Serial {
+		t.Fatalf("list = %+v", list)
+	}
+	if _, ok := crlSerials(t, s)[old.Serial]; ok {
+		t.Error("old server certificate must not be revoked")
+	}
+	if !fileExists(s.path("renewed/issued/server.crt")) || !fileExists(s.path("issued/server.crt")) {
+		t.Error("expected issued/ (new) and renewed/issued/ (old)")
+	}
+	ca, err := s.CAInfo(ctx())
+	if err != nil || ca.Name != "Test CA" || ca.NotAfter.IsZero() {
+		t.Errorf("CAInfo = %+v, %v", ca, err)
+	}
+}

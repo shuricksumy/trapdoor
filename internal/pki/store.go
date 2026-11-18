@@ -431,10 +431,19 @@ func (s *Store) Renew(_ context.Context, name string, validity time.Duration) (C
 		if err != nil {
 			return err
 		}
-		// Retire the old certificate, keep key and request for the new one.
-		s.markRevoked(&entries[i], "superseded")
-		if err := s.moveToRevoked(name, entries[i].Serial, false); err != nil {
-			return err
+		// Keep key and request for the new certificate. A client's old
+		// certificate is revoked right away. A server's old certificate stays
+		// valid (moved to renewed/issued, as easyrsa does): OpenVPN keeps
+		// using it until it is restarted with the new one.
+		if kind == KindServer {
+			if err := os.Rename(s.path("issued", name+".crt"), s.path("renewed/issued", name+".crt")); err != nil {
+				return err
+			}
+		} else {
+			s.markRevoked(&entries[i], "superseded")
+			if err := s.moveToRevoked(name, entries[i].Serial, false); err != nil {
+				return err
+			}
 		}
 		serial := serialHex(cert.SerialNumber)
 		if err := s.writeIssued(name, serial, certPEM); err != nil {
@@ -517,6 +526,15 @@ func (s *Store) GenCRL(_ context.Context) error {
 		}
 		return s.genCRL(entries)
 	})
+}
+
+// CAInfo implements PKI.
+func (s *Store) CAInfo(_ context.Context) (CAInfo, error) {
+	c, err := s.readCert(s.path("ca.crt"))
+	if err != nil {
+		return CAInfo{}, err
+	}
+	return CAInfo{Name: c.Subject.CommonName, NotAfter: c.NotAfter.UTC()}, nil
 }
 
 // Bundle implements PKI.
