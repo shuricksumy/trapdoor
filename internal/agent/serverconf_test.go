@@ -27,7 +27,6 @@ type restartingMgmt struct {
 	mu   sync.Mutex
 	conf string
 	down time.Time // down until
-	dead bool
 }
 
 func (m *restartingMgmt) Signal(context.Context, string) error {
