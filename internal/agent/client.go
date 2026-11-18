@@ -196,6 +196,20 @@ func (c *Client) RestartServer(ctx context.Context, req api.RestartRequest) (api
 	return out, err
 }
 
+// SetupStatus tells whether the server still needs the setup wizard.
+func (c *Client) SetupStatus(ctx context.Context) (api.SetupStatus, error) {
+	var out api.SetupStatus
+	err := c.doJSON(ctx, http.MethodGet, "/v1/setup", nil, &out)
+	return out, err
+}
+
+// Setup creates the server configuration and waits for OpenVPN.
+func (c *Client) Setup(ctx context.Context, req api.SetupRequest) (api.SetupResult, error) {
+	var out api.SetupResult
+	err := c.do(ctx, c.slow, http.MethodPost, "/v1/setup", req, &out)
+	return out, err
+}
+
 // ConfigBackups lists saved earlier server.conf versions.
 func (c *Client) ConfigBackups(ctx context.Context) ([]api.ConfigBackup, error) {
 	var out []api.ConfigBackup

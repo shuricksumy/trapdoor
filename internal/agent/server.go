@@ -25,14 +25,15 @@ import (
 
 // Server is the agent HTTP API.
 type Server struct {
-	cfg  config.Agent
-	log  *slog.Logger
-	pki  pki.PKI // nil until the PKI is initialized
-	gen  Profiles
-	mgmt Management
-	ccd  *ccd.Store
-	auth *clientauth.Store
-	conf *serverconf.File
+	cfg   config.Agent
+	log   *slog.Logger
+	pkiMu sync.RWMutex
+	pkiv  pki.PKI // nil until the PKI exists; use PKI()
+	gen   Profiles
+	mgmt  Management
+	ccd   *ccd.Store
+	auth  *clientauth.Store
+	conf  *serverconf.File
 
 	restartMu   sync.Mutex
 	restartWait time.Duration // tests shorten it
@@ -48,7 +49,7 @@ type Profiles interface {
 // certificate endpoints then answer 503.
 func New(cfg config.Agent, log *slog.Logger, p pki.PKI) *Server {
 	files := &ccd.Store{Dir: cfg.CCDDir}
-	return &Server{cfg: cfg, log: log, pki: p,
+	return &Server{cfg: cfg, log: log, pkiv: p,
 		gen:  &ovpn.Generator{Dir: cfg.OpenVPNDir, OpenVPNBin: cfg.OpenVPNBin},
 		mgmt: &mgmt.Client{Addr: cfg.MgmtAddr, Password: cfg.MgmtPassword},
 		ccd:  files,
@@ -68,6 +69,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerAuthRoutes(v1)
 	s.registerNetworkRoutes(v1)
 	s.registerServerConfigRoutes(v1)
+	s.registerSetupRoutes(v1)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -85,10 +87,10 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		Hostname:   host,
 		OpenVPNDir: s.cfg.OpenVPNDir,
 		PKIDir:     s.cfg.PKIDir,
-		PKIReady:   s.pki != nil,
+		PKIReady:   s.PKI() != nil,
 	}
-	if s.pki != nil {
-		if ca, err := s.pki.CAInfo(r.Context()); err == nil {
+	if s.PKI() != nil {
+		if ca, err := s.PKI().CAInfo(r.Context()); err == nil {
 			info.CAName, info.CANotAfter = ca.Name, ca.NotAfter
 		}
 	}
@@ -110,4 +112,17 @@ func (s *Server) requireToken(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// PKI returns the certificate authority, or nil before setup.
+func (s *Server) PKI() pki.PKI {
+	s.pkiMu.RLock()
+	defer s.pkiMu.RUnlock()
+	return s.pkiv
+}
+
+func (s *Server) setPKI(p pki.PKI) {
+	s.pkiMu.Lock()
+	s.pkiv = p
+	s.pkiMu.Unlock()
 }

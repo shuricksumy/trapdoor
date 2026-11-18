@@ -9,6 +9,7 @@
   import Statistics from './pages/Statistics.svelte';
   import Account from './pages/Account.svelte';
   import Server from './pages/Server.svelte';
+  import Setup from './pages/Setup.svelte';
 
   const pages = [
     { path: '/', label: 'Overview', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', component: Dashboard },
@@ -23,6 +24,8 @@
       ? { component: Login }
       : route.path === '/account'
         ? { component: Account }
+        : route.path === '/setup'
+          ? { component: Setup }
         : (pages.find((p) => p.path === route.path) ?? pages[0]),
   );
 
@@ -43,10 +46,16 @@
     api('/status')
       .then((st) => st.expiry_warn_days && (settings.expiryWarnDays = st.expiry_warn_days))
       .catch(() => {});
+    api('/setup')
+      .then((st) => {
+        settings.setupNeeded = st.needed;
+        if (st.needed && route.path === '/') navigate('/setup', { replace: true });
+      })
+      .catch(() => {});
   });
 
   $effect(() => {
-    const titles = { '/login': 'Log in', '/account': 'Account' };
+    const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup' };
     const name = titles[route.path] ?? pages.find((p) => p.path === route.path)?.label ?? 'Overview';
     document.title = `${name} · tunnelward`;
   });

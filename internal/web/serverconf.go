@@ -14,6 +14,8 @@ func (s *Server) registerServerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/server/restart", s.handleRestartServer)
 	mux.HandleFunc("GET /api/v1/server/backups", s.handleConfigBackups)
 	mux.HandleFunc("GET /api/v1/server/backups/{name}", s.handleConfigBackup)
+	mux.HandleFunc("GET /api/v1/setup", s.handleSetupStatus)
+	mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
 }
 
 func (s *Server) handleGetServerConfig(w http.ResponseWriter, r *http.Request) {
@@ -102,4 +104,27 @@ func (s *Server) handleConfigBackup(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, struct {
 		Raw string `json:"raw"`
 	}{raw})
+}
+
+func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
+	st, err := s.Agent.SetupStatus(r.Context())
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
+	var req api.SetupRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	s.audit(r, "server.setup", req.PublicHost)
+	res, err := s.Agent.Setup(r.Context(), req)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, res)
 }

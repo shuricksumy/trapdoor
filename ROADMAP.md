@@ -28,7 +28,7 @@
 
 ## v2 — setup and configuration
 
-- [ ] Setup wizard: CA, server cert, cipher, port/proto, DNS, tls-crypt
+- [x] Setup wizard: CA, server cert, key type, port/proto, subnet, DNS, tls-crypt(-v2)/tls-auth, 2FA; NAT follows the subnet in Docker
 - [x] Server config editor: form for common options + raw editor, OpenVPN-checked before saving, diff preview, backups, restart with automatic rollback
 - [x] Routing: per-client routes (`push route`), LAN behind a client (`iroute`), static client IPs, full/split tunnel
 - [ ] Named networks reusable across clients (openvpn-ui "routes")

@@ -62,8 +62,8 @@ func (s *Server) handleUpdateClientAuth(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	// Only clients that exist (and are not revoked) can get a second factor.
-	if s.pki != nil {
-		c, err := s.pki.Get(r.Context(), name)
+	if s.PKI() != nil {
+		c, err := s.PKI().Get(r.Context(), name)
 		if err != nil {
 			s.pkiError(w, err)
 			return

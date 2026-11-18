@@ -76,7 +76,9 @@
   </div>
 </header>
 
-{#if serverProblem}<div class="banner bad" role="alert">{serverProblem}</div>{/if}
+{#if settings.setupNeeded}
+  <div class="banner warn setup" role="status"><span>OpenVPN is not set up yet.</span> <a class="btn small primary" href="/setup">Set up the server</a></div>
+{:else if serverProblem}<div class="banner bad" role="alert">{serverProblem}</div>{/if}
 
 <section class="summary" aria-label="Today">
   <div>
@@ -170,6 +172,7 @@
 </Dialog>
 
 <style>
+  .setup { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
   .page-head { margin-bottom: var(--space-5); }
   .page-head p { margin-top: var(--space-1); }
   .banner { margin-bottom: var(--space-4); }
