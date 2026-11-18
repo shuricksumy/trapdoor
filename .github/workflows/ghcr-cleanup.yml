@@ -1,0 +1,31 @@
+name: GHCR package cleanup
+
+# docker-publish.yml pushes `latest` and a short-sha tag on every push to main, and the Release
+# workflow adds X.Y.Z / X.Y. The sha tags would pile up forever: this keeps latest and releases
+# and deletes the rest (plus untagged multi-arch layers). Also runnable via workflow_dispatch.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "17 3 * * 0" # Sundays 03:17 UTC
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old ghcr.io package versions
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          owner: shuricksumy
+          package: 'tunnelward'
+          # Keep `latest` and any release tag (1.2.3, 1.2, ...); delete every other tag (i.e.
+          # every short-sha build tag) plus orphaned untagged multi-arch layers.
+          delete-tags: '.*'
+          # Flat alternation: a quantified group trips the action's ReDoS check.
+          exclude-tags: '^latest$|^[0-9]+\.[0-9]+$|^[0-9]+\.[0-9]+\.[0-9]+$'
+          use-regex: true
+          delete-untagged: true
+          dry-run: false
+          log-level: info

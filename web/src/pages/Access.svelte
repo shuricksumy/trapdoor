@@ -100,7 +100,10 @@
     if (net?.server_ip) out.push({ label: 'The server', value: net.server_ip });
     for (const r of net?.routes ?? []) out.push({ label: r, value: r });
     for (const [c, lans] of Object.entries(net?.client_lans ?? {})) for (const l of lans) out.push({ label: `${l} (behind ${c})`, value: l });
-    return out;
+    // a client LAN usually also has a server "route": show it once, with its client
+    const seen = new Map();
+    for (const s of out) seen.set(s.value, s);
+    return [...seen.values()];
   });
 
   const what = (r) => {

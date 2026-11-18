@@ -1,12 +1,13 @@
-# tunnelward: OpenVPN server + agent + web UI.
+# tunnelward: OpenVPN server + agent + web UI, from the published image.
 #
-#   cp .env.example .env    # set TW_AGENT_TOKEN, time zone, ...
+#   cp .env.example .env              # set TW_AGENT_TOKEN (openssl rand -hex 32)
 #   docker compose up -d
 #   docker compose exec -it web tunnelward user add admin
 #
-# New install: open the web UI and follow the setup. Existing OpenVPN: point
-# OPENVPN_DIR at its directory. The web UI listens on 127.0.0.1:8080: put it
-# behind an HTTPS reverse proxy.
+# Then open http://127.0.0.1:8080 (WEB_BIND) and follow the setup. An existing
+# OpenVPN server (e.g. from openvpn-ui): point OPENVPN_DIR at its directory.
+# Behind Traefik: add docker-compose.traefik.yml (see the comment there).
+# Anything else with HTTPS works too: proxy to WEB_BIND.
 
 x-image: &image
   image: ${TW_IMAGE:-ghcr.io/shuricksumy/tunnelward:latest}
@@ -49,6 +50,7 @@ services:
       TW_SETUP_PORT: "1194"
       TW_SETUP_PROTO: ${VPN_PROTO:-udp}
       TW_SETUP_PUBLIC_PORT: ${VPN_PORT:-1194}
+      TW_TOTP_ISSUER: ${TW_TOTP_ISSUER:-tunnelward}
     volumes:
       - ${OPENVPN_DIR:-./openvpn}:/etc/openvpn
       - run:/run/tunnelward
@@ -70,6 +72,8 @@ services:
       TW_COOKIE_SECURE: ${TW_COOKIE_SECURE:-true}
       TW_TRUSTED_PROXIES: ${TW_TRUSTED_PROXIES:-}
       TW_WEB_API_TOKEN: ${TW_WEB_API_TOKEN:-}
+      TW_EXPIRY_WARN_DAYS: ${TW_EXPIRY_WARN_DAYS:-30}
+      TW_SESSION_IDLE: ${TW_SESSION_IDLE:-12h}
     ports:
       - "${WEB_BIND:-127.0.0.1:8080}:8080"
     volumes:
