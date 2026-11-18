@@ -24,7 +24,8 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
 FROM alpine:3.22
 # openvpn: the server itself, and `openvpn --genkey` for tls-crypt-v2 client keys (agent)
 # iptables: NAT for VPN clients (openvpn service only)
-RUN apk add --no-cache openvpn iptables ca-certificates \
+# wireguard-tools: wg / wg-quick for WireGuard servers (the kernel module comes from the host)
+RUN apk add --no-cache openvpn iptables ca-certificates wireguard-tools \
  && addgroup -g 10001 trapdoor \
  && adduser -D -H -u 10001 -G trapdoor trapdoor \
  && mkdir -p /data /run/trapdoor \
@@ -40,5 +41,5 @@ ENTRYPOINT ["trapdoor"]
 CMD ["web"]
 
 LABEL org.opencontainers.image.source="https://github.com/shuricksumy/trapdoor" \
-      org.opencontainers.image.description="Web management for an OpenVPN server" \
+      org.opencontainers.image.description="Web management for OpenVPN and WireGuard servers" \
       org.opencontainers.image.licenses="MIT"
