@@ -64,7 +64,9 @@ type Agent struct {
 	// WireGuardDir holds <id>.json (trapdoor's state) and <id>.conf for
 	// every WireGuard server.                               TD_WIREGUARD_DIR
 	WireGuardDir string
-	// WGToolsDir holds wg / wg-quick if not in PATH.        TD_WG_TOOLS_DIR
+	// AmneziaWGDir is the same for AmneziaWG servers (awg tools). TD_AMNEZIAWG_DIR
+	AmneziaWGDir string
+	// WGToolsDir holds wg / wg-quick / awg / awg-quick if not in PATH. TD_WG_TOOLS_DIR
 	WGToolsDir string
 }
 
@@ -150,6 +152,7 @@ func LoadAgent() (Agent, error) {
 		return c, fmt.Errorf("TD_WIREGUARD must be direct, file or off")
 	}
 	c.WireGuardDir = env("TD_WIREGUARD_DIR", "/etc/wireguard")
+	c.AmneziaWGDir = env("TD_AMNEZIAWG_DIR", "/etc/amnezia/amneziawg")
 	c.WGToolsDir = os.Getenv("TD_WG_TOOLS_DIR")
 	c.SetupProto = os.Getenv("TD_SETUP_PROTO")
 	if c.SetupProto != "" && c.SetupProto != "udp" && c.SetupProto != "tcp" {

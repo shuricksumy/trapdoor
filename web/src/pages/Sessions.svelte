@@ -4,7 +4,7 @@
   import { bytes, duration, dateTime } from '../lib/format.js';
   import { toast, currentServer } from '../lib/state.svelte.js';
 
-  const kickable = $derived(currentServer()?.type !== 'wireguard');
+  const kickable = $derived(!['wireguard', 'amneziawg'].includes(currentServer()?.type));
   let live = $state(null);
   let error = $state('');
   let recent = $state([]);
@@ -39,7 +39,7 @@
 
 <header class="head">
   <h1>Connected</h1>
-  <p class="muted">Live from {kickable ? 'OpenVPN' : 'WireGuard (a client counts as connected while its last handshake is recent)'}, refreshed every 10 seconds.</p>
+  <p class="muted">Live from {kickable ? 'OpenVPN' : (currentServer()?.type === 'amneziawg' ? 'AmneziaWG' : 'WireGuard') + ' (a client counts as connected while its last handshake is recent)'}, refreshed every 10 seconds.</p>
 </header>
 
 {#if error}<div class="banner bad" role="alert">Live sessions are unavailable: {error}</div>{/if}

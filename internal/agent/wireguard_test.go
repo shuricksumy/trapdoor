@@ -59,7 +59,10 @@ case $op in
 esac
 `
 	restore := "#!/bin/sh\necho iptables-restore \"$@\" >>" + calls + "\ncat >" + tools + "/restored\n"
-	for name, body := range map[string]string{"wg-quick": wgq, "wg": wgs, "iptables": ipt, "iptables-restore": restore} {
+	// AmneziaWG's tools behave the same; they log under their own names.
+	awgq := strings.ReplaceAll(wgq, "echo wg-quick", "echo awg-quick")
+	awgs := strings.ReplaceAll(wgs, "echo wg ", "echo awg ")
+	for name, body := range map[string]string{"wg-quick": wgq, "wg": wgs, "awg-quick": awgq, "awg": awgs, "iptables": ipt, "iptables-restore": restore} {
 		if err := os.WriteFile(filepath.Join(tools, name), []byte(body), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -304,6 +307,89 @@ func TestWireGuardServer(t *testing.T) {
 	}
 	if err := c.Server("wg0").RemoveServer(ctx); !IsStatus(err, http.StatusNotFound) {
 		t.Errorf("remove again: %v", err)
+	}
+}
+
+func TestAmneziaWGServer(t *testing.T) {
+	tools, calls := fakeWG(t)
+	fwd := filepath.Join(t.TempDir(), "ip_forward")
+	old := ipForwardPath
+	ipForwardPath = fwd
+	t.Cleanup(func() { ipForwardPath = old })
+	wgDirPath, awgDir := t.TempDir(), t.TempDir()
+	cfg := config.Agent{WireGuard: "direct", WireGuardDir: wgDirPath, AmneziaWGDir: awgDir, WGToolsDir: tools, IPTablesDir: tools}
+	c, _ := wgHost(t, cfg)
+	ctx := context.Background()
+
+	info, err := c.CreateServer(ctx, api.CreateServer{Type: api.TypeAmneziaWG, ID: "awg0", PublicHost: "vpn.example.com", Port: 51840, Subnet: "10.96.0.0/24"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := info.Obfuscation
+	if info.Type != api.TypeAmneziaWG || info.Name != "AmneziaWG awg0" || o == nil || o.Level != api.AWGLevel20 || !strings.Contains(o.H1, "-") || o.S4 == 0 {
+		t.Fatalf("info = %+v obfuscation %+v", info, o)
+	}
+	if !strings.Contains(read(t, calls), "awg-quick up "+filepath.Join(awgDir, "awg0.conf")) {
+		t.Errorf("awg-quick not used:\n%s", read(t, calls))
+	}
+	if _, err := os.Stat(filepath.Join(wgDirPath, "awg0.json")); err == nil {
+		t.Error("AmneziaWG state in the WireGuard directory")
+	}
+	srv := read(t, filepath.Join(awgDir, "awg0.conf"))
+	mtu := fmt.Sprintf("MTU = %d\n", 1420-o.S4)
+	for _, want := range []string{fmt.Sprintf("Jc = %d\n", o.Jc), "H4 = " + o.H4 + "\n", fmt.Sprintf("S4 = %d\n", o.S4), mtu} {
+		if !strings.Contains(srv, want) {
+			t.Errorf("server conf lacks %q:\n%s", want, srv)
+		}
+	}
+	s := c.Server("awg0")
+	if _, err := s.AddPeer(ctx, api.NewPeer{Name: "alice"}); err != nil {
+		t.Fatal(err)
+	}
+	cc, err := s.PeerConf(ctx, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"H1 = " + o.H1 + "\n", fmt.Sprintf("S1 = %d\n", o.S1), mtu, "Endpoint = vpn.example.com:51840"} {
+		if !strings.Contains(string(cc), want) {
+			t.Errorf("client conf lacks %q:\n%s", want, cc)
+		}
+	}
+	if !strings.Contains(read(t, calls), "awg syncconf awg0") {
+		t.Error("peer not applied with awg syncconf")
+	}
+
+	old15, err := c.CreateServer(ctx, api.CreateServer{Type: api.TypeAmneziaWG, ID: "awg1", PublicHost: "h", Port: 51841, Subnet: "10.95.0.0/24", AWGLevel: api.AWGLevel15})
+	if err != nil || old15.Obfuscation.Level != api.AWGLevel15 || strings.Contains(old15.Obfuscation.H1, "-") || old15.Obfuscation.S3 != 0 {
+		t.Errorf("level 1.5 = %+v, %v", old15.Obfuscation, err)
+	}
+	withI, err := c.CreateServer(ctx, api.CreateServer{Type: api.TypeAmneziaWG, ID: "awg3", PublicHost: "h", Port: 51844, Subnet: "10.92.0.0/24",
+		Obfuscation: &api.Obfuscation{I1: "<b 0xc700000001><r 16><t>"}})
+	if err != nil || withI.Obfuscation.I1 == "" || withI.Obfuscation.H1 == "" || withI.Obfuscation.Level != api.AWGLevel20 {
+		t.Errorf("imitation packet only = %+v, %v", withI.Obfuscation, err)
+	}
+	if _, err := c.CreateServer(ctx, api.CreateServer{Type: api.TypeAmneziaWG, ID: "awg4", PublicHost: "h", Port: 51845, Subnet: "10.91.0.0/24",
+		Obfuscation: &api.Obfuscation{I1: "<nope>"}}); !IsStatus(err, http.StatusBadRequest) {
+		t.Errorf("bad imitation packet: %v", err)
+	}
+	custom := api.Obfuscation{Level: api.AWGLevel15, Jc: 4, Jmin: 40, Jmax: 70, S1: 52, S2: 108, H1: "5", H2: "6", H3: "7", H4: "8"} // S2 = S1 + 56
+	for _, bad := range []api.CreateServer{
+		{Type: api.TypeAmneziaWG, ID: "awg2", PublicHost: "h", Port: 51842, Subnet: "10.94.0.0/24", Obfuscation: &custom},
+		{Type: api.TypeAmneziaWG, ID: "awg2", PublicHost: "h", Port: 51842, Subnet: "10.94.0.0/24", AWGLevel: "9"},
+		{Type: api.TypeWireGuard, ID: "awg0", PublicHost: "h", Port: 51843, Subnet: "10.93.0.0/24"}, // id taken across types
+	} {
+		if _, err := c.CreateServer(ctx, bad); err == nil {
+			t.Errorf("accepted %+v", bad)
+		}
+	}
+
+	c2, _ := wgHost(t, cfg)
+	all, err := c2.Info(ctx)
+	if err != nil || len(all.Servers) != 3 || all.Servers[0].Type != api.TypeAmneziaWG || all.Servers[0].Obfuscation.H1 != o.H1 {
+		t.Fatalf("reloaded = %+v, %v", all, err)
+	}
+	if err := s.RemoveServer(ctx); err != nil || !strings.Contains(read(t, calls), "awg-quick down") {
+		t.Errorf("remove: %v", err)
 	}
 }
 

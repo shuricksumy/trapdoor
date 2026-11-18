@@ -44,6 +44,8 @@ TD_TZ=Europe/Dublin
 OPENVPN_DIR=$WORK/openvpn
 WIREGUARD_DIR=$WORK/wireguard
 WG_PORT=15182
+AMNEZIAWG_DIR=$WORK/amneziawg
+AWG_PORT=15183
 VPN_PORT=11194
 WEB_BIND=127.0.0.1:18080
 ENV
@@ -178,6 +180,31 @@ for _ in $(seq 10); do dc exec -T openvpn ip link show wg0 >/dev/null 2>&1 || br
 ! dc exec -T openvpn ip link show wg0 >/dev/null 2>&1 || fail "wg0 still up after remove"
 ! dc exec -T openvpn iptables -S TD-wg0 >/dev/null 2>&1 || fail "TD-wg0 left after remove"
 log "WireGuard client connected through the container; disable and remove work"
+
+log "AmneziaWG: obfuscated server in the container (userspace), a client from the image connects"
+api -H "Content-Type: application/json" \
+	-d '{"type":"amneziawg","id":"awg0","port":15183,"public_host":"127.0.0.1","subnet":"10.79.0.0/24","allowed_ips":["10.79.0.0/24"]}' \
+	"$WEB/api/v1/servers" >"$WORK/awg.json" || fail "create AmneziaWG server"
+grep -q '"level":"2.0"' "$WORK/awg.json" || fail "no 2.0 obfuscation: $(cat "$WORK/awg.json")"
+awgrunning() { api "$WEB/api/v1/status" | grep -q '"id":"awg0"[^}]*"running":true'; }
+for _ in $(seq 20); do awgrunning && break; sleep 1; done
+awgrunning || fail "awg0 not running: $(api "$WEB/api/v1/status"; dc logs --tail 20 openvpn)"
+dc exec -T openvpn awg show awg0 | grep -q "h4: " || fail "awg0 has no obfuscation settings"
+api -H "Content-Type: application/json" -d '{"name":"awgsmoke"}' "$WEB/api/v1/servers/awg0/peers" >/dev/null || fail "add AmneziaWG client"
+api "$WEB/api/v1/servers/awg0/peers/awgsmoke/conf" >"$WORK/awgc.conf"
+grep -q "^S3 = " "$WORK/awgc.conf" && grep -q "^H1 = [0-9]*-[0-9]*$" "$WORK/awgc.conf" || fail "client config lacks obfuscation: $(grep -v Key "$WORK/awgc.conf")"
+# The image has the AmneziaWG tools: run the client from it, in the host's network.
+docker run --rm --network host --cap-add NET_ADMIN --device /dev/net/tun -u root --entrypoint bash \
+	-v "$WORK/awgc.conf:/c.conf:ro" "$IMAGE" -c '
+	mkdir -p /etc/amnezia/amneziawg && install -m 600 /c.conf /etc/amnezia/amneziawg/tdawgc.conf
+	awg-quick up tdawgc >/dev/null 2>&1 || exit 2
+	for i in $(seq 15); do ping -c 1 -W 1 10.79.0.1 >/dev/null 2>&1 && ok=1 && break; done
+	awg-quick down tdawgc >/dev/null 2>&1
+	[ -n "${ok:-}" ]' || fail "no ping through AmneziaWG (rc $?)"
+api -X DELETE "$WEB/api/v1/servers/awg0" || fail "remove AmneziaWG server"
+for _ in $(seq 10); do dc exec -T openvpn ip link show awg0 >/dev/null 2>&1 || break; sleep 1; done
+! dc exec -T openvpn ip link show awg0 >/dev/null 2>&1 || fail "awg0 still up after remove"
+log "AmneziaWG client connected through the obfuscated tunnel; remove works"
 
 log "web container is locked down"
 [[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' tdsmoke-web-1) == true ]] || fail "web rootfs not read-only"

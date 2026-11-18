@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/shuricksumy/trapdoor)](https://github.com/shuricksumy/trapdoor/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-A web UI for your own OpenVPN and WireGuard servers. Set the server up in a few clicks, create a profile
+A web UI for your own OpenVPN, WireGuard and AmneziaWG servers. Set the server up in a few clicks, create a profile
 for every phone and laptop, see who is connected and how much traffic each device used,
 and decide which networks each device may reach.
 

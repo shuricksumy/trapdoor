@@ -3,8 +3,10 @@
   import qrcode from 'qrcode-generator';
   import { api, apiURL, poll } from '../lib/api.js';
   import { bytes, relative } from '../lib/format.js';
-  import { toast } from '../lib/state.svelte.js';
+  import { toast, currentServer } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
+
+  const app = currentServer()?.type === 'amneziawg' ? 'AmneziaWG' : 'WireGuard';
 
   let peers = $state([]);
   let loadError = $state('');
@@ -113,7 +115,7 @@
 <header class="head">
   <div>
     <h1>Clients</h1>
-    <p class="muted">One entry per device. Scan its QR code in the WireGuard app, or download the config.</p>
+    <p class="muted">One entry per device. Scan its QR code in the {app} app, or download the config.</p>
   </div>
   <button class="btn primary" onclick={openCreate}>Add client</button>
 </header>
@@ -195,9 +197,9 @@
     <p class="muted">Loading…</p>
   {:else}
     <div class="conf-wrap">
-      {#if qrSvg}<div class="qr" role="img" aria-label="QR code with the WireGuard config">{@html qrSvg}</div>{/if}
+      {#if qrSvg}<div class="qr" role="img" aria-label="QR code with the {app} config">{@html qrSvg}</div>{/if}
       <div class="conf-side">
-        <p class="small muted">Open the WireGuard app, choose “Add a tunnel” and scan the code. On a computer, download the file and import it.</p>
+        <p class="small muted">Open the {app} app, choose “Add a tunnel” and scan the code. On a computer, download the file and import it.</p>
         <p class="small muted">The config holds the client's private key. Share it only with the person who uses this device.</p>
       </div>
     </div>

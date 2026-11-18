@@ -2,21 +2,35 @@
   import { api, reloadServers } from '../lib/api.js';
   import { navigate, selectServer, servers, toast } from '../lib/state.svelte.js';
 
-  function freeID() {
+  import { route } from '../lib/state.svelte.js';
+
+  // WireGuard, or AmneziaWG: WireGuard with traffic that is hard to detect.
+  const kinds = {
+    wireguard: { label: 'WireGuard', prefix: 'wg', port: 51820, net: 9, app: 'WireGuard' },
+    amneziawg: { label: 'AmneziaWG', prefix: 'awg', port: 51830, net: 50, app: 'AmneziaWG' },
+  };
+  const initial = route.query.get('type') === 'amneziawg' ? 'amneziawg' : 'wireguard';
+  let type = $state(initial);
+
+  function freeID(prefix) {
     for (let i = 0; i < 100; i++) {
-      if (!servers.list.some((s) => s.id === `wg${i}`)) return `wg${i}`;
+      if (!servers.list.some((s) => s.id === `${prefix}${i}`)) return `${prefix}${i}`;
     }
     return '';
   }
 
   // A second server needs its own port and subnet, so suggest the next ones.
-  const taken = servers.list.filter((s) => s.type === 'wireguard').length;
+  function defaults(t) {
+    const k = kinds[t];
+    const taken = servers.list.filter((s) => s.type === t).length;
+    return { id: freeID(k.prefix), port: k.port + taken, subnet: `10.${k.net + taken}.0.0/24` };
+  }
   let f = $state({
-    id: freeID(),
+    ...defaults(initial),
     name: '',
     host: '',
-    port: 51820 + taken,
-    subnet: `10.${9 + taken}.0.0/24`,
+    level: '2.0',
+    imitation: '',
     dns: '',
     publicPort: '',
     mtu: '',
@@ -25,6 +39,12 @@
   });
   let busy = $state(false);
   let error = $state('');
+
+  function pick(t) {
+    if (t === type) return;
+    type = t;
+    Object.assign(f, defaults(t));
+  }
 
   const idOk = $derived(/^[a-z0-9][a-z0-9-]{0,14}$/.test(f.id) && !servers.list.some((s) => s.id === f.id));
   const list = (s) => s.split(/[\s,]+/).filter(Boolean);
@@ -35,7 +55,7 @@
     error = '';
     try {
       const body = {
-        type: 'wireguard',
+        type,
         id: f.id,
         name: f.name.trim() || f.id,
         public_host: f.host.trim(),
@@ -47,6 +67,14 @@
       if (f.publicPort) body.public_port = Number(f.publicPort);
       if (f.mtu) body.mtu = Number(f.mtu);
       if (f.allowed.trim()) body.allowed_ips = list(f.allowed);
+      if (type === 'amneziawg') {
+        body.awg_level = f.level;
+        const packets = f.imitation.split('\n').map((l) => l.trim()).filter(Boolean);
+        if (packets.length) {
+          body.obfuscation = {};
+          packets.slice(0, 5).forEach((p, i) => (body.obfuscation[`i${i + 1}`] = p));
+        }
+      }
       const sv = await api('/servers', { method: 'POST', body });
       await reloadServers();
       selectServer(sv.id);
@@ -61,12 +89,23 @@
 </script>
 
 <header class="head">
-  <h1>Add WireGuard server</h1>
-  <p class="muted">A new WireGuard network next to your other servers. Clients scan a QR code to join.</p>
+  <h1>Add a server</h1>
+  <p class="muted">A new {kinds[type].label} network next to your other servers. Clients scan a QR code in the {kinds[type].app} app to join.</p>
 </header>
 
 <form class="panel form" onsubmit={create}>
   {#if error}<div class="banner bad" role="alert">{error}</div>{/if}
+
+  <div class="kinds" role="radiogroup" aria-label="Type">
+    <button type="button" role="radio" aria-checked={type === 'wireguard'} class:on={type === 'wireguard'} onclick={() => pick('wireguard')}>
+      <strong>WireGuard</strong>
+      <span>Fast and simple. Works with the official WireGuard apps.</span>
+    </button>
+    <button type="button" role="radio" aria-checked={type === 'amneziawg'} class:on={type === 'amneziawg'} onclick={() => pick('amneziawg')}>
+      <strong>AmneziaWG</strong>
+      <span>WireGuard that is hard to detect and block. Needs the AmneziaWG app.</span>
+    </button>
+  </div>
 
   <div class="grid">
     <label class="field">
@@ -105,6 +144,29 @@
     <span class="hint">Separate with commas. Clients use them while connected.</span>
   </label>
 
+  {#if type === 'amneziawg'}
+    <fieldset class="obf">
+      <legend>Hiding</legend>
+      <label class="choice">
+        <input type="radio" bind:group={f.level} value="2.0" />
+        <span><strong>Strongest</strong> (AmneziaWG 2.0): hardest to detect. Every device needs an up-to-date AmneziaWG app.</span>
+      </label>
+      <label class="choice">
+        <input type="radio" bind:group={f.level} value="1.5" />
+        <span><strong>Most compatible</strong> (1.5): also works with older AmneziaWG apps and the Linux kernel module.</span>
+      </label>
+      <p class="hint">Random values are chosen for this server; all its clients get the same ones. You see them on the server's overview.</p>
+      <details>
+        <summary>Imitation packets (optional)</summary>
+        <label class="field">
+          <span>I1–I5, one per line</span>
+          <textarea bind:value={f.imitation} class="mono" rows="3" spellcheck="false" placeholder="<b 0xc700000001><r 16><t>"></textarea>
+          <span class="hint">Packets the client sends before connecting, to look like another protocol. Tags: &lt;b 0xHEX&gt; fixed bytes, &lt;r N&gt; random bytes, &lt;rc N&gt; letters, &lt;rd N&gt; digits, &lt;t&gt; time. Leave empty if unsure.</span>
+        </label>
+      </details>
+    </fieldset>
+  {/if}
+
   <details class="adv">
     <summary>Advanced</summary>
     <div class="grid">
@@ -142,7 +204,22 @@
   .form { display: grid; gap: var(--space-4); padding: var(--space-5); max-width: 720px; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: start; }
   .hint.bad { color: var(--bad); }
+  .kinds { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+  .kinds button {
+    display: grid; gap: 2px; text-align: left; padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit;
+  }
+  .kinds button span { color: var(--ink-2); font-size: 13px; }
+  .kinds button.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .obf { border: 1px solid var(--line); border-radius: 10px; padding: var(--space-3) var(--space-4); display: grid; gap: var(--space-2); margin: 0; }
+  .obf legend { padding: 0 var(--space-1); font-weight: 600; }
+  .obf .choice { display: grid; grid-template-columns: auto 1fr; gap: var(--space-2); align-items: start; margin: 0; padding: 2px 0; }
+  .obf .choice input { margin: 4px 0 0; }
+  .choice span { color: var(--ink-2); }
+  .choice strong { color: var(--ink); }
+  .obf details summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
+  .obf textarea { width: 100%; }
   .adv summary { cursor: pointer; color: var(--ink-2); font-weight: 500; margin-bottom: var(--space-3); }
   .actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
-  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } .form { padding: var(--space-4); } }
+  @media (max-width: 600px) { .grid, .kinds { grid-template-columns: 1fr; } .form { padding: var(--space-4); } }
 </style>

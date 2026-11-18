@@ -32,13 +32,14 @@ type wgRunner interface {
 // Forwarding and NAT are set up by the agent, not by wg-quick hooks:
 // Ubuntu's AppArmor profile for wg-quick does not allow running them.
 type wgDirect struct {
+	wg, quick   string // "wg", "wg-quick" or AmneziaWG's "awg", "awg-quick"
 	toolsDir    string
 	iptablesDir string
 	ipForward   string // /proc/sys/net/ipv4/ip_forward
 }
 
 func (d wgDirect) bin(name string) string {
-	if d.toolsDir != "" && (name == "wg" || name == "wg-quick") {
+	if d.toolsDir != "" && (name == d.wg || name == d.quick) {
 		return filepath.Join(d.toolsDir, name)
 	}
 	return name
@@ -63,13 +64,13 @@ func (d wgDirect) run(ctx context.Context, stdin []byte, name string, args ...st
 }
 
 func (d wgDirect) up(ctx context.Context, id string) bool {
-	_, err := d.run(ctx, nil, "wg", "show", id, "public-key")
+	_, err := d.run(ctx, nil, d.wg, "show", id, "public-key")
 	return err == nil
 }
 
 func (d wgDirect) Apply(ctx context.Context, id, conf string, subnet, prev netip.Prefix, restart bool) error {
 	if d.up(ctx, id) && !restart {
-		stripped, err := d.run(ctx, nil, "wg-quick", "strip", conf)
+		stripped, err := d.run(ctx, nil, d.quick, "strip", conf)
 		if err != nil {
 			return err
 		}
@@ -79,18 +80,18 @@ func (d wgDirect) Apply(ctx context.Context, id, conf string, subnet, prev netip
 		if err := os.WriteFile(sync, stripped, 0o600); err != nil {
 			return err
 		}
-		_, err = d.run(ctx, nil, "wg", "syncconf", id, sync)
+		_, err = d.run(ctx, nil, d.wg, "syncconf", id, sync)
 		_ = os.Remove(sync)
 		if err != nil {
 			return err
 		}
 	} else {
 		if d.up(ctx, id) {
-			if _, err := d.run(ctx, nil, "wg-quick", "down", conf); err != nil {
+			if _, err := d.run(ctx, nil, d.quick, "down", conf); err != nil {
 				return err
 			}
 		}
-		if _, err := d.run(ctx, nil, "wg-quick", "up", conf); err != nil {
+		if _, err := d.run(ctx, nil, d.quick, "up", conf); err != nil {
 			return err
 		}
 	}
@@ -104,7 +105,7 @@ func (d wgDirect) Down(ctx context.Context, id, conf string, subnet netip.Prefix
 	if !d.up(ctx, id) {
 		return nil
 	}
-	if _, err := d.run(ctx, nil, "wg-quick", "down", conf); err != nil {
+	if _, err := d.run(ctx, nil, d.quick, "down", conf); err != nil {
 		return err
 	}
 	return d.route(ctx, id, subnet, false)
@@ -148,7 +149,7 @@ func (d wgDirect) route(ctx context.Context, id string, subnet netip.Prefix, add
 }
 
 func (d wgDirect) Dump(ctx context.Context, id string) (string, error) {
-	out, err := d.run(ctx, nil, "wg", "show", id, "dump")
+	out, err := d.run(ctx, nil, d.wg, "show", id, "dump")
 	return string(out), err
 }
 

@@ -21,16 +21,36 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
       -ldflags "-s -w -X github.com/shuricksumy/trapdoor/internal/version.Version=$VERSION -X github.com/shuricksumy/trapdoor/internal/version.Commit=$COMMIT -X github.com/shuricksumy/trapdoor/internal/version.Date=$DATE" \
       -o /out/trapdoor ./cmd/trapdoor
 
+# AmneziaWG (WireGuard with obfuscation) is not packaged for Alpine: the
+# userspace implementation and its tools are built at pinned releases, so
+# the host needs no kernel module.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS awg-go
+ARG TARGETOS TARGETARCH AMNEZIAWG_GO_VERSION=v3.1.20261116
+RUN apk add --no-cache git \
+ && git clone --depth 1 --branch "$AMNEZIAWG_GO_VERSION" https://github.com/amnezia-vpn/amneziawg-go /src
+WORKDIR /src
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w" -o /out/amneziawg-go .
+
+FROM alpine:3.22 AS awg-tools
+ARG AMNEZIAWG_TOOLS_VERSION=v3.1.20260812
+RUN apk add --no-cache git make gcc musl-dev linux-headers bash \
+ && git clone --depth 1 --branch "$AMNEZIAWG_TOOLS_VERSION" https://github.com/amnezia-vpn/amneziawg-tools /src
+WORKDIR /src/src
+RUN make && make install DESTDIR=/out WITH_WGQUICK=yes WITH_BASHCOMPLETION=no WITH_SYSTEMDUNITS=no
+
 FROM alpine:3.22
 # openvpn: the server itself, and `openvpn --genkey` for tls-crypt-v2 client keys (agent)
 # iptables: NAT for VPN clients (openvpn service only)
-# wireguard-tools: wg / wg-quick for WireGuard servers (the kernel module comes from the host)
+# wireguard-tools: wg / wg-quick for WireGuard servers (the kernel module comes from the host;
+# also pulls in bash, which awg-quick needs too)
 RUN apk add --no-cache openvpn iptables ca-certificates wireguard-tools \
  && addgroup -g 10001 trapdoor \
  && adduser -D -H -u 10001 -G trapdoor trapdoor \
  && mkdir -p /data /run/trapdoor \
  && chown trapdoor:trapdoor /data
 COPY --from=go /out/trapdoor /usr/local/bin/trapdoor
+COPY --from=awg-go /out/amneziawg-go /usr/local/bin/amneziawg-go
+COPY --from=awg-tools /out/usr/bin/awg /out/usr/bin/awg-quick /usr/local/bin/
 COPY docker/openvpn-entrypoint.sh /usr/local/bin/openvpn-entrypoint.sh
 
 ENV TD_DB_PATH=/data/trapdoor.db \
@@ -41,5 +61,5 @@ ENTRYPOINT ["trapdoor"]
 CMD ["web"]
 
 LABEL org.opencontainers.image.source="https://github.com/shuricksumy/trapdoor" \
-      org.opencontainers.image.description="Web management for OpenVPN and WireGuard servers" \
+      org.opencontainers.image.description="Web management for OpenVPN, WireGuard and AmneziaWG servers" \
       org.opencontainers.image.licenses="MIT"

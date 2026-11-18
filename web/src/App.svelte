@@ -32,7 +32,8 @@
     pages[4],
   ];
 
-  const isWG = $derived(currentServer()?.type === 'wireguard');
+  // WireGuard and AmneziaWG servers share their pages.
+  const isWG = $derived(['wireguard', 'amneziawg'].includes(currentServer()?.type));
   const navPages = $derived(isWG ? wgPages : pages);
 
   const current = $derived(
@@ -85,7 +86,7 @@
   });
 
   $effect(() => {
-    const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup', '/servers/new': 'Add WireGuard server' };
+    const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup', '/servers/new': 'Add a server' };
     const name = titles[route.path] ?? navPages.find((p) => p.path === route.path)?.label ?? 'Overview';
     document.title = `${name} · trapdoor`;
   });
@@ -138,7 +139,7 @@
             </select>
           </label>
         {/if}
-        {#if route.path !== '/servers/new'}<a class="add-server small" href="/servers/new">Add WireGuard server</a>{/if}
+        {#if route.path !== '/servers/new'}<a class="add-server small" href="/servers/new">Add a server</a>{/if}
       </div>
       {#key servers.current}
         <current.component />

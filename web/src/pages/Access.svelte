@@ -13,7 +13,7 @@
   let net = $state(null);
   let showRules = $state(false);
 
-  const isWG = currentServer()?.type === 'wireguard';
+  const isWG = ['wireguard', 'amneziawg'].includes(currentServer()?.type);
 
   // WireGuard: every client has a fixed address; build the same shape as
   // OpenVPN's /network from the client list.

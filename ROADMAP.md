@@ -65,9 +65,11 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
         `.conf` download, live state and sessions for history, `direct` / `file` modes,
         e2e with a real client
   - [x] Web API and UI (clients page, QR code, create-server form)
-- [ ] **AmneziaWG** server: the WireGuard backend with `awg` tools and the obfuscation settings
-      (junk packets, padding, header values; check the current Amnezia spec), matching client
-      configs for the Amnezia app; kernel module or `amneziawg-go` shipped in the image
+- [x] **AmneziaWG** server: the WireGuard backend with `awg` tools and the obfuscation settings
+      (junk packets, S1–S4, H1–H4 single values or ranges, optional I1–I5; levels 1.5 and 2.0,
+      2.0 by default), random values within the documented limits, matching client configs
+      for the AmneziaWG apps; `amneziawg-go` built into the image (no kernel module needed)
+  - [ ] Later: AmneziaWG 3.1 extras (header protection, timing ranges, random trailers)
 - [ ] Several OpenVPN servers (e.g. UDP 1194 + TCP 443), each with its own management port;
       the container supervisor runs all of them
 - [ ] Access rules for WireGuard / AmneziaWG interfaces; two-factor login
@@ -75,6 +77,7 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
   - [x] WireGuard: chain `TD-<id>` per server, same Access page, direct and file (Docker) mode
 - [ ] Docker: WireGuard / AmneziaWG in the `openvpn` (renamed `vpn`) container, ports per server
   - [x] WireGuard in the `openvpn` container (`TD_WIREGUARD=file`), `WG_PORT`, smoke-tested with a real client
+  - [x] AmneziaWG in the same container (userspace `amneziawg-go`), `AWG_PORT`, smoke-tested
 - [ ] Later: one UI for several hosts (one agent per host)
 
 ## v4 — extras
