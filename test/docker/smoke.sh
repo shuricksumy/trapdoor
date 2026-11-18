@@ -114,6 +114,36 @@ curl -fsS -b "$JAR" -H "Origin: $WEB" -X POST "$WEB/api/v1/certs/alice/revoke" >
 for _ in $(seq 10); do curl -fsS -b "$JAR" "$WEB/api/v1/sessions" | grep -q '"name":"alice"' || break; sleep 1; done
 ! curl -fsS -b "$JAR" "$WEB/api/v1/sessions" | grep -q '"name":"alice"' || fail "revoked alice still online"
 
+log "server config: change via the web API, restart through management (supervised SIGTERM)"
+wj() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" "$@"; }
+wj "$WEB/api/v1/server/config" >"$WORK/sc.json"
+python3 - "$WORK/sc.json" >"$WORK/sc-new.json" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1]))
+s = c["settings"]
+s["dns"] = ["9.9.9.9"]
+print(json.dumps({"base_version": c["version"], "settings": s}))
+PY
+wj -X PUT -d @"$WORK/sc-new.json" "$WEB/api/v1/server/config" >/dev/null || fail "save server config"
+wj -X POST -d '{"rollback":true}' "$WEB/api/v1/server/restart" >"$WORK/restart.json"
+grep -q '"ok":true' "$WORK/restart.json" || fail "restart: $(cat "$WORK/restart.json")"
+dc logs openvpn | grep -q "starting again (restart requested)" || fail "supervisor did not restart OpenVPN"
+api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "agent lost OpenVPN after restart (network namespace)"
+
+log "a config that passes the checks but cannot start is rolled back"
+wj "$WEB/api/v1/server/config" >"$WORK/sc2.json"
+python3 - "$WORK/sc2.json" >"$WORK/sc-bad.json" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1]))
+print(json.dumps({"base_version": c["version"], "raw": c["raw"] + "local 203.0.113.99\n"}))
+PY
+wj -X PUT -d @"$WORK/sc-bad.json" "$WEB/api/v1/server/config" >/dev/null || fail "save bad-at-start config"
+curl -sS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -m 150 -X POST -d '{"rollback":true}' "$WEB/api/v1/server/restart" >"$WORK/rollback.json"
+grep -q '"rolled_back":true' "$WORK/rollback.json" || fail "no rollback: $(cat "$WORK/rollback.json")"
+grep -q "running again" "$WORK/rollback.json" || fail "OpenVPN not back after rollback: $(cat "$WORK/rollback.json")"
+! sudo grep -q "203.0.113.99" "$WORK/openvpn/server.conf" || fail "bad config still in place"
+grep -q "9.9.9.9" "$WORK/openvpn/server.conf" || fail "rolled back to the wrong version"
+
 log "web container is locked down"
 [[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' twsmoke-web-1) == true ]] || fail "web rootfs not read-only"
 [[ $(dc exec -T web id -u) == 10001 ]] || fail "web not running as uid 10001"

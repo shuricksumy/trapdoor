@@ -36,6 +36,12 @@ type AgentClient interface {
 	ServerNetwork(ctx context.Context) (api.ServerNetwork, error)
 	ClientNetwork(ctx context.Context, name string) (api.ClientNetwork, error)
 	SetClientNetwork(ctx context.Context, name string, n api.ClientNetwork) (api.ClientNetwork, error)
+	ServerConfig(ctx context.Context) (api.ServerConfig, error)
+	CheckServerConfig(ctx context.Context, u api.ServerConfigUpdate) (api.ConfigCheck, error)
+	SaveServerConfig(ctx context.Context, u api.ServerConfigUpdate) (api.ServerConfig, error)
+	RestartServer(ctx context.Context, req api.RestartRequest) (api.RestartResult, error)
+	ConfigBackups(ctx context.Context) ([]api.ConfigBackup, error)
+	ConfigBackup(ctx context.Context, name string) (string, error)
 }
 
 // Deps are the web server's dependencies.
@@ -88,6 +94,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/stats.csv", s.handleStatsCSV)
 	api.HandleFunc("GET /api/v1/history/sessions", s.handleHistorySessions)
 	s.registerCertRoutes(api)
+	s.registerServerRoutes(api)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

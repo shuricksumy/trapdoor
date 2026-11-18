@@ -53,12 +53,27 @@ func (s *Server) handleServerNetwork(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ips, err := s.staticIPs()
+	files, err := s.ccd.All()
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	ips := map[string]netip.Addr{}
+	lans := map[string][]string{}
+	for name, data := range files {
+		n, err := ccdnet.Parse(data)
+		if err != nil {
+			continue
+		}
+		if n.StaticIP.IsValid() {
+			ips[name] = n.StaticIP
+		}
+		if len(n.LAN) > 0 {
+			lans[name] = prefixes(n.LAN)
+		}
+	}
 	out := api.ServerNetwork{
+		ClientLANs:       lans,
 		Topology:         string(srv.Topology),
 		ClientConfigDir:  srv.ClientConfigDir,
 		PushesFullTunnel: srv.PushesFullTunnel,

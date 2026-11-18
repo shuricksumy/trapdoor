@@ -7,6 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/shuricksumy/tunnelward/internal/api"
 	"github.com/shuricksumy/tunnelward/internal/ccd"
@@ -16,6 +19,7 @@ import (
 	"github.com/shuricksumy/tunnelward/internal/mgmt"
 	"github.com/shuricksumy/tunnelward/internal/ovpn"
 	"github.com/shuricksumy/tunnelward/internal/pki"
+	"github.com/shuricksumy/tunnelward/internal/serverconf"
 	"github.com/shuricksumy/tunnelward/internal/version"
 )
 
@@ -28,6 +32,10 @@ type Server struct {
 	mgmt Management
 	ccd  *ccd.Store
 	auth *clientauth.Store
+	conf *serverconf.File
+
+	restartMu   sync.Mutex
+	restartWait time.Duration // tests shorten it
 }
 
 // Profiles builds client .ovpn files; *ovpn.Generator implements it.
@@ -44,7 +52,8 @@ func New(cfg config.Agent, log *slog.Logger, p pki.PKI) *Server {
 		gen:  &ovpn.Generator{Dir: cfg.OpenVPNDir, OpenVPNBin: cfg.OpenVPNBin},
 		mgmt: &mgmt.Client{Addr: cfg.MgmtAddr, Password: cfg.MgmtPassword},
 		ccd:  files,
-		auth: &clientauth.Store{Files: files}}
+		auth: &clientauth.Store{Files: files},
+		conf: &serverconf.File{Path: filepath.Join(cfg.OpenVPNDir, "server.conf")}}
 }
 
 // Handler returns the agent's HTTP handler.
@@ -58,6 +67,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerSessionRoutes(v1)
 	s.registerAuthRoutes(v1)
 	s.registerNetworkRoutes(v1)
+	s.registerServerConfigRoutes(v1)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

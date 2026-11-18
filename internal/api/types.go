@@ -140,13 +140,14 @@ type ClientNetwork struct {
 
 // ServerNetwork is the VPN network as configured in server.conf (GET /v1/network).
 type ServerNetwork struct {
-	Subnet           string            `json:"subnet,omitempty"`
-	ServerIP         string            `json:"server_ip,omitempty"`
-	Topology         string            `json:"topology"`
-	ClientConfigDir  bool              `json:"client_config_dir"`
-	PushesFullTunnel bool              `json:"pushes_full_tunnel"`
-	Routes           []string          `json:"routes"`     // server-side "route" lines
-	StaticIPs        map[string]string `json:"static_ips"` // client → static address
+	Subnet           string              `json:"subnet,omitempty"`
+	ServerIP         string              `json:"server_ip,omitempty"`
+	Topology         string              `json:"topology"`
+	ClientConfigDir  bool                `json:"client_config_dir"`
+	PushesFullTunnel bool                `json:"pushes_full_tunnel"`
+	Routes           []string            `json:"routes"`      // server-side "route" lines
+	StaticIPs        map[string]string   `json:"static_ips"`  // client → static address
+	ClientLANs       map[string][]string `json:"client_lans"` // client → networks behind it (iroute)
 }
 
 // RenewManyRequest is the body of POST /api/v1/certs/renew.
@@ -161,4 +162,72 @@ type RenewResult struct {
 	OK    bool   `json:"ok"`
 	Error string `json:"error,omitempty"`
 	Cert  *Cert  `json:"cert,omitempty"`
+}
+
+// ServerSettings are the form-level server.conf options.
+type ServerSettings struct {
+	Port           int      `json:"port"`
+	Proto          string   `json:"proto"`
+	Subnet         string   `json:"subnet"`
+	Topology       string   `json:"topology"`
+	DNS            []string `json:"dns"`
+	Domain         string   `json:"domain"`
+	FullTunnel     bool     `json:"full_tunnel"`
+	ClientToClient bool     `json:"client_to_client"`
+	DuplicateCN    bool     `json:"duplicate_cn"`
+	MaxClients     int      `json:"max_clients"`
+	Routes         []string `json:"routes"`
+	PushRoutes     []string `json:"push_routes"`
+}
+
+// ConfigProblem is a finding of the config check; errors block saving.
+type ConfigProblem struct {
+	Error   bool   `json:"error"`
+	Message string `json:"message"`
+}
+
+// ServerConfig is server.conf as text and as settings (GET /v1/server/config).
+type ServerConfig struct {
+	Raw      string          `json:"raw"`
+	Version  string          `json:"version"` // send back as base_version when saving
+	Settings ServerSettings  `json:"settings"`
+	Pending  bool            `json:"restart_pending"` // saved but OpenVPN not restarted yet
+	Problems []ConfigProblem `json:"problems"`
+	Restart  string          `json:"restart_method"` // SIGHUP or SIGTERM (supervised)
+}
+
+// ServerConfigUpdate saves (PUT) or checks (POST .../check) a new config:
+// either Raw text or form Settings applied to the current file.
+type ServerConfigUpdate struct {
+	BaseVersion string          `json:"base_version,omitempty"`
+	Raw         *string         `json:"raw,omitempty"`
+	Settings    *ServerSettings `json:"settings,omitempty"`
+}
+
+// ConfigCheck is the answer of POST /v1/server/config/check.
+type ConfigCheck struct {
+	Raw      string          `json:"raw"` // the resulting file
+	Problems []ConfigProblem `json:"problems"`
+}
+
+// RestartRequest is the body of POST /v1/server/restart.
+type RestartRequest struct {
+	// Rollback restores the previous config if OpenVPN does not come back.
+	Rollback bool `json:"rollback"`
+}
+
+// RestartResult reports a restart.
+type RestartResult struct {
+	OK             bool    `json:"ok"`
+	OpenVPNVersion string  `json:"openvpn_version,omitempty"`
+	Seconds        float64 `json:"seconds"`
+	RolledBack     bool    `json:"rolled_back,omitempty"`
+	Error          string  `json:"error,omitempty"`
+}
+
+// ConfigBackup is a saved earlier server.conf.
+type ConfigBackup struct {
+	Name string    `json:"name"`
+	Time time.Time `json:"time"`
+	Size int64     `json:"size"`
 }

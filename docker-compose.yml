@@ -42,6 +42,7 @@ services:
       TW_AGENT_LISTEN: unix:/run/tunnelward/agent.sock
       TW_AGENT_SOCKET_GID: "10001" # lets the non-root web container connect
       TW_OPENVPN_MGMT: ${TW_OPENVPN_MGMT:-127.0.0.1:2080}
+      TW_OPENVPN_RESTART: SIGTERM # the openvpn service starts OpenVPN again
       TW_OPENVPN_MGMT_PASSWORD: ${TW_OPENVPN_MGMT_PASSWORD:-}
     volumes:
       - ${OPENVPN_DIR:-./openvpn}:/etc/openvpn

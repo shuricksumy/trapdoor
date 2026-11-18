@@ -22,6 +22,7 @@ type Client struct {
 	base  string
 	token string
 	http  *http.Client
+	slow  *http.Client // for restarts, which wait for OpenVPN
 }
 
 // NewClient returns a client for url ("http://host:port" or "unix:/path").
@@ -40,6 +41,7 @@ func NewClient(url, token string, timeout time.Duration) *Client {
 			},
 		}
 	}
+	c.slow = &http.Client{Transport: c.http.Transport, Timeout: 3 * time.Minute}
 	return c
 }
 
@@ -166,6 +168,50 @@ func (c *Client) SetClientNetwork(ctx context.Context, name string, n api.Client
 	return out, err
 }
 
+// ServerConfig returns server.conf as text and settings.
+func (c *Client) ServerConfig(ctx context.Context) (api.ServerConfig, error) {
+	var out api.ServerConfig
+	err := c.doJSON(ctx, http.MethodGet, "/v1/server/config", nil, &out)
+	return out, err
+}
+
+// CheckServerConfig checks a new config without saving it.
+func (c *Client) CheckServerConfig(ctx context.Context, u api.ServerConfigUpdate) (api.ConfigCheck, error) {
+	var out api.ConfigCheck
+	err := c.doJSON(ctx, http.MethodPost, "/v1/server/config/check", u, &out)
+	return out, err
+}
+
+// SaveServerConfig saves a new config (does not restart OpenVPN).
+func (c *Client) SaveServerConfig(ctx context.Context, u api.ServerConfigUpdate) (api.ServerConfig, error) {
+	var out api.ServerConfig
+	err := c.doJSON(ctx, http.MethodPut, "/v1/server/config", u, &out)
+	return out, err
+}
+
+// RestartServer restarts OpenVPN and waits for it.
+func (c *Client) RestartServer(ctx context.Context, req api.RestartRequest) (api.RestartResult, error) {
+	var out api.RestartResult
+	err := c.do(ctx, c.slow, http.MethodPost, "/v1/server/restart", req, &out)
+	return out, err
+}
+
+// ConfigBackups lists saved earlier server.conf versions.
+func (c *Client) ConfigBackups(ctx context.Context) ([]api.ConfigBackup, error) {
+	var out []api.ConfigBackup
+	err := c.doJSON(ctx, http.MethodGet, "/v1/server/backups", nil, &out)
+	return out, err
+}
+
+// ConfigBackup returns one backup's text.
+func (c *Client) ConfigBackup(ctx context.Context, name string) (string, error) {
+	var out struct {
+		Raw string `json:"raw"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/v1/server/backups/"+url.PathEscape(name), nil, &out)
+	return out.Raw, err
+}
+
 // GenCRL regenerates the CRL.
 func (c *Client) GenCRL(ctx context.Context) error {
 	return c.doJSON(ctx, http.MethodPost, "/v1/crl", nil, nil)
@@ -191,6 +237,10 @@ func (c *Client) Info(ctx context.Context) (api.AgentInfo, error) {
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, in, out any) error {
+	return c.do(ctx, c.http, method, path, in, out)
+}
+
+func (c *Client) do(ctx context.Context, hc *http.Client, method, path string, in, out any) error {
 	var body io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
@@ -208,7 +258,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, in, out any) e
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	resp, err := c.http.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return fmt.Errorf("agent %s %s: %w", method, path, err)
 	}

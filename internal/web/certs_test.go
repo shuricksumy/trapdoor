@@ -83,3 +83,21 @@ func TestRenewMany(t *testing.T) {
 		t.Errorf("empty list = %d", rec.Code)
 	}
 }
+
+func TestServerConfigPassthrough(t *testing.T) {
+	e := newTestEnv(t, token)
+	bearer := header("Authorization", "Bearer "+token)
+	rec := e.do(http.MethodGet, "/api/v1/server/config", "", bearer)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get = %d %s", rec.Code, rec.Body.String())
+	}
+	cfg := decode[api.ServerConfig](t, rec)
+	// The test agent has no server.conf: saving one without ca/cert/key is refused with the problems listed.
+	rec = e.do(http.MethodPut, "/api/v1/server/config", `{"base_version":"`+cfg.Version+`","raw":"port 1194\n"}`, bearer)
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), `"problems"`) {
+		t.Errorf("save invalid = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := e.do(http.MethodGet, "/api/v1/server/backups", "", bearer); rec.Code != http.StatusOK {
+		t.Errorf("backups = %d", rec.Code)
+	}
+}

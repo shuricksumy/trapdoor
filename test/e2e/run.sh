@@ -190,6 +190,31 @@ code=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" -H "Origin: $WEB" -H "Co
 [[ $code == 400 ]] || fail "duplicate static address accepted ($code)"
 log "alice got 10.99.0.50 and the route; the same address for carol was refused"
 
+log "server config: push DNS + a route to everyone via the web, restart (SIGHUP), clients get them"
+webj() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" "$@"; }
+webj "$WEB/api/v1/server/config" >"$WORK/sc.json"
+python3 - "$WORK/sc.json" >"$WORK/sc-new.json" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1]))
+s = c["settings"]
+s["dns"] = ["9.9.9.9"]
+s["push_routes"] = ["192.168.77.0/24"]
+print(json.dumps({"base_version": c["version"], "settings": s}))
+PY
+webj -X PUT -d @"$WORK/sc-new.json" "$WEB/api/v1/server/config" >"$WORK/sc-saved.json" || fail "save server config"
+grep -q '"restart_pending":true' "$WORK/sc-saved.json" || fail "no restart pending after save"
+grep -q 'dhcp-option DNS 9.9.9.9' "$WORK/server.conf" || fail "server.conf not updated"
+ls "$WORK/tunnelward-backups/" | grep -q '^server.conf.' || fail "no backup written"
+webj -X POST -d '{"rollback":true}' "$WEB/api/v1/server/restart" >"$WORK/restart.json"
+grep -q '"ok":true' "$WORK/restart.json" || fail "restart: $(cat "$WORK/restart.json")"
+connect "$WORK/alice.ovpn" "$WORK/client-pushed.log" || fail "alice could not connect after restart"
+grep -q "dhcp-option DNS 9.9.9.9" "$WORK/client-pushed.log" || fail "DNS not pushed"
+grep -q "192.168.77.0" "$WORK/client-pushed.log" || fail "route not pushed"
+log "OpenVPN restarted with the new config; alice got DNS 9.9.9.9 and 192.168.77.0/24"
+code=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT \
+	-d "{\"base_version\":\"$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$WORK/sc.json")\",\"raw\":\"port 1\\n\"}" "$WEB/api/v1/server/config")
+[[ $code == 422 || $code == 409 ]] || fail "broken/stale config accepted ($code)"
+
 log "2FA: second server checks logins with tunnelward auth-verify"
 mkdir -p "$WORK/ccd"
 cat >"$WORK/server-2fa.conf" <<CONF

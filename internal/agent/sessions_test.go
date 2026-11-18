@@ -44,6 +44,8 @@ func (f *fakeMgmt) KillClient(_ context.Context, id int64) error {
 	}
 	return f.err()
 }
+func (f *fakeMgmt) Signal(context.Context, string) error { return f.err() }
+
 func (f *fakeMgmt) KillName(_ context.Context, name string) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
