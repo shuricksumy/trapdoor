@@ -1,8 +1,8 @@
-# tunnelward: OpenVPN server + agent + web UI, from the published image.
+# trapdoor: OpenVPN server + agent + web UI, from the published image.
 #
-#   cp .env.example .env              # set TW_AGENT_TOKEN (openssl rand -hex 32)
+#   cp .env.example .env              # set TD_AGENT_TOKEN (openssl rand -hex 32)
 #   docker compose up -d
-#   docker compose exec -it web tunnelward user add admin
+#   docker compose exec -it web trapdoor user add admin
 #
 # Then open http://127.0.0.1:8080 (WEB_BIND) and follow the setup. An existing
 # OpenVPN server (e.g. from openvpn-ui): point OPENVPN_DIR at its directory.
@@ -10,7 +10,7 @@
 # Anything else with HTTPS works too: proxy to WEB_BIND.
 
 x-image: &image
-  image: ${TW_IMAGE:-ghcr.io/shuricksumy/tunnelward:latest}
+  image: ${TD_IMAGE:-ghcr.io/shuricksumy/trapdoor:latest}
   restart: unless-stopped
 
 services:
@@ -39,23 +39,23 @@ services:
     network_mode: service:openvpn
     depends_on: [openvpn]
     environment:
-      TW_AGENT_TOKEN: ${TW_AGENT_TOKEN:?set TW_AGENT_TOKEN in .env}
-      TW_AGENT_LISTEN: unix:/run/tunnelward/agent.sock
-      TW_AGENT_SOCKET_GID: "10001" # lets the non-root web container connect
-      TW_OPENVPN_MGMT: ${TW_OPENVPN_MGMT:-127.0.0.1:2080}
-      TW_OPENVPN_RESTART: SIGTERM # the openvpn service starts OpenVPN again
-      TW_FIREWALL: file # access rules are applied by the openvpn service
-      TW_OPENVPN_MGMT_PASSWORD: ${TW_OPENVPN_MGMT_PASSWORD:-}
+      TD_AGENT_TOKEN: ${TD_AGENT_TOKEN:?set TD_AGENT_TOKEN in .env}
+      TD_AGENT_LISTEN: unix:/run/trapdoor/agent.sock
+      TD_AGENT_SOCKET_GID: "10001" # lets the non-root web container connect
+      TD_OPENVPN_MGMT: ${TD_OPENVPN_MGMT:-127.0.0.1:2080}
+      TD_OPENVPN_RESTART: SIGTERM # the openvpn service starts OpenVPN again
+      TD_FIREWALL: file # access rules are applied by the openvpn service
+      TD_OPENVPN_MGMT_PASSWORD: ${TD_OPENVPN_MGMT_PASSWORD:-}
       # the setup keeps OpenVPN on the published port
-      TW_SETUP_PORT: "1194"
-      TW_SETUP_PROTO: ${VPN_PROTO:-udp}
-      TW_SETUP_PUBLIC_PORT: ${VPN_PORT:-1194}
-      TW_TOTP_ISSUER: ${TW_TOTP_ISSUER:-tunnelward}
+      TD_SETUP_PORT: "1194"
+      TD_SETUP_PROTO: ${VPN_PROTO:-udp}
+      TD_SETUP_PUBLIC_PORT: ${VPN_PORT:-1194}
+      TD_TOTP_ISSUER: ${TD_TOTP_ISSUER:-trapdoor}
     volumes:
       - ${OPENVPN_DIR:-./openvpn}:/etc/openvpn
-      - run:/run/tunnelward
+      - run:/run/trapdoor
     healthcheck:
-      test: ["CMD", "tunnelward", "health", "unix:/run/tunnelward/agent.sock"]
+      test: ["CMD", "trapdoor", "health", "unix:/run/trapdoor/agent.sock"]
       interval: 30s
       timeout: 5s
       start_period: 5s
@@ -66,24 +66,24 @@ services:
     command: ["web"]
     depends_on: [agent]
     environment:
-      TW_AGENT_TOKEN: ${TW_AGENT_TOKEN:?set TW_AGENT_TOKEN in .env}
-      TW_AGENT_URL: unix:/run/tunnelward/agent.sock
-      TW_TZ: ${TW_TZ:-UTC}
-      TW_COOKIE_SECURE: ${TW_COOKIE_SECURE:-true}
-      TW_TRUSTED_PROXIES: ${TW_TRUSTED_PROXIES:-}
-      TW_WEB_API_TOKEN: ${TW_WEB_API_TOKEN:-}
-      TW_EXPIRY_WARN_DAYS: ${TW_EXPIRY_WARN_DAYS:-30}
-      TW_SESSION_IDLE: ${TW_SESSION_IDLE:-12h}
+      TD_AGENT_TOKEN: ${TD_AGENT_TOKEN:?set TD_AGENT_TOKEN in .env}
+      TD_AGENT_URL: unix:/run/trapdoor/agent.sock
+      TD_TZ: ${TD_TZ:-UTC}
+      TD_COOKIE_SECURE: ${TD_COOKIE_SECURE:-true}
+      TD_TRUSTED_PROXIES: ${TD_TRUSTED_PROXIES:-}
+      TD_WEB_API_TOKEN: ${TD_WEB_API_TOKEN:-}
+      TD_EXPIRY_WARN_DAYS: ${TD_EXPIRY_WARN_DAYS:-30}
+      TD_SESSION_IDLE: ${TD_SESSION_IDLE:-12h}
     ports:
       - "${WEB_BIND:-127.0.0.1:8080}:8080"
     volumes:
       - web-data:/data
-      - run:/run/tunnelward
+      - run:/run/trapdoor
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     healthcheck:
-      test: ["CMD", "tunnelward", "health", "http://127.0.0.1:8080"]
+      test: ["CMD", "trapdoor", "health", "http://127.0.0.1:8080"]
       interval: 30s
       timeout: 5s
       start_period: 5s

@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/shuricksumy/tunnelward/internal/agent"
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/httpx"
-	"github.com/shuricksumy/tunnelward/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/agent"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/pki"
 )
 
 func (s *Server) registerCertRoutes(mux *http.ServeMux) {

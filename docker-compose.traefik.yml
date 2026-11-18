@@ -1,4 +1,4 @@
-# tunnelward behind Traefik: the web UI gets a hostname with HTTPS instead of
+# trapdoor behind Traefik: the web UI gets a hostname with HTTPS instead of
 # a port on the host. Use it on top of docker-compose.yml:
 #
 #   docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
@@ -14,21 +14,21 @@ services:
     ports: !reset []
     networks: [proxy]
     environment:
-      TW_COOKIE_SECURE: "true"
+      TD_COOKIE_SECURE: "true"
       # Traefik's address as seen by the web container, so the client IP in
       # X-Forwarded-For is used for login throttling and the audit log.
       # Narrow it to your proxy network's subnet (docker network inspect proxy).
-      TW_TRUSTED_PROXIES: ${TW_TRUSTED_PROXIES:-172.16.0.0/12}
+      TD_TRUSTED_PROXIES: ${TD_TRUSTED_PROXIES:-172.16.0.0/12}
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
-      - traefik.http.routers.tunnelward.rule=Host(`${TW_HOSTNAME:-vpn-admin.example.com}`)
-      - traefik.http.routers.tunnelward.entrypoints=websecure
-      - traefik.http.routers.tunnelward.tls=true
-      # - traefik.http.routers.tunnelward.tls.certresolver=letsencrypt
-      # tunnelward has its own login; add single sign-on in front if you like:
-      # - traefik.http.routers.tunnelward.middlewares=authelia@docker
-      - traefik.http.services.tunnelward.loadbalancer.server.port=8080
+      - traefik.http.routers.trapdoor.rule=Host(`${TD_HOSTNAME:-vpn-admin.example.com}`)
+      - traefik.http.routers.trapdoor.entrypoints=websecure
+      - traefik.http.routers.trapdoor.tls=true
+      # - traefik.http.routers.trapdoor.tls.certresolver=letsencrypt
+      # trapdoor has its own login; add single sign-on in front if you like:
+      # - traefik.http.routers.trapdoor.middlewares=authelia@docker
+      - traefik.http.services.trapdoor.loadbalancer.server.port=8080
 
 networks:
   proxy: # your Traefik network

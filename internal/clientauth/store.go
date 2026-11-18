@@ -1,6 +1,6 @@
 package clientauth
 
-import "github.com/shuricksumy/tunnelward/internal/ccd"
+import "github.com/shuricksumy/trapdoor/internal/ccd"
 
 // Store reads and writes the 2FA lines of ccd files.
 type Store struct {

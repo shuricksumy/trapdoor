@@ -10,7 +10,7 @@ export default defineConfig({
     assetsInlineLimit: 0, // keep CSP simple: no data: URLs for fonts
   },
   server: {
-    // npm run dev: talk to a local `tunnelward web` on :8080
+    // npm run dev: talk to a local `trapdoor web` on :8080
     proxy: { '/api': 'http://127.0.0.1:8080' },
   },
 });

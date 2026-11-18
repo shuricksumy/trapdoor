@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/clientauth"
-	"github.com/shuricksumy/tunnelward/internal/config"
-	"github.com/shuricksumy/tunnelward/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/clientauth"
+	"github.com/shuricksumy/trapdoor/internal/config"
+	"github.com/shuricksumy/trapdoor/internal/pki"
 )
 
 func authClient(t *testing.T) (*Client, string) {

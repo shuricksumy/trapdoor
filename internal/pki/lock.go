@@ -7,11 +7,11 @@ import (
 )
 
 // fileLock is an advisory flock(2) on a file inside the PKI directory, so two
-// tunnelward processes (or a future easyrsa wrapper) never write at once.
+// trapdoor processes (or a future easyrsa wrapper) never write at once.
 type fileLock struct{ f *os.File }
 
 func lockFile(dir string, exclusive bool) (*fileLock, error) {
-	f, err := os.OpenFile(filepath.Join(dir, ".tunnelward.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := os.OpenFile(filepath.Join(dir, ".trapdoor.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}

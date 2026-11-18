@@ -5,14 +5,14 @@
 The project becomes **trapdoor** (`github.com/shuricksumy/trapdoor`), since it will manage
 more than OpenVPN. Done in one go before v0.1.0, so nobody has to migrate settings:
 
-- [ ] Repo renamed on GitHub (old URLs redirect)
-- [ ] Go module path, binary (`trapdoor agent` / `web` / `user` …), Docker image `ghcr.io/shuricksumy/trapdoor`
-- [ ] Settings prefix `TW_` → `TD_`, cookie, firewall chain and file names, socket path, UI and docs
+- [x] Repo renamed on GitHub (old URLs redirect)
+- [x] Go module path, binary (`trapdoor agent` / `web` / `user` …), Docker image `ghcr.io/shuricksumy/trapdoor`
+- [x] Settings prefix `TW_` → `TD_`, cookie, firewall chain and file names, socket path, UI and docs
 - [ ] First release v0.1.0 under the new name
 
 ## v1 — manage an existing OpenVPN server
 
-- [x] Repo skeleton: single binary (`agent` / `web`), config via `TW_*` env, agent API with token auth, CI
+- [x] Repo skeleton: single binary (`agent` / `web`), config via `TD_*` env, agent API with token auth, CI
 - [x] Native Go PKI with easyrsa-compatible storage (`index.txt`, `serial`, `crl.pem`, `issued/`, `private/`)
   - [x] Read existing PKI (list certs, status, expiry)
   - [x] Issue client cert (optional passphrase, encrypted PKCS#8)
@@ -28,13 +28,13 @@ more than OpenVPN. Done in one go before v0.1.0, so nobody has to migrate settin
       any date range with day / month / year grouping per user and for the whole server,
       presets, CSV export, gaps marked as estimated
 - [x] Statistics page in the UI: date range with presets, day/month/year chart, per-client table with share, CSV export
-- [x] Client 2FA: TOTP and/or static password, `tunnelward auth-verify` for OpenVPN, compatible with openvpn-ui's ccd format, QR enrolment in the UI
+- [x] Client 2FA: TOTP and/or static password, `trapdoor auth-verify` for OpenVPN, compatible with openvpn-ui's ccd format, QR enrolment in the UI
 - [x] Web: SQLite + migrations
 - [x] Web: admin login (users CLI, secure session cookie, throttling, CSRF protection)
 - [x] Web: certificate and session management endpoints (proxy to the agent, audit log lines)
 - [x] Web UI (Svelte 5, embedded): login, overview with today's timeline, clients, live sessions, account; light/dark/auto theme; phone layout
 - [x] Docker image (amd64/arm64, GHCR) + compose: openvpn / agent / web, smoke-tested in CI with a real VPN client
-- [ ] Migration from openvpn-ui (`tunnelward migrate --from-openvpn-ui`, dry-run, backup)
+- [ ] Migration from openvpn-ui (`trapdoor migrate --from-openvpn-ui`, dry-run, backup)
 
 ## v2 — setup and configuration
 

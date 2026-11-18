@@ -34,7 +34,7 @@
   const dirty = $derived(policy && JSON.stringify(policy) !== saved);
   const status = $derived.by(() => {
     if (!state) return null;
-    if (state.mode === 'off') return { cls: 'off', text: 'Not managed by tunnelward (TW_FIREWALL=off)' };
+    if (state.mode === 'off') return { cls: 'off', text: 'Not managed by trapdoor (TD_FIREWALL=off)' };
     if (state.error) return { cls: 'bad', text: state.error };
     if (!state.policy.enabled) return { cls: 'off', text: 'Off: clients can reach everything the server routes' };
     return state.applied ? { cls: 'ok', text: 'Active' } : { cls: 'warn', text: 'Waiting to be applied' };
@@ -199,7 +199,7 @@
   <details class="generated" bind:open={showRules}>
     <summary>Generated iptables rules</summary>
     <pre class="mono">{state.rules}</pre>
-    <p class="hint">Chain TW-FWD, used for traffic coming from VPN clients (INPUT and FORWARD on tun devices). Shown as last saved.</p>
+    <p class="hint">Chain TD-FWD, used for traffic coming from VPN clients (INPUT and FORWARD on tun devices). Shown as last saved.</p>
   </details>
 
   {#if dirty}

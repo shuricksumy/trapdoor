@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/config"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/config"
 )
 
 func TestSetup(t *testing.T) {
@@ -72,7 +72,7 @@ func TestSetup(t *testing.T) {
 	if _, err := c.Setup(ctx, api.SetupRequest{PublicHost: "vpn.example.com"}); err == nil || !strings.Contains(err.Error(), "already set up") {
 		t.Errorf("second setup: %v", err)
 	}
-	if st, _ := c.SetupStatus(ctx); st.Needed || !st.HasPKI || st.CAName != "tunnelward CA" {
+	if st, _ := c.SetupStatus(ctx); st.Needed || !st.HasPKI || st.CAName != "trapdoor CA" {
 		t.Errorf("status after = %+v", st)
 	}
 

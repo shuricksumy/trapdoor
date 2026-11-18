@@ -1,16 +1,16 @@
-# tunnelward
+# trapdoor
 
-[![CI](https://github.com/shuricksumy/tunnelward/actions/workflows/ci.yml/badge.svg)](https://github.com/shuricksumy/tunnelward/actions/workflows/ci.yml)
-[![Build](https://github.com/shuricksumy/tunnelward/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/shuricksumy/tunnelward/actions/workflows/docker-publish.yml)
-[![CodeQL](https://github.com/shuricksumy/tunnelward/actions/workflows/codeql.yml/badge.svg)](https://github.com/shuricksumy/tunnelward/actions/workflows/codeql.yml)
-[![Release](https://img.shields.io/github/v/release/shuricksumy/tunnelward)](https://github.com/shuricksumy/tunnelward/releases)
+[![CI](https://github.com/shuricksumy/trapdoor/actions/workflows/ci.yml/badge.svg)](https://github.com/shuricksumy/trapdoor/actions/workflows/ci.yml)
+[![Build](https://github.com/shuricksumy/trapdoor/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/shuricksumy/trapdoor/actions/workflows/docker-publish.yml)
+[![CodeQL](https://github.com/shuricksumy/trapdoor/actions/workflows/codeql.yml/badge.svg)](https://github.com/shuricksumy/trapdoor/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/shuricksumy/trapdoor)](https://github.com/shuricksumy/trapdoor/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 A web UI for your own OpenVPN server. Set the server up in a few clicks, create a profile
 for every phone and laptop, see who is connected and how much traffic each device used,
 and decide which networks each device may reach.
 
-tunnelward is the successor to [openvpn-ui](https://github.com/shuricksumy/openvpn-ui) and
+trapdoor is the successor to [openvpn-ui](https://github.com/shuricksumy/openvpn-ui) and
 works with an existing openvpn-ui directory as it is: same certificates, same profiles,
 same two-factor logins.
 
@@ -47,13 +47,13 @@ same two-factor logins.
 You need a Linux server with Docker and a UDP port reachable from the internet.
 
 ```bash
-mkdir tunnelward && cd tunnelward
-curl -fsSLO https://raw.githubusercontent.com/shuricksumy/tunnelward/main/docker-compose.yml
-curl -fsSL -o .env https://raw.githubusercontent.com/shuricksumy/tunnelward/main/.env.example
-sed -i "s/^TW_AGENT_TOKEN=.*/TW_AGENT_TOKEN=$(openssl rand -hex 32)/" .env
-nano .env                                    # time zone (TW_TZ), VPN port; the rest can stay
+mkdir trapdoor && cd trapdoor
+curl -fsSLO https://raw.githubusercontent.com/shuricksumy/trapdoor/main/docker-compose.yml
+curl -fsSL -o .env https://raw.githubusercontent.com/shuricksumy/trapdoor/main/.env.example
+sed -i "s/^TD_AGENT_TOKEN=.*/TD_AGENT_TOKEN=$(openssl rand -hex 32)/" .env
+nano .env                                    # time zone (TD_TZ), VPN port; the rest can stay
 docker compose up -d
-docker compose exec -it web tunnelward user add admin    # choose your admin password
+docker compose exec -it web trapdoor user add admin    # choose your admin password
 ```
 
 1. Open the web UI. It listens on `127.0.0.1:8080` of the server, so either put it behind
@@ -68,7 +68,7 @@ docker compose exec -it web tunnelward user add admin    # choose your admin pas
 
 ## Moving from openvpn-ui
 
-tunnelward reads openvpn-ui's directory as it is (`server.conf`, `client-template.txt`,
+trapdoor reads openvpn-ui's directory as it is (`server.conf`, `client-template.txt`,
 `easy-rsa/pki`, `ccd/`): certificates, profiles, routes and two-factor logins keep working.
 
 1. Back up the directory.
@@ -78,22 +78,22 @@ tunnelward reads openvpn-ui's directory as it is (`server.conf`, `client-templat
 4. Check that `server.conf` has a `management` line (openvpn-ui's `management 0.0.0.0 2080`
    works; `127.0.0.1 2080` is better). The Server page points out anything missing.
 
-Admin users are not taken over: create them with `tunnelward user add`.
+Admin users are not taken over: create them with `trapdoor user add`.
 
 ## Reverse proxy
 
 Put the web UI behind HTTPS. With **Traefik** use the ready-made override:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/shuricksumy/tunnelward/main/docker-compose.traefik.yml
-# in .env: COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml, TW_HOSTNAME, TRAEFIK_NETWORK
+curl -fsSLO https://raw.githubusercontent.com/shuricksumy/trapdoor/main/docker-compose.traefik.yml
+# in .env: COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml, TD_HOSTNAME, TRAEFIK_NETWORK
 docker compose up -d
 ```
 
 It removes the host port, joins your Traefik network and adds the router labels; adjust the
 entrypoint, certificate resolver and middlewares (an Authelia line is included, commented
 out) in the file. With **Caddy, nginx** or anything else, proxy to `WEB_BIND` and set
-`TW_TRUSTED_PROXIES` to the proxy's address so login throttling sees real client IPs.
+`TD_TRUSTED_PROXIES` to the proxy's address so login throttling sees real client IPs.
 
 ## Updating
 
@@ -101,12 +101,12 @@ out) in the file. With **Caddy, nginx** or anything else, proxy to `WEB_BIND` an
 docker compose pull && docker compose up -d
 ```
 
-Images on GitHub Container Registry, `ghcr.io/shuricksumy/tunnelward` (amd64 and arm64):
+Images on GitHub Container Registry, `ghcr.io/shuricksumy/trapdoor` (amd64 and arm64):
 
 | Tag | Built from |
 | --- | --- |
 | `latest` | the `main` branch |
-| `1.2.3`, `1.2` | releases (set `TW_IMAGE=ghcr.io/shuricksumy/tunnelward:1.2` in `.env` for a stable setup) |
+| `1.2.3`, `1.2` | releases (set `TD_IMAGE=ghcr.io/shuricksumy/trapdoor:1.2` in `.env` for a stable setup) |
 
 ## Backups
 
@@ -116,7 +116,7 @@ Everything that matters is in two places:
   `server.conf`, per-client settings. Losing it means re-issuing every profile, so back it up
   and keep it private.
 - **The `web-data` volume**: admin users and traffic history.
-  `docker compose stop web && docker compose cp web:/data/tunnelward.db ./tunnelward.db && docker compose start web`
+  `docker compose stop web && docker compose cp web:/data/trapdoor.db ./trapdoor.db && docker compose start web`
 
 ## Settings
 
@@ -124,31 +124,31 @@ Set in `.env` next to `docker-compose.yml`:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TW_AGENT_TOKEN` | — | Shared secret between the web UI and the agent; required, long and random |
-| `TW_TZ` | `UTC` | Time zone for days, months and years in traffic reports, e.g. `Europe/Berlin` |
+| `TD_AGENT_TOKEN` | — | Shared secret between the web UI and the agent; required, long and random |
+| `TD_TZ` | `UTC` | Time zone for days, months and years in traffic reports, e.g. `Europe/Berlin` |
 | `OPENVPN_DIR` | `./openvpn` | OpenVPN directory on the host |
 | `VPN_PORT` / `VPN_PROTO` | `1194` / `udp` | Port and protocol published for VPN clients |
 | `VPN_NAT_SUBNET` | `auto` | NAT for VPN clients: `auto` follows `server.conf`, or a subnet, or empty for none |
 | `WEB_BIND` | `127.0.0.1:8080` | Where the web UI listens on the host |
-| `TW_COOKIE_SECURE` | `true` | `false` only for testing over plain HTTP |
-| `TW_TRUSTED_PROXIES` | — | Reverse proxy addresses (CIDRs) allowed to pass the client IP |
-| `TW_WEB_API_TOKEN` | — | Optional token for scripts: `Authorization: Bearer …` ([API](docs/api.md)) |
-| `TW_EXPIRY_WARN_DAYS` | `30` | Warn this many days before a client certificate expires |
-| `TW_SESSION_IDLE` | `12h` | Admin logout after this much inactivity |
-| `TW_TOTP_ISSUER` | `tunnelward` | Name shown in authenticator apps |
-| `TW_IMAGE` | `…/tunnelward:latest` | Image to run |
+| `TD_COOKIE_SECURE` | `true` | `false` only for testing over plain HTTP |
+| `TD_TRUSTED_PROXIES` | — | Reverse proxy addresses (CIDRs) allowed to pass the client IP |
+| `TD_WEB_API_TOKEN` | — | Optional token for scripts: `Authorization: Bearer …` ([API](docs/api.md)) |
+| `TD_EXPIRY_WARN_DAYS` | `30` | Warn this many days before a client certificate expires |
+| `TD_SESSION_IDLE` | `12h` | Admin logout after this much inactivity |
+| `TD_TOTP_ISSUER` | `trapdoor` | Name shown in authenticator apps |
+| `TD_IMAGE` | `…/trapdoor:latest` | Image to run |
 
 ## Without Docker
 
-Each [release](https://github.com/shuricksumy/tunnelward/releases) has Linux binaries
-(amd64, arm64, armv7) with the web UI built in. Run `tunnelward agent` as root next to
-OpenVPN and `tunnelward web` as an unprivileged user, with the same `TW_AGENT_TOKEN`; see
+Each [release](https://github.com/shuricksumy/trapdoor/releases) has Linux binaries
+(amd64, arm64, armv7) with the web UI built in. Run `trapdoor agent` as root next to
+OpenVPN and `trapdoor web` as an unprivileged user, with the same `TD_AGENT_TOKEN`; see
 [docs/guide.md](docs/guide.md#admin-login-and-security) for how the parts fit together and
 [`internal/config/config.go`](internal/config/config.go) for every setting.
 
 ## Documentation
 
-- [How tunnelward works](docs/guide.md): setup, profiles, two-factor login, server
+- [How trapdoor works](docs/guide.md): setup, profiles, two-factor login, server
   settings, client networks, access rules, traffic history, security
 - [HTTP API](docs/api.md)
 - [Development](docs/development.md): building, tests, GitHub Actions, releases

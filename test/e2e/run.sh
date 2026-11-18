@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # End-to-end test: a real OpenVPN server and client on localhost, using only
-# certificates, CRL and .ovpn profiles produced by tunnelward.
+# certificates, CRL and .ovpn profiles produced by trapdoor.
 #
 # Needs root (tun device), openvpn and curl. Usage: test/e2e/run.sh [bin]
 set -euo pipefail
 
-BIN=$(realpath "${1:-bin/tunnelward}")
+BIN=$(realpath "${1:-bin/trapdoor}")
 WORK=$(mktemp -d)
 PORT=11940
 TOKEN=e2e
@@ -17,21 +17,21 @@ cleanup() {
 	wait 2>/dev/null || true
 	ip netns del twc 2>/dev/null || true
 	ip link del twh 2>/dev/null || true
-	for c in INPUT FORWARD; do iptables -D "$c" -i tun+ -j TW-FWD 2>/dev/null || true; done
-	iptables -F TW-FWD 2>/dev/null && iptables -X TW-FWD 2>/dev/null || true
+	for c in INPUT FORWARD; do iptables -D "$c" -i tun+ -j TD-FWD 2>/dev/null || true; done
+	iptables -F TD-FWD 2>/dev/null && iptables -X TD-FWD 2>/dev/null || true
 	[[ "${KEEP:-}" == 1 ]] || rm -rf "$WORK"
 }
 trap cleanup EXIT
 
 log() { echo "==> $*"; }
 fail() { echo "FAIL: $*" >&2; for f in "$WORK"/*.log; do echo "--- $f"; tail -20 "$f"; done; exit 1; }
-api() { curl -fsS -H "X-Tunnelward-Token: $TOKEN" "$@"; }
+api() { curl -fsS -H "X-Trapdoor-Token: $TOKEN" "$@"; }
 
-export TW_AGENT_TOKEN=$TOKEN TW_AGENT_LISTEN=127.0.0.1:19090 \
-	TW_OPENVPN_DIR=$WORK TW_PKI_DIR=$WORK/pki TW_CRL_COPIES=- \
-	TW_OPENVPN_MGMT=127.0.0.1:12080 \
-	TW_WEB_LISTEN=127.0.0.1:18080 TW_AGENT_URL=$API TW_DB_PATH=$WORK/tw.db \
-	TW_WEB_API_TOKEN=e2e-web-token TW_POLL_INTERVAL=5s TW_TZ=UTC TW_COOKIE_SECURE=false
+export TD_AGENT_TOKEN=$TOKEN TD_AGENT_LISTEN=127.0.0.1:19090 \
+	TD_OPENVPN_DIR=$WORK TD_PKI_DIR=$WORK/pki TD_CRL_COPIES=- \
+	TD_OPENVPN_MGMT=127.0.0.1:12080 \
+	TD_WEB_LISTEN=127.0.0.1:18080 TD_AGENT_URL=$API TD_DB_PATH=$WORK/td.db \
+	TD_WEB_API_TOKEN=e2e-web-token TD_POLL_INTERVAL=5s TD_TZ=UTC TD_COOKIE_SECURE=false
 WEB=http://127.0.0.1:18080
 webapi() { curl -fsS -H "Authorization: Bearer e2e-web-token" "$@"; }
 
@@ -50,7 +50,7 @@ if curl -fsS "$WEB/" | grep -q 'id="app"'; then
 	curl -fsSI "$WEB/certificates" | grep -qi "content-security-policy: default-src 'self'" || fail "UI served without CSP"
 	log "web UI served (with CSP)"
 fi
-TW_ADMIN_PASSWORD=e2e-admin-password "$BIN" user add admin >/dev/null
+TD_ADMIN_PASSWORD=e2e-admin-password "$BIN" user add admin >/dev/null
 JAR=$WORK/cookies
 code=$(curl -s -o /dev/null -w "%{http_code}" -c "$JAR" -H "Content-Type: application/json" \
 	-d '{"username":"admin","password":"wrong-password"}' "$WEB/api/v1/auth/login")
@@ -213,17 +213,17 @@ wait_for 10 nsping || fail "no ping through the tunnel before any rules"
 fw() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT -d "$1" "$WEB/api/v1/firewall"; }
 fw '{"enabled":true,"default":"deny","rules":[]}' >"$WORK/fw1.json" || fail "save access rules"
 grep -q '"applied":true' "$WORK/fw1.json" || fail "rules not applied: $(cat "$WORK/fw1.json")"
-iptables -C INPUT -i tun+ -j TW-FWD && iptables -C FORWARD -i tun+ -j TW-FWD || fail "no jump to TW-FWD"
+iptables -C INPUT -i tun+ -j TD-FWD && iptables -C FORWARD -i tun+ -j TD-FWD || fail "no jump to TD-FWD"
 ! nsping || fail "ping passes although everything is blocked"
 fw '{"enabled":true,"default":"deny","rules":[{"client":"alice","to":"10.99.0.1","proto":"icmp","action":"allow"}]}' >"$WORK/fw2.json"
 grep -q '"missing":\[\]' "$WORK/fw2.json" || fail "alice reported without fixed address: $(cat "$WORK/fw2.json")"
-iptables -S TW-FWD | grep -q -- "-s 10.99.0.50/32 -d 10.99.0.1/32 -p icmp -j ACCEPT" || fail "alice's rule missing: $(iptables -S TW-FWD)"
+iptables -S TD-FWD | grep -q -- "-s 10.99.0.50/32 -d 10.99.0.1/32 -p icmp -j ACCEPT" || fail "alice's rule missing: $(iptables -S TD-FWD)"
 wait_for 5 nsping || fail "allowed ping blocked"
 fw '{"enabled":true,"default":"allow","rules":[{"client":"alice","proto":"icmp","action":"deny"}]}' >/dev/null
 ! nsping || fail "ping passes although alice's ICMP is blocked"
 fw '{"enabled":false,"default":"deny","rules":[]}' >/dev/null
 wait_for 5 nsping || fail "ping blocked although the rules are off"
-[[ $(iptables -S TW-FWD | tail -1) == "-A TW-FWD -j RETURN" ]] || fail "disabled chain: $(iptables -S TW-FWD)"
+[[ $(iptables -S TD-FWD | tail -1) == "-A TD-FWD -j RETURN" ]] || fail "disabled chain: $(iptables -S TD-FWD)"
 kill "$NSCLIENT"; wait "$NSCLIENT" 2>/dev/null || true
 wait_for 15 offline alice || fail "alice still online"
 log "rules block and allow alice's real traffic; off means pass-through"
@@ -242,7 +242,7 @@ PY
 webj -X PUT -d @"$WORK/sc-new.json" "$WEB/api/v1/server/config" >"$WORK/sc-saved.json" || fail "save server config"
 grep -q '"restart_pending":true' "$WORK/sc-saved.json" || fail "no restart pending after save"
 grep -q 'dhcp-option DNS 9.9.9.9' "$WORK/server.conf" || fail "server.conf not updated"
-ls "$WORK/tunnelward-backups/" | grep -q '^server.conf.' || fail "no backup written"
+ls "$WORK/trapdoor-backups/" | grep -q '^server.conf.' || fail "no backup written"
 webj -X POST -d '{"rollback":true}' "$WEB/api/v1/server/restart" >"$WORK/restart.json"
 grep -q '"ok":true' "$WORK/restart.json" || fail "restart: $(cat "$WORK/restart.json")"
 connect "$WORK/alice.ovpn" "$WORK/client-pushed.log" || fail "alice could not connect after restart"
@@ -253,7 +253,7 @@ code=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" -H "Origin: $WEB" -H "Co
 	-d "{\"base_version\":\"$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$WORK/sc.json")\",\"raw\":\"port 1\\n\"}" "$WEB/api/v1/server/config")
 [[ $code == 422 || $code == 409 ]] || fail "broken/stale config accepted ($code)"
 
-log "2FA: second server checks logins with tunnelward auth-verify"
+log "2FA: second server checks logins with trapdoor auth-verify"
 mkdir -p "$WORK/ccd"
 cat >"$WORK/server-2fa.conf" <<CONF
 port 11941
@@ -276,7 +276,7 @@ CONF
 PIDS+=($!)
 wait_for 10 grep -q "Initialization Sequence Completed" "$WORK/server-2fa.log" || fail "2FA server did not start"
 
-# totp <key> hex|b32: current 6-digit code (HMAC-SHA256, 30 s), computed independently of tunnelward
+# totp <key> hex|b32: current 6-digit code (HMAC-SHA256, 30 s), computed independently of trapdoor
 totp() {
 	python3 - "$1" "$2" <<'PY'
 import sys, hmac, hashlib, struct, time, base64

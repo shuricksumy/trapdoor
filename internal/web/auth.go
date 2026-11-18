@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/auth"
-	"github.com/shuricksumy/tunnelward/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/auth"
+	"github.com/shuricksumy/trapdoor/internal/httpx"
 )
 
-const cookieName = "tw_session"
+const cookieName = "td_session"
 
 type ctxKey struct{}
 
@@ -41,14 +41,14 @@ func (s *Server) registerAuthRoutes(public, protected *http.ServeMux) {
 }
 
 // requireAuth accepts a login session cookie or "Authorization: Bearer
-// <TW_WEB_API_TOKEN>" (for scripts). Cookie requests that change state must
+// <TD_WEB_API_TOKEN>" (for scripts). Cookie requests that change state must
 // come from the same site.
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	token := []byte(s.APIToken)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
 			if len(token) == 0 || subtle.ConstantTimeCompare([]byte(got), token) != 1 {
-				w.Header().Set("WWW-Authenticate", `Bearer realm="tunnelward"`)
+				w.Header().Set("WWW-Authenticate", `Bearer realm="trapdoor"`)
 				httpx.WriteError(w, http.StatusUnauthorized, "invalid API token")
 				return
 			}
@@ -207,7 +207,7 @@ func (s *Server) clearCookie(w http.ResponseWriter) {
 }
 
 // clientIP is the peer address, or the X-Forwarded-For client when the peer
-// is a trusted reverse proxy (TW_TRUSTED_PROXIES).
+// is a trusted reverse proxy (TD_TRUSTED_PROXIES).
 func (s *Server) clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

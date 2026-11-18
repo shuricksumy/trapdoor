@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/config"
-	"github.com/shuricksumy/tunnelward/internal/firewall"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/config"
+	"github.com/shuricksumy/trapdoor/internal/firewall"
 )
 
 // fakeIPTables writes iptables / iptables-restore scripts that log calls.
@@ -76,11 +76,11 @@ func TestFirewallDirect(t *testing.T) {
 		t.Fatalf("set = %+v, %v", st, err)
 	}
 	applied, _ := os.ReadFile(filepath.Join(ipt, "applied"))
-	if !strings.Contains(string(applied), "-A TW-FWD -s 10.8.0.10/32 -d 192.168.1.0/24 -j ACCEPT") {
+	if !strings.Contains(string(applied), "-A TD-FWD -s 10.8.0.10/32 -d 192.168.1.0/24 -j ACCEPT") {
 		t.Errorf("applied:\n%s", applied)
 	}
 	log, _ := os.ReadFile(calls)
-	if !strings.Contains(string(log), "restore --noflush") || strings.Count(string(log), "-I FORWARD 1 -i tun+ -j TW-FWD") != 1 || strings.Count(string(log), "-I INPUT 1 -i tun+ -j TW-FWD") != 1 {
+	if !strings.Contains(string(log), "restore --noflush") || strings.Count(string(log), "-I FORWARD 1 -i tun+ -j TD-FWD") != 1 || strings.Count(string(log), "-I INPUT 1 -i tun+ -j TD-FWD") != 1 {
 		t.Errorf("calls:\n%s", log)
 	}
 
@@ -124,8 +124,8 @@ func TestFirewallFile(t *testing.T) {
 				return
 			case <-time.After(50 * time.Millisecond):
 			}
-			if data, err := os.ReadFile(filepath.Join(dir, "tunnelward-firewall.rules")); err == nil {
-				_ = os.WriteFile(filepath.Join(dir, "tunnelward-firewall.status"), []byte("ok "+firewall.Hash(string(data))+"\n"), 0o644)
+			if data, err := os.ReadFile(filepath.Join(dir, "trapdoor-firewall.rules")); err == nil {
+				_ = os.WriteFile(filepath.Join(dir, "trapdoor-firewall.status"), []byte("ok "+firewall.Hash(string(data))+"\n"), 0o644)
 			}
 		}
 	}()

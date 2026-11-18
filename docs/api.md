@@ -5,7 +5,7 @@ Everything the web UI does goes through the web API, so it can be scripted too.
 ## Web API
 
 Log in like the browser does (`POST /api/v1/auth/login` sets the session cookie), or set
-`TW_WEB_API_TOKEN` and send `Authorization: Bearer <token>`. Errors are JSON
+`TD_WEB_API_TOKEN` and send `Authorization: Bearer <token>`. Errors are JSON
 `{"error": "..."}`.
 
 | Method | Path | Result |
@@ -44,15 +44,15 @@ Report parameters (`/api/v1/stats`, `/stats.csv`): see [the guide](guide.md#traf
 Example:
 
 ```
-curl -H "Authorization: Bearer $TW_WEB_API_TOKEN" -H "Content-Type: application/json" \
+curl -H "Authorization: Bearer $TD_WEB_API_TOKEN" -H "Content-Type: application/json" \
   -d '{"name":"alice-phone"}' https://vpn-admin.example.com/api/v1/certs
-curl -H "Authorization: Bearer $TW_WEB_API_TOKEN" -o alice-phone.ovpn \
+curl -H "Authorization: Bearer $TD_WEB_API_TOKEN" -o alice-phone.ovpn \
   https://vpn-admin.example.com/api/v1/certs/alice-phone/ovpn
 ```
 
 ## Agent API (web → agent)
 
-All `/v1/*` requests need the header `X-Tunnelward-Token: <TW_AGENT_TOKEN>`.
+All `/v1/*` requests need the header `X-Trapdoor-Token: <TD_AGENT_TOKEN>`.
 Errors are JSON `{"error": "..."}` with 400 / 401 / 404 / 409 / 503.
 
 | Method | Path | Body | Result |
@@ -78,14 +78,14 @@ Errors are JSON `{"error": "..."}` with 400 / 401 / 404 / 409 / 503.
 
 Revoke and delete also disconnect the client right away (otherwise OpenVPN would only
 notice at the next renegotiation, up to an hour later). Sessions need OpenVPN's management
-interface: `management 127.0.0.1 2080` in `server.conf` (`TW_OPENVPN_MGMT`, optional
-`TW_OPENVPN_MGMT_PASSWORD` for `pw-file` setups); 502 when it is unreachable.
+interface: `management 127.0.0.1 2080` in `server.conf` (`TD_OPENVPN_MGMT`, optional
+`TD_OPENVPN_MGMT_PASSWORD` for `pw-file` setups); 502 when it is unreachable.
 
 Try it with a throw-away PKI:
 
 ```
-export TW_AGENT_TOKEN=dev TW_PKI_DIR=/tmp/tw/pki TW_CRL_COPIES=-
-./bin/tunnelward init-pki
-./bin/tunnelward agent &
-curl -H "X-Tunnelward-Token: dev" -d '{"name":"alice"}' localhost:9090/v1/certs
+export TD_AGENT_TOKEN=dev TD_PKI_DIR=/tmp/tw/pki TD_CRL_COPIES=-
+./bin/trapdoor init-pki
+./bin/trapdoor agent &
+curl -H "X-Trapdoor-Token: dev" -d '{"name":"alice"}' localhost:9090/v1/certs
 ```

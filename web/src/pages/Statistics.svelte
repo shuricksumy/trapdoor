@@ -179,7 +179,7 @@
   {:else}
     <p class="back"><button class="link" onclick={() => (name = '')}>Show all clients</button></p>
   {/if}
-  {#if total === 0 && !loading}<p class="faint small note">Traffic is recorded while tunnelward runs; earlier periods are empty.</p>{/if}
+  {#if total === 0 && !loading}<p class="faint small note">Traffic is recorded while trapdoor runs; earlier periods are empty.</p>{/if}
 {/if}
 
 <style>

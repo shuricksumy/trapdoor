@@ -1,4 +1,4 @@
-// Command tunnelward runs the tunnelward agent or web process.
+// Command trapdoor runs the trapdoor agent or web process.
 package main
 
 import (
@@ -12,28 +12,28 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	_ "time/tzdata" // TW_TZ works in minimal containers without zoneinfo
+	_ "time/tzdata" // TD_TZ works in minimal containers without zoneinfo
 
-	"github.com/shuricksumy/tunnelward/internal/agent"
-	"github.com/shuricksumy/tunnelward/internal/auth"
-	"github.com/shuricksumy/tunnelward/internal/clientauth"
-	"github.com/shuricksumy/tunnelward/internal/config"
-	"github.com/shuricksumy/tunnelward/internal/history"
-	"github.com/shuricksumy/tunnelward/internal/httpx"
-	"github.com/shuricksumy/tunnelward/internal/pki"
-	"github.com/shuricksumy/tunnelward/internal/store"
-	"github.com/shuricksumy/tunnelward/internal/version"
-	"github.com/shuricksumy/tunnelward/internal/web"
+	"github.com/shuricksumy/trapdoor/internal/agent"
+	"github.com/shuricksumy/trapdoor/internal/auth"
+	"github.com/shuricksumy/trapdoor/internal/clientauth"
+	"github.com/shuricksumy/trapdoor/internal/config"
+	"github.com/shuricksumy/trapdoor/internal/history"
+	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/store"
+	"github.com/shuricksumy/trapdoor/internal/version"
+	"github.com/shuricksumy/trapdoor/internal/web"
 )
 
-const usage = `usage: tunnelward <command>
+const usage = `usage: trapdoor <command>
 
 commands:
   agent     run the privileged agent (PKI, OpenVPN control)
   web       run the web UI and API
-  init-pki  create a new CA in TW_PKI_DIR (CA name from TW_CA_NAME)
+  init-pki  create a new CA in TD_PKI_DIR (CA name from TD_CA_NAME)
   user add|passwd|del|list [name]
-            manage admin users in TW_DB_PATH (password from TW_ADMIN_PASSWORD or stdin)
+            manage admin users in TD_DB_PATH (password from TD_ADMIN_PASSWORD or stdin)
   auth-verify [--ccd DIR] <file>
             OpenVPN auth-user-pass-verify (via-file) for client 2FA
   health    <url>  exit 0 if GET <url>/healthz answers 200 (http://... or unix:/path)
@@ -136,10 +136,10 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 
 	authSvc := auth.New(db, auth.Options{IdleTimeout: cfg.SessionIdle})
 	if n, err := authSvc.CountUsers(ctx); err == nil && n == 0 {
-		log.Warn("no admin user yet: create one with 'tunnelward user add <name>'")
+		log.Warn("no admin user yet: create one with 'trapdoor user add <name>'")
 	}
 	if !cfg.CookieSecure {
-		log.Warn("TW_COOKIE_SECURE=false: login cookie is sent over plain HTTP")
+		log.Warn("TD_COOKIE_SECURE=false: login cookie is sent over plain HTTP")
 	}
 	srv := web.New(web.Deps{
 		Agent: client, Stats: &history.Stats{DB: db, Agent: agentID},
@@ -158,7 +158,7 @@ func runInitPKI(log *slog.Logger) error {
 	if err != nil && !errors.Is(err, config.ErrNoToken) {
 		return err
 	}
-	name := os.Getenv("TW_CA_NAME")
+	name := os.Getenv("TD_CA_NAME")
 	if _, err := pki.Init(cfg.PKIDir, pki.InitOptions{CommonName: name},
 		pki.Options{CAPassphrase: cfg.CAPassphrase, CRLCopies: cfg.CRLCopies}); err != nil {
 		return err
@@ -169,7 +169,7 @@ func runInitPKI(log *slog.Logger) error {
 
 func runUser(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: tunnelward user add|passwd|del|list [name]")
+		return errors.New("usage: trapdoor user add|passwd|del|list [name]")
 	}
 	cfg, err := config.LoadWeb()
 	if err != nil && !errors.Is(err, config.ErrNoToken) {
@@ -188,7 +188,7 @@ func runUser(ctx context.Context, args []string) error {
 	}
 	need := func() error {
 		if name == "" {
-			return fmt.Errorf("usage: tunnelward user %s <name>", args[0])
+			return fmt.Errorf("usage: trapdoor user %s <name>", args[0])
 		}
 		return nil
 	}
@@ -242,10 +242,10 @@ func runUser(ctx context.Context, args []string) error {
 	}
 }
 
-// readPassword takes TW_ADMIN_PASSWORD, else the first line of stdin, so it
-// works in scripts and with "docker exec -i ... tunnelward user add admin".
+// readPassword takes TD_ADMIN_PASSWORD, else the first line of stdin, so it
+// works in scripts and with "docker exec -i ... trapdoor user add admin".
 func readPassword() (string, error) {
-	if pw := os.Getenv("TW_ADMIN_PASSWORD"); pw != "" {
+	if pw := os.Getenv("TD_ADMIN_PASSWORD"); pw != "" {
 		return pw, nil
 	}
 	fmt.Fprint(os.Stderr, "password: ")
@@ -259,7 +259,7 @@ func readPassword() (string, error) {
 // runHealth is the container health check (no curl in the image needed).
 func runHealth(ctx context.Context, args []string) error {
 	if len(args) != 1 {
-		return errors.New("usage: tunnelward health http://127.0.0.1:8080 | unix:/path/to/agent.sock")
+		return errors.New("usage: trapdoor health http://127.0.0.1:8080 | unix:/path/to/agent.sock")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -269,12 +269,12 @@ func runHealth(ctx context.Context, args []string) error {
 // runAuthVerify is called by OpenVPN for every login:
 //
 //	script-security 2
-//	auth-user-pass-verify "/usr/local/bin/tunnelward auth-verify" via-file
+//	auth-user-pass-verify "/usr/local/bin/trapdoor auth-verify" via-file
 //
 // Exit 0 allows the client, anything else denies it. Messages go to stderr,
 // which ends up in OpenVPN's log; passwords are never printed.
 func runAuthVerify(args []string) int {
-	ccd := env("TW_CCD_DIR", env("TW_OPENVPN_DIR", "/etc/openvpn")+"/ccd")
+	ccd := env("TD_CCD_DIR", env("TD_OPENVPN_DIR", "/etc/openvpn")+"/ccd")
 	var file string
 	for i := 0; i < len(args); i++ {
 		switch {
@@ -288,7 +288,7 @@ func runAuthVerify(args []string) int {
 		}
 	}
 	if file == "" {
-		fmt.Fprintln(os.Stderr, "auth-verify: usage: tunnelward auth-verify [--ccd DIR] <credentials file>")
+		fmt.Fprintln(os.Stderr, "auth-verify: usage: trapdoor auth-verify [--ccd DIR] <credentials file>")
 		return 2
 	}
 	user, err := clientauth.VerifyFile(ccd, file, os.Getenv("common_name"), time.Now())

@@ -59,7 +59,7 @@
   $effect(() => {
     const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup' };
     const name = titles[route.path] ?? pages.find((p) => p.path === route.path)?.label ?? 'Overview';
-    document.title = `${name} · tunnelward`;
+    document.title = `${name} · trapdoor`;
   });
 </script>
 
@@ -70,12 +70,12 @@
 {:else}
   <div class="shell">
     <nav class="rail" aria-label="Main">
-      <a class="brand" href="/" aria-label="tunnelward overview">
+      <a class="brand" href="/" aria-label="trapdoor overview">
         <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
           <path d="M5 22c0-6 5-11 11-11s11 5 11 11" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" />
           <path d="M10.5 22c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5" fill="none" stroke="var(--upload)" stroke-width="3" stroke-linecap="round" />
         </svg>
-        <span>tunnelward</span>
+        <span>trapdoor</span>
       </a>
       <ul>
         {#each pages as p (p.path)}

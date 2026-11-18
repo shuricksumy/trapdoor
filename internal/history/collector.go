@@ -16,8 +16,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/store"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/store"
 )
 
 // Source provides the live sessions; *agent.Client implements it.

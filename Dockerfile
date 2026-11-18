@@ -18,27 +18,27 @@ COPY . .
 COPY --from=ui /src/internal/webui/dist ./internal/webui/dist
 ARG TARGETOS TARGETARCH VERSION=dev COMMIT=none DATE=unknown
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
-      -ldflags "-s -w -X github.com/shuricksumy/tunnelward/internal/version.Version=$VERSION -X github.com/shuricksumy/tunnelward/internal/version.Commit=$COMMIT -X github.com/shuricksumy/tunnelward/internal/version.Date=$DATE" \
-      -o /out/tunnelward ./cmd/tunnelward
+      -ldflags "-s -w -X github.com/shuricksumy/trapdoor/internal/version.Version=$VERSION -X github.com/shuricksumy/trapdoor/internal/version.Commit=$COMMIT -X github.com/shuricksumy/trapdoor/internal/version.Date=$DATE" \
+      -o /out/trapdoor ./cmd/trapdoor
 
 FROM alpine:3.22
 # openvpn: the server itself, and `openvpn --genkey` for tls-crypt-v2 client keys (agent)
 # iptables: NAT for VPN clients (openvpn service only)
 RUN apk add --no-cache openvpn iptables ca-certificates \
- && addgroup -g 10001 tunnelward \
- && adduser -D -H -u 10001 -G tunnelward tunnelward \
- && mkdir -p /data /run/tunnelward \
- && chown tunnelward:tunnelward /data
-COPY --from=go /out/tunnelward /usr/local/bin/tunnelward
+ && addgroup -g 10001 trapdoor \
+ && adduser -D -H -u 10001 -G trapdoor trapdoor \
+ && mkdir -p /data /run/trapdoor \
+ && chown trapdoor:trapdoor /data
+COPY --from=go /out/trapdoor /usr/local/bin/trapdoor
 COPY docker/openvpn-entrypoint.sh /usr/local/bin/openvpn-entrypoint.sh
 
-ENV TW_DB_PATH=/data/tunnelward.db \
-    TW_WEB_LISTEN=:8080
-USER tunnelward
+ENV TD_DB_PATH=/data/trapdoor.db \
+    TD_WEB_LISTEN=:8080
+USER trapdoor
 EXPOSE 8080
-ENTRYPOINT ["tunnelward"]
+ENTRYPOINT ["trapdoor"]
 CMD ["web"]
 
-LABEL org.opencontainers.image.source="https://github.com/shuricksumy/tunnelward" \
+LABEL org.opencontainers.image.source="https://github.com/shuricksumy/trapdoor" \
       org.opencontainers.image.description="Web management for an OpenVPN server" \
       org.opencontainers.image.licenses="MIT"

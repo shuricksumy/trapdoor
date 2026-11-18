@@ -101,7 +101,7 @@ func (db *DB) migrate(ctx context.Context) error {
 		return err
 	}
 	if v > len(migrations) {
-		return fmt.Errorf("database schema version %d is newer than this tunnelward (%d)", v, len(migrations))
+		return fmt.Errorf("database schema version %d is newer than this trapdoor (%d)", v, len(migrations))
 	}
 	for i := v; i < len(migrations); i++ {
 		tx, err := db.BeginTx(ctx, nil)

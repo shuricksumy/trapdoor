@@ -4,11 +4,11 @@
 //	#2FA_KEY:<hex secret>        TOTP, HMAC-SHA256, 6 digits, 30 s
 //	#2FA_USER:<label>            account label shown in authenticator apps
 //	#STATIC_PASS:<plain>         openvpn-ui's static password (still accepted)
-//	#STATIC_PASS_HASH:<pbkdf2>   tunnelward's static password (hashed)
+//	#STATIC_PASS_HASH:<pbkdf2>   trapdoor's static password (hashed)
 //
 // The client logs in with username = its certificate name and
 // password = static password followed by the current TOTP code (either part
-// may be absent). OpenVPN runs `tunnelward auth-verify` to check it.
+// may be absent). OpenVPN runs `trapdoor auth-verify` to check it.
 package clientauth
 
 import (
@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/auth"
+	"github.com/shuricksumy/trapdoor/internal/auth"
 )
 
 const (
@@ -47,7 +47,7 @@ type Settings struct {
 	TOTPKey     []byte // nil = no TOTP
 	TOTPUser    string
 	StaticPlain string // legacy openvpn-ui value
-	StaticHash  string // tunnelward value
+	StaticHash  string // trapdoor value
 }
 
 // Enabled reports whether any factor is configured.

@@ -8,7 +8,7 @@ import (
 )
 
 func TestOpenMigrates(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sub", "tw.db")
+	path := filepath.Join(t.TempDir(), "sub", "td.db")
 	db, err := Open(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +38,7 @@ func TestOpenMigrates(t *testing.T) {
 }
 
 func TestNewerSchemaRefused(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "tw.db")
+	path := filepath.Join(t.TempDir(), "td.db")
 	db, err := Open(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)

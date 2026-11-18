@@ -14,14 +14,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/ccdnet"
-	"github.com/shuricksumy/tunnelward/internal/firewall"
-	"github.com/shuricksumy/tunnelward/internal/httpx"
-	"github.com/shuricksumy/tunnelward/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/ccdnet"
+	"github.com/shuricksumy/trapdoor/internal/firewall"
+	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/pki"
 )
 
-// Firewall modes (TW_FIREWALL).
+// Firewall modes (TD_FIREWALL).
 const (
 	FirewallDirect = "direct" // the agent runs iptables-restore itself
 	FirewallFile   = "file"   // the OpenVPN container applies the rules file
@@ -35,7 +35,7 @@ func (s *Server) registerFirewallRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) fwPath(ext string) string {
-	return filepath.Join(s.cfg.OpenVPNDir, "tunnelward-firewall."+ext)
+	return filepath.Join(s.cfg.OpenVPNDir, "trapdoor-firewall."+ext)
 }
 
 func (s *Server) firewallMode() string {
@@ -88,7 +88,7 @@ func (s *Server) firewallState(p firewall.Policy) (api.Firewall, firewall.Result
 }
 
 // applyFirewall renders the saved policy and makes it active. With no saved
-// policy nothing is touched (tunnelward never adds rules nobody asked for).
+// policy nothing is touched (trapdoor never adds rules nobody asked for).
 func (s *Server) applyFirewall(ctx context.Context) (api.Firewall, error) {
 	s.fwMu.Lock()
 	defer s.fwMu.Unlock()
@@ -103,7 +103,7 @@ func (s *Server) applyFirewall(ctx context.Context) (api.Firewall, error) {
 	if !saved || st.Mode == FirewallOff {
 		st.Applied = !saved
 		if st.Mode == FirewallOff && p.Enabled {
-			st.Error = "the agent does not manage the firewall (TW_FIREWALL=off)"
+			st.Error = "the agent does not manage the firewall (TD_FIREWALL=off)"
 		}
 		return st, nil
 	}
@@ -157,7 +157,7 @@ func (s *Server) waitForFirewallFile(ctx context.Context, hash string) (bool, st
 			return ok, msg
 		}
 		if time.Now().After(deadline) || ctx.Err() != nil {
-			return false, "the OpenVPN container has not applied the rules yet (is it running the tunnelward image?)"
+			return false, "the OpenVPN container has not applied the rules yet (is it running the trapdoor image?)"
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
@@ -201,7 +201,7 @@ func (s *Server) iptablesApply(ctx context.Context, rules string) error {
 	return nil
 }
 
-// iptables lets tests substitute the binaries (TW_IPTABLES_DIR).
+// iptables lets tests substitute the binaries (TD_IPTABLES_DIR).
 func (s *Server) iptables(name string) string {
 	if s.cfg.IPTablesDir != "" {
 		return filepath.Join(s.cfg.IPTablesDir, name)
@@ -250,7 +250,7 @@ func (s *Server) handleSetFirewall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.firewallMode() == FirewallOff {
-		httpx.WriteError(w, http.StatusConflict, "the agent does not manage the firewall (TW_FIREWALL=off)")
+		httpx.WriteError(w, http.StatusConflict, "the agent does not manage the firewall (TD_FIREWALL=off)")
 		return
 	}
 	data, _ := json.MarshalIndent(p, "", "  ")
@@ -355,7 +355,7 @@ func (s *Server) ApplyFirewallAtStart(ctx context.Context) {
 }
 
 func writeAtomic(path string, data []byte, perm os.FileMode) error {
-	tmp := path + ".tw-tmp"
+	tmp := path + ".td-tmp"
 	if err := os.WriteFile(tmp, data, perm); err != nil {
 		return err
 	}

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/pki"
 )
 
-// VerifyFile is `tunnelward auth-verify`: OpenVPN's auth-user-pass-verify
+// VerifyFile is `trapdoor auth-verify`: OpenVPN's auth-user-pass-verify
 // with via-file. passFile holds username and password on two lines;
 // commonName is the certificate's CN (OpenVPN's $common_name).
 //

@@ -6,7 +6,7 @@ package api
 import "time"
 
 // HeaderToken is the HTTP header carrying the shared agent token.
-const HeaderToken = "X-Tunnelward-Token"
+const HeaderToken = "X-Trapdoor-Token"
 
 // Health is returned by GET /healthz on both processes.
 type Health struct {
@@ -32,7 +32,7 @@ type AgentInfo struct {
 type Status struct {
 	WebVersion string `json:"web_version"`
 	// ExpiryWarnDays: client certificates expiring within this many days
-	// are flagged (TW_EXPIRY_WARN_DAYS).
+	// are flagged (TD_EXPIRY_WARN_DAYS).
 	ExpiryWarnDays int        `json:"expiry_warn_days"`
 	AgentOK        bool       `json:"agent_ok"`
 	Agent          *AgentInfo `json:"agent,omitempty"`

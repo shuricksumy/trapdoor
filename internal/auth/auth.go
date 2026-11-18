@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/store"
+	"github.com/shuricksumy/trapdoor/internal/store"
 )
 
 // Errors; check with errors.Is.
