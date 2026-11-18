@@ -1,5 +1,15 @@
 # Roadmap
 
+## Next — rename to trapdoor (before the first release)
+
+The project becomes **trapdoor** (`github.com/shuricksumy/trapdoor`), since it will manage
+more than OpenVPN. Done in one go before v0.1.0, so nobody has to migrate settings:
+
+- [ ] Repo renamed on GitHub (old URLs redirect)
+- [ ] Go module path, binary (`trapdoor agent` / `web` / `user` …), Docker image `ghcr.io/shuricksumy/trapdoor`
+- [ ] Settings prefix `TW_` → `TD_`, cookie, firewall chain and file names, socket path, UI and docs
+- [ ] First release v0.1.0 under the new name
+
 ## v1 — manage an existing OpenVPN server
 
 - [x] Repo skeleton: single binary (`agent` / `web`), config via `TW_*` env, agent API with token auth, CI
@@ -35,10 +45,32 @@
 - [x] Certificate expiry warnings (clients, server, CA; UI + daily log) and bulk renew
 - [x] Access rules (firewall) per client or for all: networks, ports, allow/block, default policy; iptables chain applied by the agent or the OpenVPN container
 
-## v3 — extras
+## v3 — several servers, WireGuard and AmneziaWG
+
+Like [WGDashboard](https://github.com/WGDashboard/WGDashboard), but for OpenVPN, WireGuard and
+AmneziaWG side by side: several VPN servers of any type on one host, managed in one UI.
+
+- [ ] **Servers** as their own objects: each has a type (OpenVPN / WireGuard / AmneziaWG), name,
+      port, subnet; clients, live sessions, traffic history and access rules belong to a server;
+      server switcher in the UI; existing setups become the first OpenVPN server
+- [ ] Agent backends behind one interface (create / remove client, sessions, traffic, apply config)
+- [ ] **WireGuard** server: setup, `wg0.conf` written by the agent and applied live with
+      `wg syncconf` (no disconnects), peers with key pairs and addresses, AllowedIPs for routing
+      and site-to-site, optional preshared key, `.conf` download + QR code, live status and traffic
+      from `wg show dump` (connected = recent handshake), remove = revoke (no certificates)
+- [ ] **AmneziaWG** server: the WireGuard backend with `awg` tools and the obfuscation settings
+      (junk packets, padding, header values; check the current Amnezia spec), matching client
+      configs for the Amnezia app; kernel module or `amneziawg-go` shipped in the image
+- [ ] Several OpenVPN servers (e.g. UDP 1194 + TCP 443), each with its own management port;
+      the container supervisor runs all of them
+- [ ] Access rules for WireGuard / AmneziaWG interfaces (`wg+` next to `tun+`); two-factor login
+      stays OpenVPN-only (WireGuard has no login step)
+- [ ] Docker: WireGuard / AmneziaWG in the `openvpn` (renamed `vpn`) container, ports per server
+- [ ] Later: one UI for several hosts (one agent per host)
+
+## v4 — extras
 
 - [ ] OIDC login (e.g. Authelia)
-- [ ] Multiple VPN servers (agents) in one UI
 - [ ] Backup / restore (PKI + config + DB)
 - [ ] Audit log
 - [ ] Optional easyrsa backend for the PKI interface
