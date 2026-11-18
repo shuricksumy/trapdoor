@@ -28,7 +28,7 @@ func Listen(addr string) (net.Listener, error) {
 		}
 		// Only the owner and group (e.g. a shared docker volume) may connect.
 		if err := os.Chmod(path, 0o660); err != nil {
-			l.Close()
+			_ = l.Close()
 			return nil, err
 		}
 		return l, nil

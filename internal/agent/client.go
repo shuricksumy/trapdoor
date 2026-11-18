@@ -57,7 +57,7 @@ func (c *Client) do(ctx context.Context, method, path string, out any) error {
 	if err != nil {
 		return fmt.Errorf("agent %s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 300 {
 		var e api.Error
