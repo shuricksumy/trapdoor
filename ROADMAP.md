@@ -3,13 +3,13 @@
 ## v1 — manage an existing OpenVPN server
 
 - [x] Repo skeleton: single binary (`agent` / `web`), config via `TW_*` env, agent API with token auth, CI
-- [ ] Native Go PKI with easyrsa-compatible storage (`index.txt`, `serial`, `crl.pem`, `issued/`, `private/`)
-  - [ ] Read existing PKI (list certs, status, expiry)
-  - [ ] Issue client cert (optional passphrase, encrypted PKCS#8)
-  - [ ] Revoke / un-revoke, CRL generation
-  - [ ] Renew — including expired certs
-  - [ ] Remove cert completely
-  - [ ] Compatibility tests against real easyrsa 3.2 in CI
+- [x] Native Go PKI with easyrsa-compatible storage (`index.txt`, `serial`, `crl.pem`, `issued/`, `private/`)
+  - [x] Read existing PKI (list certs, status, expiry)
+  - [x] Issue client cert (optional passphrase, encrypted PKCS#8)
+  - [x] Revoke / un-revoke, CRL generation
+  - [x] Renew — including expired certs
+  - [x] Remove cert completely
+  - [x] Compatibility tests against real easyrsa 3.2 in CI
 - [ ] `.ovpn` generation from templates (tls-crypt / tls-auth / tls-crypt-v2), QR code
 - [ ] Live sessions via OpenVPN management interface: list, traffic, kick
 - [ ] Client 2FA: TOTP and/or static password, `tunnelward auth-verify` for OpenVPN

@@ -25,6 +25,29 @@ jobs:
       - name: build
         run: make build && ./bin/tunnelward version
 
+  # PKI compatibility against the real easyrsa + openssl CLIs.
+  compat:
+    runs-on: ubuntu-latest
+    env:
+      EASYRSA_VERSION: 3.2.7
+      EASYRSA_SHA256: 308743bc9fe871b902d47dbe98d749daff3a05b27531684f02625ce7208d4598
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Download easyrsa
+        run: |
+          curl -fsSL -o easyrsa.tgz \
+            "https://github.com/OpenVPN/easy-rsa/releases/download/v${EASYRSA_VERSION}/EasyRSA-${EASYRSA_VERSION}.tgz"
+          echo "${EASYRSA_SHA256}  easyrsa.tgz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/easyrsa"
+          tar -xzf easyrsa.tgz -C "$RUNNER_TEMP/easyrsa" --strip-components=1
+      - name: Compatibility tests
+        run: go test -count=1 -run Compat -v ./internal/pki/
+        env:
+          TW_EASYRSA_DIR: ${{ runner.temp }}/easyrsa
+
   lint:
     runs-on: ubuntu-latest
     steps:
