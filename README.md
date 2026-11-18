@@ -125,6 +125,14 @@ tunnelward user list | passwd <name> | del <name>
 | GET | `/api/v1/stats` | traffic report (below) |
 | GET | `/api/v1/stats.csv` | same, as CSV: period, name, upload, download, estimated |
 | GET | `/api/v1/history/sessions` | recorded sessions, newest first (`limit`, default 100) |
+| GET, POST | `/api/v1/certs` | list / issue certificates (same bodies as the agent API) |
+| GET, DELETE | `/api/v1/certs/{name}` | get / delete |
+| POST | `/api/v1/certs/{name}/revoke`, `/unrevoke`, `/renew` | |
+| GET | `/api/v1/certs/{name}/ovpn` | download the `.ovpn` profile |
+| DELETE | `/api/v1/certs/{name}/sessions`, `/api/v1/sessions/{client_id}` | disconnect |
+
+Certificate and session calls are passed to the agent; every change is logged as
+`audit action=... target=... by=<user>`.
 
 Report parameters: `preset=today|this_month|last_month|last_30_days|this_year|last_year`
 **or** `from=YYYY-MM-DD&to=YYYY-MM-DD` (inclusive; default this month), `group=day|month|year`,

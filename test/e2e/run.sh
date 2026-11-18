@@ -165,6 +165,12 @@ echo bobpass1 >"$WORK/bob.pass"
 echo "askpass $WORK/bob.pass" >>"$WORK/bob.ovpn"
 connect "$WORK/bob.ovpn" "$WORK/client6.log" || fail "bob could not connect with passphrase"
 
+log "web: admin issues carol and downloads her profile through the web API"
+curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -d '{"name":"carol"}' "$WEB/api/v1/certs" >/dev/null || fail "web issue failed"
+curl -fsS -b "$JAR" "$WEB/api/v1/certs/carol/ovpn" >"$WORK/carol.ovpn" || fail "web download failed"
+connect "$WORK/carol.ovpn" "$WORK/client7.log" || fail "carol could not connect"
+grep -q '"action":"cert.issue"\|action=cert.issue' "$WORK/web.log" || fail "no audit log line"
+
 log "session history: alice's sessions and traffic were recorded"
 sleep 6
 curl -fsS -b "$JAR" "$WEB/api/v1/stats?preset=today" >"$WORK/stats.json" # as logged-in admin

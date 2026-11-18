@@ -21,7 +21,7 @@
 - [ ] Client 2FA: TOTP and/or static password, `tunnelward auth-verify` for OpenVPN
 - [x] Web: SQLite + migrations
 - [x] Web: admin login (users CLI, secure session cookie, throttling, CSRF protection)
-- [ ] Web: certificate and session management endpoints (proxy to the agent)
+- [x] Web: certificate and session management endpoints (proxy to the agent, audit log lines)
 - [ ] Frontend (SvelteKit, embedded in the binary): dashboard, clients, certificates
 - [ ] Docker image + two-service `docker-compose` example
 - [ ] Migration from openvpn-ui (`tunnelward migrate --from-openvpn-ui`, dry-run, backup)
