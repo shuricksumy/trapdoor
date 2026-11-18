@@ -231,3 +231,41 @@ type ConfigBackup struct {
 	Time time.Time `json:"time"`
 	Size int64     `json:"size"`
 }
+
+// SetupRequest holds the answers of the setup wizard.
+type SetupRequest struct {
+	PublicHost     string   `json:"public_host"`           // what clients connect to
+	PublicPort     int      `json:"public_port,omitempty"` // as seen from outside; default Port
+	Port           int      `json:"port"`                  // OpenVPN listens on
+	Proto          string   `json:"proto"`                 // udp or tcp
+	Subnet         string   `json:"subnet"`                // e.g. 10.8.0.0/24
+	DNS            []string `json:"dns"`
+	FullTunnel     bool     `json:"full_tunnel"`
+	ClientToClient bool     `json:"client_to_client"`
+	CAName         string   `json:"ca_name"`
+	KeyType        string   `json:"key_type"` // ec256, ec384, rsa2048, rsa3072, rsa4096
+	TLS            string   `json:"tls"`      // tls-crypt-v2, tls-crypt, tls-auth, none
+	TwoFactor      bool     `json:"two_factor"`
+}
+
+// SetupStatus tells whether the server still needs to be set up.
+type SetupStatus struct {
+	Needed        bool         `json:"needed"` // no server.conf yet
+	HasPKI        bool         `json:"has_pki"`
+	HasServerConf bool         `json:"has_server_conf"`
+	CAName        string       `json:"ca_name,omitempty"` // existing CA, reused
+	Defaults      SetupRequest `json:"defaults"`
+	// FixedPort/FixedProto are set by the container: OpenVPN must listen
+	// there because only that port is published.
+	FixedPort  int    `json:"fixed_port,omitempty"`
+	FixedProto string `json:"fixed_proto,omitempty"`
+}
+
+// SetupResult is the outcome of POST /v1/setup.
+type SetupResult struct {
+	Running        bool            `json:"running"` // OpenVPN answered on the management interface
+	OpenVPNVersion string          `json:"openvpn_version,omitempty"`
+	Message        string          `json:"message"`
+	Warnings       []ConfigProblem `json:"warnings,omitempty"`
+	ServerConf     string          `json:"server_conf"`
+}

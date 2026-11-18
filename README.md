@@ -52,7 +52,7 @@ and OpenVPN's management interface is never published.
 ### Existing OpenVPN directory (e.g. from openvpn-ui)
 
 ```
-cp .env.example .env                 # set TW_AGENT_TOKEN, TW_TZ, OPENVPN_DIR, VPN_NAT_SUBNET
+cp .env.example .env                 # set TW_AGENT_TOKEN, TW_TZ, OPENVPN_DIR
 docker compose up -d
 docker compose exec -it web tunnelward user add admin
 ```
@@ -64,19 +64,21 @@ inside the shared network namespace, but nothing else can reach it there).
 
 ### New install
 
-There is no setup wizard yet (planned). Create the CA and keys, then write `server.conf`
-and `client-template.txt` by hand (see [test/docker/smoke.sh](test/docker/smoke.sh) for a
-minimal working example):
+```
+cp .env.example .env                 # set TW_AGENT_TOKEN, TW_TZ, VPN_PORT, VPN_PROTO
+docker compose up -d                 # openvpn waits until server.conf exists
+docker compose exec -it web tunnelward user add admin
+```
 
-```
-docker run --rm -u root -v ./openvpn:/etc/openvpn ghcr.io/shuricksumy/tunnelward init-pki
-docker run --rm -u root -v ./openvpn:/etc/openvpn --entrypoint openvpn \
-  ghcr.io/shuricksumy/tunnelward --genkey tls-crypt-v2-server /etc/openvpn/tls-crypt-v2.key
-docker compose up -d                # openvpn waits until server.conf exists
-# create the server certificate, e.g. with TW_WEB_API_TOKEN set:
-curl -H "Authorization: Bearer $TW_WEB_API_TOKEN" -d '{"name":"server","kind":"server"}' \
-  http://127.0.0.1:8080/api/v1/certs
-```
+Log in: the setup opens by itself. It asks for the public address, protocol and port,
+the VPN subnet, full/split tunnel, DNS and two-factor login, then creates the certificate
+authority (EC P-256 by default), the `server` certificate, the tls-crypt-v2 key,
+`server.conf` and `client-template.txt`, and waits for OpenVPN to start. Nothing is
+overwritten: an existing PKI is reused, and the setup refuses when `server.conf` exists.
+
+In Docker OpenVPN listens on 1194 inside the container; `VPN_PORT` / `VPN_PROTO` set what
+is published and what client profiles use. `VPN_NAT_SUBNET=auto` (default) masquerades the
+`server` subnet of `server.conf` and follows it when it changes.
 
 ### HTTPS
 
@@ -115,6 +117,8 @@ Errors are JSON `{"error": "..."}` with 400 / 401 / 404 / 409 / 503.
 |---|---|---|---|
 | GET | `/healthz` | – | `{"status":"ok"}` (no token) |
 | GET | `/v1/info` | – | version, dirs, `pki_ready` |
+| GET | `/v1/setup` | – | `needed`, `has_pki`, defaults, container-fixed port/proto |
+| POST | `/v1/setup` | wizard answers (`public_host`, `port`, `proto`, `subnet`, `dns`, `tls`, …) | creates PKI, keys, `server.conf`; 409 when it exists |
 | GET | `/v1/certs` | – | all entries (history included; `current` marks the newest per name) |
 | POST | `/v1/certs` | `{"name","kind"?,"passphrase"?,"validity_days"?}` | 201 cert |
 | GET | `/v1/certs/{name}` | – | current cert |

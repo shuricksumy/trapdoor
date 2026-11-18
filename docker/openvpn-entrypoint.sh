@@ -1,7 +1,9 @@
 #!/bin/sh
 # Runs the OpenVPN server for the "openvpn" compose service.
 # - waits for the config instead of crash-looping (fresh installs)
-# - optional NAT for VPN clients: VPN_NAT_SUBNET=10.8.0.0/24 [VPN_NAT_IFACE=eth0]
+# - NAT for VPN clients: VPN_NAT_SUBNET=auto (the "server" line of
+#   server.conf, checked at every start) or a CIDR; empty = none.
+#   [VPN_NAT_IFACE=eth0]
 # - supervises OpenVPN: when it exits (tunnelward restarts it with SIGTERM
 #   through the management interface, or it crashes) it is started again in
 #   this container, so the agent sharing this network namespace keeps working.
@@ -21,13 +23,25 @@ while [ ! -f "$CONF" ]; do
 	sleep 5
 done
 
-if [ -n "${VPN_NAT_SUBNET:-}" ]; then
-	IFACE=${VPN_NAT_IFACE:-$(ip route | awk '/^default/ { print $5; exit }')}
-	if ! iptables -t nat -C POSTROUTING -s "$VPN_NAT_SUBNET" -o "$IFACE" -j MASQUERADE 2>/dev/null; then
-		iptables -t nat -A POSTROUTING -s "$VPN_NAT_SUBNET" -o "$IFACE" -j MASQUERADE
+# The NAT rule follows the VPN subnet; auto re-reads it before every start.
+nat_rule=
+nat() {
+	want=${VPN_NAT_SUBNET:-}
+	if [ "$want" = auto ]; then
+		want=$(awk '$1 == "server" && NF >= 3 { print $2 "/" $3; exit }' "$CONF")
 	fi
-	echo "openvpn: NAT $VPN_NAT_SUBNET via $IFACE"
-fi
+	[ "$want" = "$nat_rule" ] && return 0
+	IFACE=${VPN_NAT_IFACE:-$(ip route | awk '/^default/ { print $5; exit }')}
+	if [ -n "$nat_rule" ]; then
+		iptables -t nat -D POSTROUTING -s "$nat_rule" -o "$IFACE" -j MASQUERADE 2>/dev/null || true
+	fi
+	nat_rule=$want
+	[ -n "$want" ] || return 0
+	if ! iptables -t nat -C POSTROUTING -s "$want" -o "$IFACE" -j MASQUERADE 2>/dev/null; then
+		iptables -t nat -A POSTROUTING -s "$want" -o "$IFACE" -j MASQUERADE
+	fi
+	echo "openvpn: NAT $want via $IFACE"
+}
 
 cd "$(dirname "$CONF")"
 
@@ -36,6 +50,7 @@ pid=
 trap 'stopping=1; [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null || true' TERM INT
 
 while :; do
+	nat || echo "openvpn: NAT setup failed"
 	openvpn --config "$CONF" &
 	pid=$!
 	set +e

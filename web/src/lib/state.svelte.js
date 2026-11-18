@@ -42,7 +42,7 @@ addEventListener('click', (e) => {
 export const session = $state({ user: null, checked: false });
 
 // Server-side settings shown in the UI (from /api/v1/status).
-export const settings = $state({ expiryWarnDays: 30 });
+export const settings = $state({ expiryWarnDays: 30, setupNeeded: false });
 
 // Theme: 'light' | 'dark' | 'auto'
 const media = matchMedia('(prefers-color-scheme: dark)');

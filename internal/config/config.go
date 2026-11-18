@@ -46,6 +46,12 @@ type Agent struct {
 	// CRLCopies get a copy of crl.pem after every change
 	// (comma-separated; "-" disables).                     TW_CRL_COPIES
 	CRLCopies []string
+	// Setup* describe a container that publishes a fixed port: the setup
+	// wizard then keeps OpenVPN on SetupPort/SetupProto and suggests
+	// SetupPublicPort to clients.  TW_SETUP_PORT, TW_SETUP_PROTO, TW_SETUP_PUBLIC_PORT
+	SetupPort       int
+	SetupProto      string
+	SetupPublicPort int
 }
 
 // Web is the configuration of the web/API process.
@@ -107,6 +113,22 @@ func LoadAgent() (Agent, error) {
 		MgmtPassword:  os.Getenv("TW_OPENVPN_MGMT_PASSWORD"),
 		CAPassphrase:  os.Getenv("TW_CA_PASSPHRASE"),
 		CRLCopies:     list(env("TW_CRL_COPIES", openvpnDir+"/crl.pem")),
+	}
+	for _, v := range []struct {
+		name string
+		dst  *int
+	}{{"TW_SETUP_PORT", &c.SetupPort}, {"TW_SETUP_PUBLIC_PORT", &c.SetupPublicPort}} {
+		if raw := os.Getenv(v.name); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 1 || n > 65535 {
+				return c, fmt.Errorf("%s must be a port number", v.name)
+			}
+			*v.dst = n
+		}
+	}
+	c.SetupProto = os.Getenv("TW_SETUP_PROTO")
+	if c.SetupProto != "" && c.SetupProto != "udp" && c.SetupProto != "tcp" {
+		return c, fmt.Errorf("TW_SETUP_PROTO must be udp or tcp")
 	}
 	if c.RestartSignal != "SIGHUP" && c.RestartSignal != "SIGTERM" {
 		return c, fmt.Errorf("TW_OPENVPN_RESTART must be SIGHUP or SIGTERM")

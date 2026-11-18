@@ -42,6 +42,8 @@ type AgentClient interface {
 	RestartServer(ctx context.Context, req api.RestartRequest) (api.RestartResult, error)
 	ConfigBackups(ctx context.Context) ([]api.ConfigBackup, error)
 	ConfigBackup(ctx context.Context, name string) (string, error)
+	SetupStatus(ctx context.Context) (api.SetupStatus, error)
+	Setup(ctx context.Context, req api.SetupRequest) (api.SetupResult, error)
 }
 
 // Deps are the web server's dependencies.

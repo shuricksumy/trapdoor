@@ -147,6 +147,7 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("OpenVPN restart requested", "signal", s.cfg.RestartSignal)
+	s.waitForExit(r.Context())
 	if v, err := s.waitForOpenVPN(r.Context(), s.restartTimeout()); err == nil {
 		s.conf.MarkRunning(raw)
 		res.OK, res.OpenVPNVersion = true, v
@@ -164,7 +165,9 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 			res.RolledBack = true
 			// A supervised OpenVPN restarts by itself with the restored file;
 			// one that is still up (SIGHUP) needs another signal.
-			_ = s.mgmt.Signal(r.Context(), s.cfg.RestartSignal)
+			if s.mgmt.Signal(r.Context(), s.cfg.RestartSignal) == nil {
+				s.waitForExit(r.Context())
+			}
 			if v, err := s.waitForOpenVPN(r.Context(), s.restartTimeout()); err == nil {
 				res.OpenVPNVersion = v
 				res.Error += "; the previous config was restored and OpenVPN is running again"
@@ -182,6 +185,22 @@ func (s *Server) restartTimeout() time.Duration {
 		return s.restartWait
 	}
 	return 30 * time.Second
+}
+
+// waitForExit waits until a SIGTERMed OpenVPN has gone (it can keep
+// answering for seconds, e.g. while explicit-exit-notify tells UDP clients),
+// so the old process is not taken for the restarted one.
+func (s *Server) waitForExit(ctx context.Context) {
+	if s.cfg.RestartSignal != "SIGTERM" {
+		return
+	}
+	deadline := time.Now().Add(min(15*time.Second, s.restartTimeout()))
+	for time.Now().Before(deadline) && ctx.Err() == nil {
+		if _, err := s.mgmt.Version(ctx); err != nil {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 // waitForOpenVPN gives OpenVPN a moment to go down, then polls the

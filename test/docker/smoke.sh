@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Docker smoke test: the real compose file with a locally built image.
-# A fresh OpenVPN setup is created, the web UI/API is used to issue
+# A fresh install is set up with the setup wizard's API, the web API issues
 # certificates, and a VPN client on the host connects through the container.
 #
 # Needs: docker compose, openvpn and curl on the host, sudo (tun device).
@@ -41,7 +41,6 @@ TW_COOKIE_SECURE=false
 TW_TZ=Europe/Dublin
 OPENVPN_DIR=$WORK/openvpn
 VPN_PORT=11194
-VPN_NAT_SUBNET=10.77.0.0/24
 WEB_BIND=127.0.0.1:18080
 ENV
 
@@ -49,44 +48,26 @@ log "image runs as non-root and reports its version"
 docker run --rm "$IMAGE" version
 [[ $(docker run --rm --entrypoint id "$IMAGE" -u) == 10001 ]] || fail "image does not run as uid 10001"
 
-log "new PKI and tls-crypt-v2 key (one-off containers)"
-docker run --rm -u root -v "$WORK/openvpn:/etc/openvpn" "$IMAGE" init-pki
-docker run --rm -u root -v "$WORK/openvpn:/etc/openvpn" --entrypoint openvpn "$IMAGE" \
-	--genkey tls-crypt-v2-server /etc/openvpn/tls-crypt-v2.key
-
 log "compose up (openvpn waits for server.conf)"
 (cd "$WORK" && dc up -d)
 for _ in $(seq 60); do curl -fs "$WEB/healthz" >/dev/null 2>&1 && break; sleep 1; done
 curl -fs "$WEB/healthz" >/dev/null || fail "web not healthy"
 curl -fs "$WEB/" | grep -q 'id="app"' || fail "UI not served"
 
-log "server certificate via the web API, then server.conf"
-api -H "Content-Type: application/json" -d '{"name":"server","kind":"server","validity_days":3650}' "$WEB/api/v1/certs" >/dev/null
-sudo tee "$WORK/openvpn/server.conf" >/dev/null <<CONF
-port 1194
-proto udp
-dev tun
-topology subnet
-server 10.77.0.0 255.255.255.0
-ca easy-rsa/pki/ca.crt
-cert easy-rsa/pki/issued/server.crt
-key easy-rsa/pki/private/server.key
-dh none
-tls-crypt-v2 tls-crypt-v2.key
-crl-verify crl.pem
-keepalive 2 6
-management 127.0.0.1 2080
-verb 3
-CONF
-sudo tee "$WORK/openvpn/client-template.txt" >/dev/null <<CONF
-client
-proto udp
-remote 127.0.0.1 11194
-dev tun
-nobind
-remote-cert-tls server
-verb 3
-CONF
+log "setup wizard: needed, container port fixed, then create the server"
+api "$WEB/api/v1/setup" >"$WORK/setup-status.json"
+grep -q '"needed":true' "$WORK/setup-status.json" || fail "setup not needed: $(cat "$WORK/setup-status.json")"
+grep -q '"fixed_port":1194' "$WORK/setup-status.json" || fail "no fixed port: $(cat "$WORK/setup-status.json")"
+grep -q '"public_port":11194' "$WORK/setup-status.json" || fail "public port not from VPN_PORT"
+api -H "Content-Type: application/json" -m 90 \
+	-d '{"public_host":"127.0.0.1","public_port":11194,"subnet":"10.77.0.0/24","dns":["10.77.0.1"]}' \
+	"$WEB/api/v1/setup" >"$WORK/setup.json" || fail "setup failed"
+grep -q '"running":true' "$WORK/setup.json" || fail "OpenVPN not running after setup: $(cat "$WORK/setup.json")"
+dc logs openvpn | grep -q "NAT 10.77.0.0/255.255.255.0" || fail "NAT not derived from server.conf"
+sudo grep -q "^remote 127.0.0.1 11194$" "$WORK/openvpn/client-template.txt" || fail "client template"
+code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+	-d '{"public_host":"127.0.0.1"}' "$WEB/api/v1/setup")
+[[ $code == 409 ]] || fail "second setup answered $code, want 409"
 
 log "agent reaches OpenVPN's management interface (shared network namespace)"
 for _ in $(seq 60); do api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' && break; sleep 1; done

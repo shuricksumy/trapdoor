@@ -124,8 +124,8 @@ func (s *Server) handleSetClientNetwork(w http.ResponseWriter, r *http.Request) 
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	if s.pki != nil {
-		if _, err := s.pki.Get(r.Context(), name); err != nil {
+	if s.PKI() != nil {
+		if _, err := s.PKI().Get(r.Context(), name); err != nil {
 			s.pkiError(w, err)
 			return
 		}

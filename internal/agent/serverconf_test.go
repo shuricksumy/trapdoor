@@ -20,25 +20,31 @@ import (
 	"github.com/shuricksumy/tunnelward/internal/mgmt"
 )
 
-// restartingMgmt simulates OpenVPN: after a signal it is down until it
+// restartingMgmt simulates OpenVPN: after a signal the old process keeps
+// answering for a while (explicit-exit-notify), then it is down until it
 // "starts" again, which only works if server.conf has no "broken-on-start".
 type restartingMgmt struct {
 	fakeMgmt
-	mu   sync.Mutex
-	conf string
-	down time.Time // down until
+	mu      sync.Mutex
+	conf    string
+	exiting time.Time // the old process answers until then
+	down    time.Time // down until
 }
 
 func (m *restartingMgmt) Signal(context.Context, string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.down = time.Now().Add(500 * time.Millisecond)
+	m.exiting = time.Now().Add(2500 * time.Millisecond)
+	m.down = m.exiting.Add(500 * time.Millisecond)
 	return nil
 }
 
 func (m *restartingMgmt) Version(context.Context) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if time.Now().Before(m.exiting) {
+		return "OpenVPN 2.6.19", nil // still the old one
+	}
 	if time.Now().Before(m.down) {
 		return "", fmt.Errorf("%w: down", mgmt.ErrUnavailable)
 	}
@@ -67,7 +73,7 @@ func confServer(t *testing.T) (*httptest.Server, *restartingMgmt, string) {
 	s := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	m := &restartingMgmt{conf: filepath.Join(dir, "server.conf")}
 	s.mgmt = m
-	s.restartWait = 3 * time.Second
+	s.restartWait = 6 * time.Second
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
 	return srv, m, dir

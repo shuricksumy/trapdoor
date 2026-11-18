@@ -35,7 +35,7 @@ func (s *Server) registerCertRoutes(mux *http.ServeMux) {
 // withPKI answers 503 until a PKI is available (e.g. before setup).
 func (s *Server) withPKI(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.pki == nil {
+		if s.PKI() == nil {
 			httpx.WriteError(w, http.StatusServiceUnavailable, "PKI is not initialized")
 			return
 		}
@@ -44,7 +44,7 @@ func (s *Server) withPKI(h http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) handleListCerts(w http.ResponseWriter, r *http.Request) {
-	certs, err := s.pki.List(r.Context())
+	certs, err := s.PKI().List(r.Context())
 	if err != nil {
 		s.pkiError(w, err)
 		return
@@ -57,7 +57,7 @@ func (s *Server) handleListCerts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetCert(w http.ResponseWriter, r *http.Request) {
-	c, err := s.pki.Get(r.Context(), r.PathValue("name"))
+	c, err := s.PKI().Get(r.Context(), r.PathValue("name"))
 	if err != nil {
 		s.pkiError(w, err)
 		return
@@ -80,7 +80,7 @@ func (s *Server) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("passphrase must be %d-%d characters", minPassphrase, maxPassphrase))
 		return
 	}
-	c, err := s.pki.Issue(r.Context(), pki.IssueRequest{
+	c, err := s.PKI().Issue(r.Context(), pki.IssueRequest{
 		Name:       req.Name,
 		Kind:       pki.Kind(req.Kind),
 		Passphrase: req.Passphrase,
@@ -96,7 +96,7 @@ func (s *Server) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRevokeCert(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if err := s.pki.Revoke(r.Context(), name); err != nil {
+	if err := s.PKI().Revoke(r.Context(), name); err != nil {
 		s.pkiError(w, err)
 		return
 	}
@@ -107,7 +107,7 @@ func (s *Server) handleRevokeCert(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUnrevokeCert(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if err := s.pki.Unrevoke(r.Context(), name); err != nil {
+	if err := s.PKI().Unrevoke(r.Context(), name); err != nil {
 		s.pkiError(w, err)
 		return
 	}
@@ -125,7 +125,7 @@ func (s *Server) handleRenewCert(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	c, err := s.pki.Renew(r.Context(), r.PathValue("name"), validity)
+	c, err := s.PKI().Renew(r.Context(), r.PathValue("name"), validity)
 	if err != nil {
 		s.pkiError(w, err)
 		return
@@ -136,7 +136,7 @@ func (s *Server) handleRenewCert(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRemoveCert(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if err := s.pki.Remove(r.Context(), name); err != nil {
+	if err := s.PKI().Remove(r.Context(), name); err != nil {
 		s.pkiError(w, err)
 		return
 	}
@@ -153,7 +153,7 @@ func (s *Server) handleRemoveCert(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	b, err := s.pki.Bundle(r.Context(), name)
+	b, err := s.PKI().Bundle(r.Context(), name)
 	if err != nil {
 		s.pkiError(w, err)
 		return
@@ -170,7 +170,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGenCRL(w http.ResponseWriter, r *http.Request) {
-	if err := s.pki.GenCRL(r.Context()); err != nil {
+	if err := s.PKI().GenCRL(r.Context()); err != nil {
 		s.pkiError(w, err)
 		return
 	}
@@ -178,7 +178,7 @@ func (s *Server) handleGenCRL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) respondCert(w http.ResponseWriter, r *http.Request, name string) {
-	c, err := s.pki.Get(r.Context(), name)
+	c, err := s.PKI().Get(r.Context(), name)
 	if err != nil {
 		s.pkiError(w, err)
 		return

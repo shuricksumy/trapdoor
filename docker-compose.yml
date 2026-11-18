@@ -4,9 +4,9 @@
 #   docker compose up -d
 #   docker compose exec -it web tunnelward user add admin
 #
-# Point OPENVPN_DIR at an existing OpenVPN directory (e.g. from openvpn-ui), or
-# see README "Docker" for a new install. The web UI listens on 127.0.0.1:8080:
-# put it behind an HTTPS reverse proxy.
+# New install: open the web UI and follow the setup. Existing OpenVPN: point
+# OPENVPN_DIR at its directory. The web UI listens on 127.0.0.1:8080: put it
+# behind an HTTPS reverse proxy.
 
 x-image: &image
   image: ${TW_IMAGE:-ghcr.io/shuricksumy/tunnelward:latest}
@@ -23,9 +23,9 @@ services:
     sysctls:
       - net.ipv4.ip_forward=1
     environment:
-      VPN_NAT_SUBNET: ${VPN_NAT_SUBNET:-}
+      VPN_NAT_SUBNET: ${VPN_NAT_SUBNET:-auto}
     ports:
-      - "${VPN_PORT:-1194}:1194/udp"
+      - "${VPN_PORT:-1194}:1194/${VPN_PROTO:-udp}"
     volumes:
       - ${OPENVPN_DIR:-./openvpn}:/etc/openvpn
 
@@ -44,6 +44,10 @@ services:
       TW_OPENVPN_MGMT: ${TW_OPENVPN_MGMT:-127.0.0.1:2080}
       TW_OPENVPN_RESTART: SIGTERM # the openvpn service starts OpenVPN again
       TW_OPENVPN_MGMT_PASSWORD: ${TW_OPENVPN_MGMT_PASSWORD:-}
+      # the setup keeps OpenVPN on the published port
+      TW_SETUP_PORT: "1194"
+      TW_SETUP_PROTO: ${VPN_PROTO:-udp}
+      TW_SETUP_PUBLIC_PORT: ${VPN_PORT:-1194}
     volumes:
       - ${OPENVPN_DIR:-./openvpn}:/etc/openvpn
       - run:/run/tunnelward
