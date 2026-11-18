@@ -1,6 +1,10 @@
 #!/bin/sh
-# Runs the OpenVPN server for the "openvpn" compose service.
-# - waits for the config instead of crash-looping (fresh installs)
+# Runs the VPN servers for the "openvpn" compose service.
+# - WireGuard (TD_WIREGUARD=file on the agent): brings up every interface the
+#   agent describes in $WG_DIR (<id>.json + <id>.conf), applies changes with
+#   `wg syncconf` (nobody is disconnected), adds NAT for its subnet, and
+#   writes `wg show <id> dump` to <id>.dump (<id>.error on failure).
+# - waits for the OpenVPN config instead of crash-looping (fresh installs)
 # - NAT for VPN clients: VPN_NAT_SUBNET=auto (the "server" line of
 #   server.conf, checked at every start) or a CIDR; empty = none.
 #   [VPN_NAT_IFACE=eth0]
@@ -40,8 +44,76 @@ fw_apply() {
 	mv "$FW_STATUS.tmp" "$FW_STATUS"
 	fw_sum=$sum
 }
+
+WG_DIR=${WG_DIR:-/etc/wireguard}
+WG_STATE=/run/trapdoor-wg
+mkdir -p "$WG_STATE"
+wg_iface() { ip route | awk '/^default/ { print $5; exit }'; }
+wg_nat() { # add|del <address/bits>
+	[ -n "$2" ] || return 0
+	ifc=${VPN_NAT_IFACE:-$(wg_iface)}
+	if [ "$1" = add ]; then
+		iptables -t nat -C POSTROUTING -s "$2" -o "$ifc" -j MASQUERADE 2>/dev/null ||
+			iptables -t nat -A POSTROUTING -s "$2" -o "$ifc" -j MASQUERADE
+	else
+		iptables -t nat -D POSTROUTING -s "$2" -o "$ifc" -j MASQUERADE 2>/dev/null || true
+	fi
+}
+wg_fail() { # <id> <sum> <message>
+	echo "$3" >"$WG_DIR/$1.error"
+	echo "$2" >"$WG_STATE/$1.failed"
+	echo "wireguard $1: $3"
+}
+wg_sync() {
+	command -v wg >/dev/null || return 0
+	for conf in "$WG_DIR"/*.conf; do
+		[ -f "$conf" ] || continue
+		id=$(basename "$conf" .conf)
+		[ -f "$WG_DIR/$id.json" ] || continue # only interfaces trapdoor manages
+		sum=$(sha256sum "$conf" | cut -d' ' -f1)
+		[ "$sum" = "$(cat "$WG_STATE/$id.failed" 2>/dev/null)" ] && continue # retried when it changes
+		addr=$(awk -F' *= *' '$1 == "Address" { print $2; exit }' "$conf")
+		old_addr=$(cat "$WG_STATE/$id.addr" 2>/dev/null || true)
+		if ! ip link show "$id" >/dev/null 2>&1; then
+			out=$(wg-quick up "$conf" 2>&1) || { wg_fail "$id" "$sum" "$(echo "$out" | tail -1)"; continue; }
+			echo "wireguard $id: up ($addr)"
+		elif [ "$sum" != "$(cat "$WG_STATE/$id.sum" 2>/dev/null)" ]; then
+			if [ "$addr" != "$old_addr" ]; then
+				wg-quick down "$conf" >/dev/null 2>&1 || ip link del "$id" 2>/dev/null || true
+				wg_nat del "$old_addr"
+				out=$(wg-quick up "$conf" 2>&1) || { wg_fail "$id" "$sum" "$(echo "$out" | tail -1)"; continue; }
+				echo "wireguard $id: restarted ($addr)"
+			else
+				out=$(wg-quick strip "$conf" >"$WG_STATE/$id.strip" 2>&1 && wg syncconf "$id" "$WG_STATE/$id.strip" 2>&1) ||
+					{ wg_fail "$id" "$sum" "$(echo "$out" | tail -1)"; continue; }
+				rm -f "$WG_STATE/$id.strip"
+				echo "wireguard $id: peers updated"
+			fi
+		fi
+		wg_nat add "$addr" || echo "wireguard $id: NAT setup failed"
+		echo "$sum" >"$WG_STATE/$id.sum"
+		echo "$addr" >"$WG_STATE/$id.addr"
+		rm -f "$WG_STATE/$id.failed" "$WG_DIR/$id.error"
+		# Keys stay out of the dump: the private key (interface line) and the
+		# preshared keys (second column of the peer lines).
+		wg show "$id" dump | awk -F'\t' -v OFS='\t' 'NR == 1 { $1 = "(hidden)" } NR > 1 { $2 = "(hidden)" } { print }' >"$WG_DIR/$id.dump.tmp" &&
+			mv "$WG_DIR/$id.dump.tmp" "$WG_DIR/$id.dump"
+	done
+	# Servers removed in trapdoor: take their interfaces down.
+	for f in "$WG_STATE"/*.addr; do
+		[ -f "$f" ] || continue
+		id=$(basename "$f" .addr)
+		[ -f "$WG_DIR/$id.conf" ] && continue
+		ip link del "$id" 2>/dev/null || true
+		wg_nat del "$(cat "$f")"
+		rm -f "$WG_STATE/$id".* "$WG_DIR/$id.dump" "$WG_DIR/$id.error"
+		echo "wireguard $id: removed"
+	done
+}
+
 (while :; do
 	[ -f "$FW_RULES" ] && fw_apply
+	wg_sync
 	sleep 1
 done) &
 

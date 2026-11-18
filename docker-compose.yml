@@ -1,4 +1,4 @@
-# trapdoor: OpenVPN server + agent + web UI, from the published image.
+# trapdoor: OpenVPN / WireGuard servers + agent + web UI, from the published image.
 #
 #   cp .env.example .env              # set TD_AGENT_TOKEN (openssl rand -hex 32)
 #   docker compose up -d
@@ -27,8 +27,11 @@ services:
       VPN_NAT_SUBNET: ${VPN_NAT_SUBNET:-auto}
     ports:
       - "${VPN_PORT:-1194}:1194/${VPN_PROTO:-udp}"
+      # WireGuard: the same port inside and outside; create the server with it
+      - "${WG_PORT:-51820}:${WG_PORT:-51820}/udp"
     volumes:
       - ${OPENVPN_DIR:-./openvpn}:/etc/openvpn
+      - ${WIREGUARD_DIR:-./wireguard}:/etc/wireguard
 
   # Manages PKI and OpenVPN. Shares the openvpn container's network, so the
   # management interface stays on 127.0.0.1 and is never published.
@@ -45,7 +48,7 @@ services:
       TD_OPENVPN_MGMT: ${TD_OPENVPN_MGMT:-127.0.0.1:2080}
       TD_OPENVPN_RESTART: SIGTERM # the openvpn service starts OpenVPN again
       TD_FIREWALL: file # access rules are applied by the openvpn service
-      TD_WIREGUARD: "off" # WireGuard in Docker comes with the vpn container
+      TD_WIREGUARD: file # WireGuard interfaces are run by the openvpn service
       TD_OPENVPN_MGMT_PASSWORD: ${TD_OPENVPN_MGMT_PASSWORD:-}
       # the setup keeps OpenVPN on the published port
       TD_SETUP_PORT: "1194"
@@ -54,6 +57,7 @@ services:
       TD_TOTP_ISSUER: ${TD_TOTP_ISSUER:-trapdoor}
     volumes:
       - ${OPENVPN_DIR:-./openvpn}:/etc/openvpn
+      - ${WIREGUARD_DIR:-./wireguard}:/etc/wireguard
       - run:/run/trapdoor
     healthcheck:
       test: ["CMD", "trapdoor", "health", "unix:/run/trapdoor/agent.sock"]

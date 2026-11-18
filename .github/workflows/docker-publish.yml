@@ -48,8 +48,8 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.traefik.yml config --format json > traefik.json
           jq -e '(.services.web.ports // []) == [] and (.services.web.labels["traefik.enable"] == "true")' traefik.json
 
-      - name: Install openvpn (VPN client on the host)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq openvpn
+      - name: Install openvpn and wireguard-tools (VPN clients on the host)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq openvpn wireguard-tools
 
       - name: Smoke test
         run: test/docker/smoke.sh trapdoor:smoke

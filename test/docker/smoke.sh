@@ -26,6 +26,8 @@ fail() {
 }
 cleanup() {
 	[[ -n $CLIENT_PID ]] && sudo kill "$CLIENT_PID" 2>/dev/null || true
+	sudo wg-quick down /etc/wireguard/tdsmoke.conf >/dev/null 2>&1 || true
+	sudo rm -f /etc/wireguard/tdsmoke.conf
 	dc down -v --remove-orphans >/dev/null 2>&1 || true
 	sudo rm -rf "$WORK"
 }
@@ -40,6 +42,8 @@ TD_WEB_API_TOKEN=$TOKEN
 TD_COOKIE_SECURE=false
 TD_TZ=Europe/Dublin
 OPENVPN_DIR=$WORK/openvpn
+WIREGUARD_DIR=$WORK/wireguard
+WG_PORT=15182
 VPN_PORT=11194
 WEB_BIND=127.0.0.1:18080
 ENV
@@ -134,6 +138,35 @@ dc exec -T openvpn iptables -S TD-FWD | grep -q -- "-d 10.77.0.1/32 -p icmp -j A
 dc exec -T openvpn iptables -C FORWARD -i tun+ -j TD-FWD || fail "no FORWARD jump"
 dc logs openvpn | grep -q "access rules applied" || fail "no apply log"
 ! dc exec -T agent iptables -N TD-PROBE >/dev/null 2>&1 || fail "agent container can change the firewall"
+
+log "WireGuard: created through the web API, run by the openvpn container (TD_WIREGUARD=file)"
+api -H "Content-Type: application/json" \
+	-d '{"type":"wireguard","id":"wg0","name":"Smoke","port":15182,"public_host":"127.0.0.1","subnet":"10.78.0.0/24","allowed_ips":["10.78.0.0/24"]}' \
+	"$WEB/api/v1/servers" >"$WORK/wg.json" || fail "create WireGuard server"
+wgrunning() { api "$WEB/api/v1/status" | grep -q '"id":"wg0"[^}]*"running":true'; }
+for _ in $(seq 20); do wgrunning && break; sleep 1; done
+wgrunning || fail "wg0 not running: $(api "$WEB/api/v1/status")"
+dc logs openvpn | grep -q "wireguard wg0: up (10.78.0.1/24)" || fail "no wg0 up log"
+sudo head -1 "$WORK/wireguard/wg0.dump" | grep -q '^(hidden)' || fail "private key in the dump file"
+api -H "Content-Type: application/json" -d '{"name":"wgsmoke"}' "$WEB/api/v1/servers/wg0/peers" >/dev/null || fail "add WireGuard client"
+sudo mkdir -p /etc/wireguard
+api "$WEB/api/v1/servers/wg0/peers/wgsmoke/conf" | sudo sh -c 'umask 077; cat >/etc/wireguard/tdsmoke.conf'
+sudo wg-quick up /etc/wireguard/tdsmoke.conf >/dev/null 2>&1 || fail "host WireGuard client"
+wgping() { ping -c 1 -W 1 10.78.0.1 >/dev/null 2>&1; }
+for _ in $(seq 15); do wgping && break; sleep 1; done
+wgping || fail "no ping through WireGuard: $(dc logs --tail 20 openvpn)"
+! sudo awk -F'\t' 'NR > 1 && $2 != "(hidden)"' "$WORK/wireguard/wg0.dump" | grep -q . || fail "preshared key in the dump file"
+for _ in $(seq 10); do api "$WEB/api/v1/servers/wg0/sessions" | grep -q '"name":"wgsmoke"' && break; sleep 1; done
+api "$WEB/api/v1/servers/wg0/sessions" | grep -q '"name":"wgsmoke"' || fail "wgsmoke not in live sessions"
+api -X PUT -H "Content-Type: application/json" -d '{"disabled":true}' "$WEB/api/v1/servers/wg0/peers/wgsmoke" >/dev/null
+for _ in $(seq 10); do dc logs openvpn | grep -q "wireguard wg0: peers updated" && break; sleep 1; done
+sleep 1
+! wgping || fail "disabled WireGuard client still gets through"
+sudo wg-quick down /etc/wireguard/tdsmoke.conf >/dev/null 2>&1 || true
+api -X DELETE "$WEB/api/v1/servers/wg0" || fail "remove WireGuard server"
+for _ in $(seq 10); do dc exec -T openvpn ip link show wg0 >/dev/null 2>&1 || break; sleep 1; done
+! dc exec -T openvpn ip link show wg0 >/dev/null 2>&1 || fail "wg0 still up after remove"
+log "WireGuard client connected through the container; disable and remove work"
 
 log "web container is locked down"
 [[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' tdsmoke-web-1) == true ]] || fail "web rootfs not read-only"
