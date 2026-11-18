@@ -13,7 +13,10 @@
 - [x] `.ovpn` generation from templates (tls-crypt / tls-auth / tls-crypt-v2)
 - [x] End-to-end test with a real OpenVPN server and client in CI
 - [ ] QR code for `.ovpn` (web UI)
-- [ ] Live sessions via OpenVPN management interface: list, traffic, kick
+- [x] Live sessions via OpenVPN management interface: list, traffic, kick; revoke/delete disconnects
+- [ ] Session history & traffic statistics (web): sessions table + hourly traffic per user,
+      any date range with daily / monthly / yearly views per user and for the whole server,
+      presets (this month, last month, last 30 days, this year), CSV export, gaps marked as estimated
 - [ ] Client 2FA: TOTP and/or static password, `tunnelward auth-verify` for OpenVPN
 - [ ] Web: admin login, SQLite + migrations
 - [ ] Frontend (SvelteKit, embedded in the binary): dashboard, clients, certificates

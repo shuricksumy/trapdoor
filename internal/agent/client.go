@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -109,6 +110,25 @@ func (c *Client) Profile(ctx context.Context, name string) ([]byte, error) {
 	var out []byte
 	err := c.doJSON(ctx, http.MethodGet, "/v1/certs/"+url.PathEscape(name)+"/ovpn", nil, &out)
 	return out, err
+}
+
+// Sessions returns the connected clients and server counters.
+func (c *Client) Sessions(ctx context.Context) (api.Sessions, error) {
+	var out api.Sessions
+	err := c.doJSON(ctx, http.MethodGet, "/v1/sessions", nil, &out)
+	return out, err
+}
+
+// KillSession disconnects one session by client ID.
+func (c *Client) KillSession(ctx context.Context, clientID int64) error {
+	return c.doJSON(ctx, http.MethodDelete, "/v1/sessions/"+strconv.FormatInt(clientID, 10), nil, nil)
+}
+
+// KillName disconnects all sessions of a certificate name.
+func (c *Client) KillName(ctx context.Context, name string) (int, error) {
+	var out api.Killed
+	err := c.doJSON(ctx, http.MethodDelete, "/v1/certs/"+url.PathEscape(name)+"/sessions", nil, &out)
+	return out.Killed, err
 }
 
 // GenCRL regenerates the CRL.

@@ -101,6 +101,7 @@ func (s *Server) handleRevokeCert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("certificate revoked", "name", name)
+	s.disconnect(r.Context(), name)
 	s.respondCert(w, r, name)
 }
 
@@ -143,6 +144,7 @@ func (s *Server) handleRemoveCert(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("remove client files", "name", name, "err", err)
 	}
 	s.log.Info("certificate removed", "name", name)
+	s.disconnect(r.Context(), name)
 	w.WriteHeader(http.StatusNoContent)
 }
 
