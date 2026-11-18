@@ -30,7 +30,8 @@
 
 - [ ] Setup wizard: CA, server cert, cipher, port/proto, DNS, tls-crypt
 - [ ] Server config editor: forms for common options + validated raw editor
-- [ ] Routing: per-client routes (`iroute` / `push route`), route groups, static client IPs, full/split tunnel
+- [x] Routing: per-client routes (`push route`), LAN behind a client (`iroute`), static client IPs, full/split tunnel
+- [ ] Named networks reusable across clients (openvpn-ui "routes")
 - [ ] Certificate expiry warnings and bulk renew
 - [ ] Firewall rules managed by the agent
 

@@ -178,6 +178,23 @@ The settings live in `ccd/<name>` exactly as openvpn-ui wrote them (`#2FA_KEY:` 
 
 Use an authenticator app that supports SHA-256 codes (some apps only do SHA-1).
 
+## Client network settings
+
+Per client, in the UI (Clients → More → Network) or `PUT /api/v1/certs/{name}/network`:
+
+| Setting | Written to `ccd/<name>` |
+|---|---|
+| static VPN address | `ifconfig-push 10.8.0.50 255.255.255.0` (net30: the /30 peer address) |
+| networks the client can reach | `push "route 192.168.1.0 255.255.255.0"` |
+| networks behind the client (site-to-site) | `iroute 192.168.50.0 255.255.255.0` |
+| all traffic through the VPN | `push "redirect-gateway def1"` |
+
+Addresses are checked against `server` / `topology` in `server.conf` and against the other
+clients' static addresses. A LAN behind a client also needs `route <net> <mask>` in
+`server.conf`: tunnelward warns with the exact line to add. `server.conf` needs
+`client-config-dir ccd`. Changes apply when the client reconnects (the UI offers to reconnect
+it). The 2FA lines and any other lines in the file are kept; openvpn-ui's files are read as they are.
+
 ## Web API
 
 The web process records session history (polling the agent every `TW_POLL_INTERVAL`,
@@ -219,6 +236,8 @@ tunnelward user list | passwd <name> | del <name>
 | POST | `/api/v1/certs/{name}/revoke`, `/unrevoke`, `/renew` | |
 | GET | `/api/v1/certs/{name}/ovpn` | download the `.ovpn` profile |
 | DELETE | `/api/v1/certs/{name}/sessions`, `/api/v1/sessions/{client_id}` | disconnect |
+| GET | `/api/v1/network` | VPN subnet, topology, server routes, static addresses in use |
+| GET, PUT | `/api/v1/certs/{name}/network` | `{"static_ip","full_tunnel","routes":[cidr],"lan":[cidr]}`, response adds `warnings` |
 | GET, PUT | `/api/v1/certs/{name}/auth` | 2FA status / change: `{"totp":"enable\|reset\|disable","static_password":"…","remove_static":true}`; a new key's secret and `otpauth://` URI are returned once |
 
 Certificate and session calls are passed to the agent; every change is logged as

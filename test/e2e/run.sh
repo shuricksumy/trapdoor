@@ -74,6 +74,7 @@ dh none
 tls-crypt-v2 tls-crypt-v2.key
 crl-verify pki/crl.pem
 keepalive 2 6
+client-config-dir ccd
 management 127.0.0.1 12080
 verb 3
 CONF
@@ -89,6 +90,7 @@ connect-retry-max 1
 verb 3
 CONF
 
+mkdir -p "$WORK/ccd"
 log "start OpenVPN server"
 (cd "$WORK" && openvpn --config server.conf >"$WORK/server.log" 2>&1) &
 PIDS+=($!)
@@ -174,6 +176,19 @@ curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -d '{"
 curl -fsS -b "$JAR" "$WEB/api/v1/certs/carol/ovpn" >"$WORK/carol.ovpn" || fail "web download failed"
 connect "$WORK/carol.ovpn" "$WORK/client7.log" || fail "carol could not connect"
 grep -q '"action":"cert.issue"\|action=cert.issue' "$WORK/web.log" || fail "no audit log line"
+
+log "routing: static VPN address and a pushed route for alice (web API)"
+curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT \
+	-d '{"static_ip":"10.99.0.50","routes":["192.168.123.0/24"],"lan":[],"full_tunnel":false}' \
+	"$WEB/api/v1/certs/alice/network" >"$WORK/alice-net.json" || fail "set network"
+grep -q '"static_ip":"10.99.0.50"' "$WORK/alice-net.json" || fail "network not saved: $(cat "$WORK/alice-net.json")"
+connect "$WORK/alice.ovpn" "$WORK/client-net.log" || fail "alice could not connect with network settings"
+grep -q "10.99.0.50" "$WORK/client-net.log" || fail "alice did not get 10.99.0.50"
+grep -q "192.168.123.0" "$WORK/client-net.log" || fail "alice did not get the pushed route"
+code=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT \
+	-d '{"static_ip":"10.99.0.50","routes":[],"lan":[]}' "$WEB/api/v1/certs/carol/network")
+[[ $code == 400 ]] || fail "duplicate static address accepted ($code)"
+log "alice got 10.99.0.50 and the route; the same address for carol was refused"
 
 log "2FA: second server checks logins with tunnelward auth-verify"
 mkdir -p "$WORK/ccd"

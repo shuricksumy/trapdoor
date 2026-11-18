@@ -24,6 +24,49 @@ func (s *Server) registerCertRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}", s.handleKillSession)
 	mux.HandleFunc("GET /api/v1/certs/{name}/auth", s.handleGetClientAuth)
 	mux.HandleFunc("PUT /api/v1/certs/{name}/auth", s.handleUpdateClientAuth)
+	mux.HandleFunc("GET /api/v1/network", s.handleServerNetwork)
+	mux.HandleFunc("GET /api/v1/certs/{name}/network", s.handleGetClientNetwork)
+	mux.HandleFunc("PUT /api/v1/certs/{name}/network", s.handleSetClientNetwork)
+}
+
+func (s *Server) handleServerNetwork(w http.ResponseWriter, r *http.Request) {
+	n, err := s.Agent.ServerNetwork(r.Context())
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, n)
+}
+
+func (s *Server) handleGetClientNetwork(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.name(w, r)
+	if !ok {
+		return
+	}
+	n, err := s.Agent.ClientNetwork(r.Context(), name)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, n)
+}
+
+func (s *Server) handleSetClientNetwork(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.name(w, r)
+	if !ok {
+		return
+	}
+	var req api.ClientNetwork
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	n, err := s.Agent.SetClientNetwork(r.Context(), name, req)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	s.audit(r, "client.network", name)
+	httpx.WriteJSON(w, http.StatusOK, n)
 }
 
 func (s *Server) handleGetClientAuth(w http.ResponseWriter, r *http.Request) {
