@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/shuricksumy/tunnelward/internal/agent"
 	"github.com/shuricksumy/tunnelward/internal/config"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
+	"github.com/shuricksumy/tunnelward/internal/pki"
 	"github.com/shuricksumy/tunnelward/internal/version"
 	"github.com/shuricksumy/tunnelward/internal/web"
 )
@@ -21,6 +23,7 @@ const usage = `usage: tunnelward <command>
 commands:
   agent     run the privileged agent (PKI, OpenVPN control)
   web       run the web UI and API
+  init-pki  create a new CA in TW_PKI_DIR (CA name from TW_CA_NAME)
   version   print version
 `
 
@@ -40,6 +43,8 @@ func main() {
 		err = runAgent(ctx, log)
 	case "web":
 		err = runWeb(ctx, log)
+	case "init-pki":
+		err = runInitPKI(log)
 	case "version":
 		fmt.Println(version.String())
 	case "-h", "--help", "help":
@@ -64,8 +69,21 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 		return err
 	}
 	log = log.With("proc", "agent")
+
+	var p pki.PKI
+	store, err := pki.Open(cfg.PKIDir, pki.Options{CAPassphrase: cfg.CAPassphrase, CRLCopies: cfg.CRLCopies})
+	switch {
+	case err == nil:
+		p = store
+		log.Info("PKI opened", "dir", cfg.PKIDir)
+	case errors.Is(err, pki.ErrNotInitialized):
+		log.Warn("no PKI yet; certificate API disabled until setup", "dir", cfg.PKIDir)
+	default:
+		return err
+	}
+
 	log.Info("listening", "addr", cfg.Listen, "version", version.Version)
-	return httpx.Serve(ctx, l, agent.New(cfg, log).Handler())
+	return httpx.Serve(ctx, l, agent.New(cfg, log, p).Handler())
 }
 
 func runWeb(ctx context.Context, log *slog.Logger) error {
@@ -81,4 +99,18 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 	client := agent.NewClient(cfg.AgentURL, cfg.AgentToken, cfg.AgentTimeout)
 	log.Info("listening", "addr", cfg.Listen, "agent", cfg.AgentURL, "version", version.Version)
 	return httpx.Serve(ctx, l, web.New(client, log).Handler())
+}
+
+func runInitPKI(log *slog.Logger) error {
+	cfg, err := config.LoadAgent()
+	if err != nil && !errors.Is(err, config.ErrNoToken) {
+		return err
+	}
+	name := os.Getenv("TW_CA_NAME")
+	if _, err := pki.Init(cfg.PKIDir, pki.InitOptions{CommonName: name},
+		pki.Options{CAPassphrase: cfg.CAPassphrase, CRLCopies: cfg.CRLCopies}); err != nil {
+		return err
+	}
+	log.Info("PKI created", "dir", cfg.PKIDir)
+	return nil
 }

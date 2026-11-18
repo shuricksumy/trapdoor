@@ -10,6 +10,7 @@ import (
 	"github.com/shuricksumy/tunnelward/internal/api"
 	"github.com/shuricksumy/tunnelward/internal/config"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
+	"github.com/shuricksumy/tunnelward/internal/pki"
 	"github.com/shuricksumy/tunnelward/internal/version"
 )
 
@@ -17,11 +18,13 @@ import (
 type Server struct {
 	cfg config.Agent
 	log *slog.Logger
+	pki pki.PKI // nil until the PKI is initialized
 }
 
-// New returns an agent server for cfg.
-func New(cfg config.Agent, log *slog.Logger) *Server {
-	return &Server{cfg: cfg, log: log}
+// New returns an agent server for cfg. p may be nil when no PKI exists yet;
+// certificate endpoints then answer 503.
+func New(cfg config.Agent, log *slog.Logger, p pki.PKI) *Server {
+	return &Server{cfg: cfg, log: log, pki: p}
 }
 
 // Handler returns the agent's HTTP handler.
@@ -31,6 +34,7 @@ func New(cfg config.Agent, log *slog.Logger) *Server {
 func (s *Server) Handler() http.Handler {
 	v1 := http.NewServeMux()
 	v1.HandleFunc("GET /v1/info", s.handleInfo)
+	s.registerCertRoutes(v1)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -48,6 +52,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, _ *http.Request) {
 		Hostname:   host,
 		OpenVPNDir: s.cfg.OpenVPNDir,
 		PKIDir:     s.cfg.PKIDir,
+		PKIReady:   s.pki != nil,
 	})
 }
 
