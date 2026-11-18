@@ -23,7 +23,7 @@
 - [x] Web: admin login (users CLI, secure session cookie, throttling, CSRF protection)
 - [x] Web: certificate and session management endpoints (proxy to the agent, audit log lines)
 - [x] Web UI (Svelte 5, embedded): login, overview with today's timeline, clients, live sessions, account; light/dark/auto theme; phone layout
-- [ ] Docker image + two-service `docker-compose` example
+- [x] Docker image (amd64/arm64, GHCR) + compose: openvpn / agent / web, smoke-tested in CI with a real VPN client
 - [ ] Migration from openvpn-ui (`tunnelward migrate --from-openvpn-ui`, dry-run, backup)
 
 ## v2 — setup and configuration

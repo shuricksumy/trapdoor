@@ -1,0 +1,10 @@
+.git
+bin
+dist
+web/node_modules
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep
+openvpn
+data
+.env
+*.db

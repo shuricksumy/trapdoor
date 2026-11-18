@@ -136,6 +136,18 @@ func (c *Client) GenCRL(ctx context.Context) error {
 	return c.doJSON(ctx, http.MethodPost, "/v1/crl", nil, nil)
 }
 
+// Health checks GET /healthz (no token needed); it works for agent and web.
+func (c *Client) Health(ctx context.Context) error {
+	var h api.Health
+	if err := c.doJSON(ctx, http.MethodGet, "/healthz", nil, &h); err != nil {
+		return err
+	}
+	if h.Status != "ok" {
+		return fmt.Errorf("health: %q", h.Status)
+	}
+	return nil
+}
+
 // Info returns basic information about the agent.
 func (c *Client) Info(ctx context.Context) (api.AgentInfo, error) {
 	var out api.AgentInfo

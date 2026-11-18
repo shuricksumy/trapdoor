@@ -35,6 +35,55 @@ statistics with day / month / year views, presets, per-client shares and CSV exp
 Light, dark or automatic theme; works on phones. Strict Content-Security-Policy, no CDN:
 fonts (IBM Plex) are bundled.
 
+## Docker
+
+One image (`ghcr.io/shuricksumy/tunnelward`, amd64 + arm64) runs three services
+from [docker-compose.yml](docker-compose.yml):
+
+| Service | Runs as | Privileges | Purpose |
+|---|---|---|---|
+| `openvpn` | root | `NET_ADMIN`, `/dev/net/tun` | the OpenVPN server (+ optional NAT) |
+| `agent` | root | none; shares `openvpn`'s network | PKI, profiles, sessions via management on `127.0.0.1` |
+| `web` | uid 10001 | none, read-only filesystem | UI + API, database in a volume |
+
+Web and agent talk over a unix socket on a shared volume, so the agent has no network port,
+and OpenVPN's management interface is never published.
+
+### Existing OpenVPN directory (e.g. from openvpn-ui)
+
+```
+cp .env.example .env                 # set TW_AGENT_TOKEN, TW_TZ, OPENVPN_DIR, VPN_NAT_SUBNET
+docker compose up -d
+docker compose exec -it web tunnelward user add admin
+```
+
+Expected layout in `OPENVPN_DIR` (the openvpn-ui defaults): `server.conf`,
+`client-template.txt`, `easy-rsa/pki/`, `crl.pem` (kept up to date by the agent).
+`server.conf` needs `management 127.0.0.1 2080` (openvpn-ui's `0.0.0.0 2080` also works
+inside the shared network namespace, but nothing else can reach it there).
+
+### New install
+
+There is no setup wizard yet (planned). Create the CA and keys, then write `server.conf`
+and `client-template.txt` by hand (see [test/docker/smoke.sh](test/docker/smoke.sh) for a
+minimal working example):
+
+```
+docker run --rm -u root -v ./openvpn:/etc/openvpn ghcr.io/shuricksumy/tunnelward init-pki
+docker run --rm -u root -v ./openvpn:/etc/openvpn --entrypoint openvpn \
+  ghcr.io/shuricksumy/tunnelward --genkey tls-crypt-v2-server /etc/openvpn/tls-crypt-v2.key
+docker compose up -d                # openvpn waits until server.conf exists
+# create the server certificate, e.g. with TW_WEB_API_TOKEN set:
+curl -H "Authorization: Bearer $TW_WEB_API_TOKEN" -d '{"name":"server","kind":"server"}' \
+  http://127.0.0.1:8080/api/v1/certs
+```
+
+### HTTPS
+
+The UI listens on `127.0.0.1:8080`. Put a reverse proxy with TLS in front (Traefik, Caddy,
+nginx) and set `TW_TRUSTED_PROXIES` to its address. `TW_COOKIE_SECURE=false` is only for a
+first local test over plain HTTP.
+
 ## Development
 
 Requires Go 1.24+ and, for the UI, Node 22.

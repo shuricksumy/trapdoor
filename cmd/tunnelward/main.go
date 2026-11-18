@@ -33,6 +33,7 @@ commands:
   init-pki  create a new CA in TW_PKI_DIR (CA name from TW_CA_NAME)
   user add|passwd|del|list [name]
             manage admin users in TW_DB_PATH (password from TW_ADMIN_PASSWORD or stdin)
+  health    <url>  exit 0 if GET <url>/healthz answers 200 (http://... or unix:/path)
   version   print version
 `
 
@@ -58,6 +59,8 @@ func main() {
 		err = runUser(ctx, os.Args[2:])
 	case "version":
 		fmt.Println(version.String())
+	case "health":
+		err = runHealth(ctx, os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:
@@ -78,6 +81,11 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 	l, err := httpx.Listen(cfg.Listen)
 	if err != nil {
 		return err
+	}
+	if path, ok := strings.CutPrefix(cfg.Listen, "unix:"); ok && cfg.SocketGID >= 0 {
+		if err := os.Chown(path, -1, cfg.SocketGID); err != nil {
+			return fmt.Errorf("chown agent socket: %w", err)
+		}
 	}
 	log = log.With("proc", "agent")
 
@@ -237,4 +245,14 @@ func readPassword() (string, error) {
 		return "", fmt.Errorf("read password: %w", err)
 	}
 	return strings.TrimRight(line, "\r\n"), nil
+}
+
+// runHealth is the container health check (no curl in the image needed).
+func runHealth(ctx context.Context, args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: tunnelward health http://127.0.0.1:8080 | unix:/path/to/agent.sock")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return agent.NewClient(args[0], "", 5*time.Second).Health(ctx)
 }

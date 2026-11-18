@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -20,6 +21,9 @@ type Agent struct {
 	Listen string
 	// Token is the shared secret the web process must send. TW_AGENT_TOKEN
 	Token string
+	// SocketGID, when >= 0, becomes the group of the unix socket so a
+	// non-root web container can connect (mode 0660).    TW_AGENT_SOCKET_GID
+	SocketGID int
 	// OpenVPNDir is the OpenVPN config directory.           TW_OPENVPN_DIR
 	OpenVPNDir string
 	// PKIDir is the easyrsa-compatible PKI directory.       TW_PKI_DIR
@@ -71,7 +75,16 @@ var ErrNoToken = errors.New("TW_AGENT_TOKEN must be set")
 // LoadAgent reads agent settings from the environment.
 func LoadAgent() (Agent, error) {
 	openvpnDir := env("TW_OPENVPN_DIR", "/etc/openvpn")
+	gid := -1
+	if v := os.Getenv("TW_AGENT_SOCKET_GID"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return Agent{}, fmt.Errorf("TW_AGENT_SOCKET_GID must be a group number")
+		}
+		gid = n
+	}
 	c := Agent{
+		SocketGID:    gid,
 		Listen:       env("TW_AGENT_LISTEN", "127.0.0.1:9090"),
 		Token:        os.Getenv("TW_AGENT_TOKEN"),
 		OpenVPNDir:   openvpnDir,
