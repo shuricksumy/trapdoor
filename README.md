@@ -63,6 +63,14 @@ Errors are JSON `{"error": "..."}` with 400 / 401 / 404 / 409 / 503.
 | DELETE | `/v1/certs/{name}` | – | 204; revokes and deletes key material, stays in CRL |
 | GET | `/v1/certs/{name}/ovpn` | – | `.ovpn` profile (409 unless the cert is valid) |
 | POST | `/v1/crl` | – | 204; regenerates `crl.pem` |
+| GET | `/v1/sessions` | – | connected clients + server traffic counters |
+| DELETE | `/v1/sessions/{client_id}` | – | 204; disconnects one session |
+| DELETE | `/v1/certs/{name}/sessions` | – | `{"killed":n}`; disconnects all sessions of a name |
+
+Revoke and delete also disconnect the client right away (otherwise OpenVPN would only
+notice at the next renegotiation, up to an hour later). Sessions need OpenVPN's management
+interface: `management 127.0.0.1 2080` in `server.conf` (`TW_OPENVPN_MGMT`, optional
+`TW_OPENVPN_MGMT_PASSWORD` for `pw-file` setups); 502 when it is unreachable.
 
 Try it with a throw-away PKI:
 

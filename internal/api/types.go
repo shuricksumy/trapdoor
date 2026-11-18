@@ -20,6 +20,9 @@ type AgentInfo struct {
 	OpenVPNDir string `json:"openvpn_dir"`
 	PKIDir     string `json:"pki_dir"`
 	PKIReady   bool   `json:"pki_ready"`
+	// OpenVPNVersion is empty when the management interface is unreachable.
+	OpenVPNVersion string `json:"openvpn_version,omitempty"`
+	MgmtError      string `json:"mgmt_error,omitempty"`
 }
 
 // Status is returned by GET /api/v1/status on the web process.
@@ -64,4 +67,32 @@ type IssueCertRequest struct {
 // RenewCertRequest is the body of POST /v1/certs/{name}/renew.
 type RenewCertRequest struct {
 	ValidityDays int `json:"validity_days,omitempty"`
+}
+
+// Session is one connected VPN client.
+type Session struct {
+	ClientID       int64     `json:"client_id"`
+	Name           string    `json:"name"`
+	Username       string    `json:"username,omitempty"`
+	RealAddress    string    `json:"real_address"`
+	VirtualAddress string    `json:"virtual_address,omitempty"`
+	VirtualIPv6    string    `json:"virtual_ipv6,omitempty"`
+	BytesReceived  int64     `json:"bytes_received"`
+	BytesSent      int64     `json:"bytes_sent"`
+	ConnectedSince time.Time `json:"connected_since"`
+	Cipher         string    `json:"cipher,omitempty"`
+}
+
+// Sessions is returned by GET /v1/sessions.
+type Sessions struct {
+	Time     time.Time `json:"time"`
+	Clients  int64     `json:"clients"`
+	BytesIn  int64     `json:"bytes_in"`
+	BytesOut int64     `json:"bytes_out"`
+	Sessions []Session `json:"sessions"`
+}
+
+// Killed is returned by DELETE /v1/certs/{name}/sessions.
+type Killed struct {
+	Killed int `json:"killed"`
 }

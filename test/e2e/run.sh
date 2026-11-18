@@ -24,7 +24,8 @@ fail() { echo "FAIL: $*" >&2; for f in "$WORK"/*.log; do echo "--- $f"; tail -20
 api() { curl -fsS -H "X-Tunnelward-Token: $TOKEN" "$@"; }
 
 export TW_AGENT_TOKEN=$TOKEN TW_AGENT_LISTEN=127.0.0.1:19090 \
-	TW_OPENVPN_DIR=$WORK TW_PKI_DIR=$WORK/pki TW_CRL_COPIES=-
+	TW_OPENVPN_DIR=$WORK TW_PKI_DIR=$WORK/pki TW_CRL_COPIES=- \
+	TW_OPENVPN_MGMT=127.0.0.1:12080
 
 log "init PKI and start agent"
 "$BIN" init-pki 2>/dev/null
@@ -49,7 +50,8 @@ key pki/private/server.key
 dh none
 tls-crypt-v2 tls-crypt-v2.key
 crl-verify pki/crl.pem
-keepalive 10 60
+keepalive 2 6
+management 127.0.0.1 12080
 verb 3
 CONF
 cat >"$WORK/client-template.txt" <<CONF
@@ -87,6 +89,35 @@ log "download alice.ovpn and connect"
 api "$API/v1/certs/alice/ovpn" >"$WORK/alice.ovpn"
 connect "$WORK/alice.ovpn" "$WORK/client1.log" || fail "alice could not connect"
 log "alice connected"
+
+# wait_for <seconds> <command...>: retry until the command succeeds
+wait_for() {
+	local n=$(($1 * 5)); shift
+	for _ in $(seq "$n"); do "$@" && return 0; sleep 0.2; done
+	return 1
+}
+online() { api "$API/v1/sessions" | grep -q "\"name\":\"$1\""; }
+offline() { ! online "$1"; }
+
+log "live session: alice shows up, kick disconnects her"
+openvpn --config "$WORK/alice.ovpn" >"$WORK/live.log" 2>&1 &
+LIVE=$!
+PIDS+=($LIVE)
+wait_for 15 online alice || fail "alice not in /v1/sessions"
+api "$API/v1/info" | grep -q '"openvpn_version":"OpenVPN 2' || fail "no openvpn_version in /v1/info"
+api -X DELETE "$API/v1/certs/alice/sessions" | grep -q '"killed":1' || fail "kick did not kill 1 session"
+wait_for 5 offline alice || fail "alice still online after kick"
+log "alice kicked (her client reconnects on its own after the ping timeout)"
+
+log "revoke while connected: session is dropped and cannot come back"
+wait_for 30 online alice || fail "alice did not reconnect after kick"
+api -X POST "$API/v1/certs/alice/revoke" >/dev/null
+wait_for 5 offline alice || fail "revoked alice still online"
+wait_for 30 grep -q "CRL CHECK FAILED\|certificate revoked" "$WORK/server.log" || fail "server did not reject her reconnect by CRL"
+offline alice || fail "revoked alice came back"
+kill "$LIVE" 2>/dev/null || true
+log "revoked alice disconnected and rejected by CRL"
+api -X POST "$API/v1/certs/alice/unrevoke" >/dev/null
 
 log "revoke alice: connection must be refused"
 api -X POST "$API/v1/certs/alice/revoke" >/dev/null
