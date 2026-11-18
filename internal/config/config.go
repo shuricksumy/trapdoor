@@ -25,6 +25,8 @@ type Agent struct {
 	PKIDir string
 	// MgmtAddr is the OpenVPN management interface address. TW_OPENVPN_MGMT
 	MgmtAddr string
+	// OpenVPNBin is the openvpn binary (tls-crypt-v2 keys). TW_OPENVPN_BIN
+	OpenVPNBin string
 	// CAPassphrase unlocks an encrypted CA key.            TW_CA_PASSPHRASE
 	CAPassphrase string
 	// CRLCopies get a copy of crl.pem after every change
@@ -59,6 +61,7 @@ func LoadAgent() (Agent, error) {
 		OpenVPNDir:   openvpnDir,
 		PKIDir:       env("TW_PKI_DIR", openvpnDir+"/easy-rsa/pki"),
 		MgmtAddr:     env("TW_OPENVPN_MGMT", "127.0.0.1:2080"),
+		OpenVPNBin:   env("TW_OPENVPN_BIN", "openvpn"),
 		CAPassphrase: os.Getenv("TW_CA_PASSPHRASE"),
 		CRLCopies:    list(env("TW_CRL_COPIES", openvpnDir+"/crl.pem")),
 	}

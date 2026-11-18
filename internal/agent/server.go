@@ -2,6 +2,7 @@
 package agent
 
 import (
+	"context"
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/shuricksumy/tunnelward/internal/api"
 	"github.com/shuricksumy/tunnelward/internal/config"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
+	"github.com/shuricksumy/tunnelward/internal/ovpn"
 	"github.com/shuricksumy/tunnelward/internal/pki"
 	"github.com/shuricksumy/tunnelward/internal/version"
 )
@@ -19,12 +21,20 @@ type Server struct {
 	cfg config.Agent
 	log *slog.Logger
 	pki pki.PKI // nil until the PKI is initialized
+	gen Profiles
+}
+
+// Profiles builds client .ovpn files; *ovpn.Generator implements it.
+type Profiles interface {
+	Build(ctx context.Context, name string, b pki.Bundle) ([]byte, error)
+	RemoveClient(name string) error
 }
 
 // New returns an agent server for cfg. p may be nil when no PKI exists yet;
 // certificate endpoints then answer 503.
 func New(cfg config.Agent, log *slog.Logger, p pki.PKI) *Server {
-	return &Server{cfg: cfg, log: log, pki: p}
+	return &Server{cfg: cfg, log: log, pki: p,
+		gen: &ovpn.Generator{Dir: cfg.OpenVPNDir, OpenVPNBin: cfg.OpenVPNBin}}
 }
 
 // Handler returns the agent's HTTP handler.

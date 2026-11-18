@@ -9,6 +9,7 @@ import (
 
 	"github.com/shuricksumy/tunnelward/internal/api"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
+	"github.com/shuricksumy/tunnelward/internal/ovpn"
 	"github.com/shuricksumy/tunnelward/internal/pki"
 )
 
@@ -27,6 +28,7 @@ func (s *Server) registerCertRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/certs/{name}/revoke", s.withPKI(s.handleRevokeCert))
 	mux.HandleFunc("POST /v1/certs/{name}/unrevoke", s.withPKI(s.handleUnrevokeCert))
 	mux.HandleFunc("POST /v1/certs/{name}/renew", s.withPKI(s.handleRenewCert))
+	mux.HandleFunc("GET /v1/certs/{name}/ovpn", s.withPKI(s.handleProfile))
 	mux.HandleFunc("POST /v1/crl", s.withPKI(s.handleGenCRL))
 }
 
@@ -137,8 +139,29 @@ func (s *Server) handleRemoveCert(w http.ResponseWriter, r *http.Request) {
 		s.pkiError(w, err)
 		return
 	}
+	if err := s.gen.RemoveClient(name); err != nil {
+		s.log.Warn("remove client files", "name", name, "err", err)
+	}
 	s.log.Info("certificate removed", "name", name)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	b, err := s.pki.Bundle(r.Context(), name)
+	if err != nil {
+		s.pkiError(w, err)
+		return
+	}
+	profile, err := s.gen.Build(r.Context(), name, b)
+	if err != nil {
+		s.pkiError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-openvpn-profile")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`.ovpn"`)
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(profile)
 }
 
 func (s *Server) handleGenCRL(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +191,7 @@ func (s *Server) pkiError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	case errors.Is(err, pki.ErrAlreadyExists), errors.Is(err, pki.ErrNotValid), errors.Is(err, pki.ErrNotRevoked):
 		status = http.StatusConflict
-	case errors.Is(err, pki.ErrNotInitialized):
+	case errors.Is(err, pki.ErrNotInitialized), errors.Is(err, ovpn.ErrNoTemplate), errors.Is(err, ovpn.ErrNoServerConf):
 		status = http.StatusServiceUnavailable
 	}
 	if status == http.StatusInternalServerError {

@@ -10,7 +10,9 @@
   - [x] Renew — including expired certs
   - [x] Remove cert completely
   - [x] Compatibility tests against real easyrsa 3.2 in CI
-- [ ] `.ovpn` generation from templates (tls-crypt / tls-auth / tls-crypt-v2), QR code
+- [x] `.ovpn` generation from templates (tls-crypt / tls-auth / tls-crypt-v2)
+- [x] End-to-end test with a real OpenVPN server and client in CI
+- [ ] QR code for `.ovpn` (web UI)
 - [ ] Live sessions via OpenVPN management interface: list, traffic, kick
 - [ ] Client 2FA: TOTP and/or static password, `tunnelward auth-verify` for OpenVPN
 - [ ] Web: admin login, SQLite + migrations

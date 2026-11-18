@@ -78,6 +78,13 @@ var (
 	ErrNotInitialized = errors.New("PKI is not initialized")
 )
 
+// Bundle holds the PEM files a client config needs.
+type Bundle struct {
+	CA   []byte // ca.crt
+	Cert []byte // client certificate (PEM only, no text dump)
+	Key  []byte // private key, encrypted if it was issued with a passphrase
+}
+
 // PKI is the set of operations the agent performs on the certificate authority.
 type PKI interface {
 	// List returns every index entry, oldest first.
@@ -95,6 +102,9 @@ type PKI interface {
 	Remove(ctx context.Context, name string) error
 	// GenCRL regenerates crl.pem.
 	GenCRL(ctx context.Context) error
+	// Bundle returns CA, certificate and key of the current certificate for
+	// name. It fails with ErrNotValid unless that certificate is valid.
+	Bundle(ctx context.Context, name string) (Bundle, error)
 }
 
 var validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}$`)
