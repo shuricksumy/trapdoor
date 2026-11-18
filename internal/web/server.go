@@ -44,6 +44,9 @@ type AgentClient interface {
 	ConfigBackup(ctx context.Context, name string) (string, error)
 	SetupStatus(ctx context.Context) (api.SetupStatus, error)
 	Setup(ctx context.Context, req api.SetupRequest) (api.SetupResult, error)
+	Firewall(ctx context.Context) (api.Firewall, error)
+	SetFirewall(ctx context.Context, p api.FirewallPolicy) (api.Firewall, error)
+	AssignAddresses(ctx context.Context, names []string) (api.Firewall, error)
 }
 
 // Deps are the web server's dependencies.

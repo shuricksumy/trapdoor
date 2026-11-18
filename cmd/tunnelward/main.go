@@ -107,7 +107,9 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 	}
 
 	log.Info("listening", "addr", cfg.Listen, "version", version.Version)
-	return httpx.Serve(ctx, l, agent.New(cfg, log, p).Handler())
+	srv := agent.New(cfg, log, p)
+	go srv.ApplyFirewallAtStart(ctx)
+	return httpx.Serve(ctx, l, srv.Handler())
 }
 
 func runWeb(ctx context.Context, log *slog.Logger) error {

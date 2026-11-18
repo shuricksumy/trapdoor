@@ -43,6 +43,7 @@ services:
       TW_AGENT_SOCKET_GID: "10001" # lets the non-root web container connect
       TW_OPENVPN_MGMT: ${TW_OPENVPN_MGMT:-127.0.0.1:2080}
       TW_OPENVPN_RESTART: SIGTERM # the openvpn service starts OpenVPN again
+      TW_FIREWALL: file # access rules are applied by the openvpn service
       TW_OPENVPN_MGMT_PASSWORD: ${TW_OPENVPN_MGMT_PASSWORD:-}
       # the setup keeps OpenVPN on the published port
       TW_SETUP_PORT: "1194"

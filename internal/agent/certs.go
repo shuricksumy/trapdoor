@@ -148,6 +148,7 @@ func (s *Server) handleRemoveCert(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Info("certificate removed", "name", name)
 	s.disconnect(r.Context(), name)
+	s.refreshFirewall(r.Context())
 	w.WriteHeader(http.StatusNoContent)
 }
 

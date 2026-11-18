@@ -52,6 +52,11 @@ type Agent struct {
 	SetupPort       int
 	SetupProto      string
 	SetupPublicPort int
+	// Firewall: how access rules are applied: direct (iptables in this
+	// process), file (the OpenVPN container applies them) or off. TW_FIREWALL
+	Firewall string
+	// IPTablesDir holds iptables/iptables-restore if not in PATH. TW_IPTABLES_DIR
+	IPTablesDir string
 }
 
 // Web is the configuration of the web/API process.
@@ -126,6 +131,11 @@ func LoadAgent() (Agent, error) {
 			*v.dst = n
 		}
 	}
+	c.Firewall = env("TW_FIREWALL", "direct")
+	if c.Firewall != "direct" && c.Firewall != "file" && c.Firewall != "off" {
+		return c, fmt.Errorf("TW_FIREWALL must be direct, file or off")
+	}
+	c.IPTablesDir = os.Getenv("TW_IPTABLES_DIR")
 	c.SetupProto = os.Getenv("TW_SETUP_PROTO")
 	if c.SetupProto != "" && c.SetupProto != "udp" && c.SetupProto != "tcp" {
 		return c, fmt.Errorf("TW_SETUP_PROTO must be udp or tcp")

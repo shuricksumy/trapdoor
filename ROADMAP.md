@@ -33,7 +33,7 @@
 - [x] Routing: per-client routes (`push route`), LAN behind a client (`iroute`), static client IPs, full/split tunnel
 - [ ] Named networks reusable across clients (openvpn-ui "routes")
 - [x] Certificate expiry warnings (clients, server, CA; UI + daily log) and bulk renew
-- [ ] Firewall rules managed by the agent
+- [x] Access rules (firewall) per client or for all: networks, ports, allow/block, default policy; iptables chain applied by the agent or the OpenVPN container
 
 ## v3 — extras
 

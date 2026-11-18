@@ -125,6 +125,16 @@ grep -q "running again" "$WORK/rollback.json" || fail "OpenVPN not back after ro
 ! sudo grep -q "203.0.113.99" "$WORK/openvpn/server.conf" || fail "bad config still in place"
 grep -q "9.9.9.9" "$WORK/openvpn/server.conf" || fail "rolled back to the wrong version"
 
+log "access rules: written by the agent, applied by the openvpn container (TW_FIREWALL=file)"
+api -X PUT -H "Content-Type: application/json" -m 30 \
+	-d '{"enabled":true,"default":"deny","rules":[{"to":"10.77.0.1","proto":"icmp","action":"allow"}]}' \
+	"$WEB/api/v1/firewall" >"$WORK/fw.json" || fail "save access rules"
+grep -q '"applied":true' "$WORK/fw.json" || fail "rules not applied: $(cat "$WORK/fw.json")"
+dc exec -T openvpn iptables -S TW-FWD | grep -q -- "-d 10.77.0.1/32 -p icmp -j ACCEPT" || fail "rule not in the container"
+dc exec -T openvpn iptables -C FORWARD -i tun+ -j TW-FWD || fail "no FORWARD jump"
+dc logs openvpn | grep -q "access rules applied" || fail "no apply log"
+! dc exec -T agent iptables -N TW-PROBE >/dev/null 2>&1 || fail "agent container can change the firewall"
+
 log "web container is locked down"
 [[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' twsmoke-web-1) == true ]] || fail "web rootfs not read-only"
 [[ $(dc exec -T web id -u) == 10001 ]] || fail "web not running as uid 10001"
