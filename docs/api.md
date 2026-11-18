@@ -40,6 +40,12 @@ server). Below, `…` stands for that prefix.
 | GET, PUT | `…/firewall` | access rules |
 | POST | `…/firewall/addresses` | `{"names":[…]}` → fixed VPN addresses for these clients |
 
+| POST | `/api/v1/servers` | create a WireGuard server (body as the agent's `POST /v1/servers`) |
+| DELETE | `/api/v1/servers/{server}` | remove a WireGuard server and its interface |
+| GET, POST | `…/peers` | WireGuard clients: list / add `{"name","address"?,"lan"?,"no_psk"?}` |
+| GET, PUT, DELETE | `…/peers/{name}` | get / `{"disabled"?,"lan"?}` / delete |
+| GET | `…/peers/{name}/conf` | download the client's WireGuard configuration |
+
 Calls are passed to the agent (404 for an unknown server); every change is logged as
 `audit server=... action=... target=... by=<user>`.
 
