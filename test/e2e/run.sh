@@ -15,6 +15,8 @@ PIDS=()
 cleanup() {
 	for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null || true; done
 	wait 2>/dev/null || true
+	ip netns exec twc ip link del tdwc 2>/dev/null || true
+	ip link del tdwg0 2>/dev/null || true
 	ip netns del twc 2>/dev/null || true
 	ip link del twh 2>/dev/null || true
 	for c in INPUT FORWARD; do iptables -D "$c" -i tun+ -j TD-FWD 2>/dev/null || true; done
@@ -29,7 +31,7 @@ api() { curl -fsS -H "X-Trapdoor-Token: $TOKEN" "$@"; }
 
 export TD_AGENT_TOKEN=$TOKEN TD_AGENT_LISTEN=127.0.0.1:19090 \
 	TD_OPENVPN_DIR=$WORK TD_PKI_DIR=$WORK/pki TD_CRL_COPIES=- \
-	TD_OPENVPN_MGMT=127.0.0.1:12080 \
+	TD_OPENVPN_MGMT=127.0.0.1:12080 TD_WIREGUARD=direct TD_WIREGUARD_DIR=$WORK/wg \
 	TD_WEB_LISTEN=127.0.0.1:18080 TD_AGENT_URL=$API TD_DB_PATH=$WORK/td.db \
 	TD_WEB_API_TOKEN=e2e-web-token TD_POLL_INTERVAL=5s TD_TZ=UTC TD_COOKIE_SECURE=false
 WEB=http://127.0.0.1:18080
@@ -331,5 +333,47 @@ print("    alice:", alice)
 PY
 webapi "$WEB/api/v1/servers/openvpn/history/sessions?preset=today&name=alice" | grep -q '"disconnected_at"' || fail "no closed session in history"
 webapi "$WEB/api/v1/servers/openvpn/stats.csv?preset=today" | grep -q "^[0-9-]*,alice," || fail "csv has no alice row"
+
+if command -v wg >/dev/null && command -v wg-quick >/dev/null; then
+	log "WireGuard: server created through the agent, a client in the namespace connects"
+	api -d '{"type":"wireguard","id":"tdwg0","name":"WireGuard e2e","port":51830,"public_host":"10.200.0.1","subnet":"10.98.0.0/24","allowed_ips":["10.98.0.0/24"]}' \
+		"$API/v1/servers" >"$WORK/wg-create.json" || fail "create WireGuard server: $(cat "$WORK/wg-create.json")"
+	grep -q '"running":true' "$WORK/wg-create.json" || fail "WireGuard interface not up: $(cat "$WORK/wg-create.json")"
+	ip link show tdwg0 >/dev/null || fail "no tdwg0 interface"
+	api -d '{"name":"wgalice"}' "$API/v1/servers/tdwg0/peers" >/dev/null || fail "add peer"
+	api "$API/v1/servers/tdwg0/peers/wgalice/conf" >"$WORK/tdwc.conf"
+	chmod 600 "$WORK/tdwc.conf"
+	ip netns exec twc wg-quick up "$WORK/tdwc.conf" >"$WORK/wg-client.log" 2>&1 || fail "client wg-quick up"
+	wgping() { ip netns exec twc ping -c 1 -W 1 10.98.0.1 >/dev/null 2>&1; }
+	wait_for 10 wgping || fail "no ping through the WireGuard tunnel"
+	ip netns exec twc ping -c 20 -i 0.2 -s 1000 10.98.0.1 >/dev/null || true
+	wgonline() { api "$API/v1/servers/tdwg0/sessions" | grep -q '"name":"wgalice"'; }
+	wait_for 10 wgonline || fail "wgalice not in live sessions: $(api "$API/v1/servers/tdwg0/sessions")"
+	webapi "$WEB/api/v1/status" | grep -q '"id":"tdwg0"' || fail "web status does not list tdwg0"
+	webapi "$WEB/api/v1/servers/tdwg0/sessions" | grep -q '"name":"wgalice"' || fail "web live sessions lack wgalice"
+	log "wgalice connected and shows up live; disable cuts her off without restarting the interface"
+	port_before=$(wg show tdwg0 listen-port)
+	api -X PUT -d '{"disabled":true}' "$API/v1/servers/tdwg0/peers/wgalice" >/dev/null || fail "disable"
+	! wg show tdwg0 peers | grep -q . || fail "disabled peer still on the interface"
+	! wgping || fail "disabled client still gets through"
+	api -X PUT -d '{"disabled":false}' "$API/v1/servers/tdwg0/peers/wgalice" >/dev/null
+	wait_for 30 wgping || fail "enabled client cannot get through" # its next handshake, up to ~15s
+	[[ $(wg show tdwg0 listen-port) == "$port_before" ]] || fail "interface was restarted"
+	sleep 6
+	webapi "$WEB/api/v1/servers/tdwg0/stats?preset=today" >"$WORK/wg-stats.json"
+	python3 - "$WORK/wg-stats.json" <<'PY' || fail "WireGuard stats: $(cat "$WORK/wg-stats.json")"
+import json, sys
+r = json.load(open(sys.argv[1]))
+a = next(u for u in r["users"] if u["name"] == "wgalice")
+assert a["upload"] > 20000 and a["download"] > 20000, a
+print("    wgalice:", a)
+PY
+	ip netns exec twc wg-quick down "$WORK/tdwc.conf" >/dev/null 2>&1 || true
+	api -X DELETE "$API/v1/servers/tdwg0" || fail "remove WireGuard server"
+	! ip link show tdwg0 >/dev/null 2>&1 || fail "tdwg0 still there after remove"
+	log "traffic recorded per server; removing the server takes the interface down"
+else
+	log "WireGuard tools not installed: skipping the WireGuard test"
+fi
 
 log "PASS"

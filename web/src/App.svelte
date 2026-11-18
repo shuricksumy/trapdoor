@@ -48,7 +48,8 @@
     api('/status')
       .then((st) => {
         if (st.expiry_warn_days) settings.expiryWarnDays = st.expiry_warn_days;
-        setServers(st.agent?.servers ?? []);
+        // WireGuard servers get their pages with the WireGuard UI.
+        setServers((st.agent?.servers ?? []).filter((s) => s.type === 'openvpn'));
       })
       .catch(() => {});
   });

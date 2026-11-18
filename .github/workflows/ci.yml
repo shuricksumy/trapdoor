@@ -77,7 +77,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: Install openvpn and oathtool
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq openvpn oathtool
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq openvpn oathtool wireguard-tools
       - name: Tests that need openvpn / oathtool
         run: |
           go test -count=1 -v -run TLSCryptV2 ./internal/ovpn/

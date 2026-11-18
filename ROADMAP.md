@@ -56,10 +56,15 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
   - [x] API per server (`/v1/servers/{id}/…`, `/api/v1/servers/{id}/…`), history keyed by
         server, existing setup is server `openvpn`, switcher shown when there are several
 - [ ] Agent backends behind one interface (create / remove client, sessions, traffic, apply config)
+  - [x] Host with OpenVPN and WireGuard servers; WireGuard servers created / removed at runtime
 - [ ] **WireGuard** server: setup, `wg0.conf` written by the agent and applied live with
       `wg syncconf` (no disconnects), peers with key pairs and addresses, AllowedIPs for routing
       and site-to-site, optional preshared key, `.conf` download + QR code, live status and traffic
       from `wg show dump` (connected = recent handshake), remove = revoke (no certificates)
+  - [x] Agent: create / remove servers, clients (keys, PSK, next free address, LANs, disable),
+        `.conf` download, live state and sessions for history, `direct` / `file` modes,
+        e2e with a real client
+  - [ ] Web API and UI (clients page, QR code, create-server form)
 - [ ] **AmneziaWG** server: the WireGuard backend with `awg` tools and the obfuscation settings
       (junk packets, padding, header values; check the current Amnezia spec), matching client
       configs for the Amnezia app; kernel module or `amneziawg-go` shipped in the image
