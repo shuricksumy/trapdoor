@@ -89,6 +89,30 @@ control-channel key matching `server.conf` (`tls-crypt`, `tls-auth` with `key-di
 or a per-client `tls-crypt-v2` key). tls-crypt-v2 client keys live in `keys-v2/<name>.key`;
 existing ones are reused, new ones are created with `openvpn --genkey` (`TW_OPENVPN_BIN`).
 
+## Web API
+
+The web process records session history (polling the agent every `TW_POLL_INTERVAL`,
+default 30s) into SQLite (`TW_DB_PATH`) and serves reports. Until admin login exists,
+every `/api/v1/*` call needs `Authorization: Bearer <TW_WEB_API_TOKEN>`; without that
+variable the API stays disabled (401).
+
+| Method | Path | Result |
+|---|---|---|
+| GET | `/api/v1/status` | web version + agent reachability |
+| GET | `/api/v1/sessions` | live sessions (from the agent) |
+| GET | `/api/v1/stats` | traffic report (below) |
+| GET | `/api/v1/stats.csv` | same, as CSV: period, name, upload, download, estimated |
+| GET | `/api/v1/history/sessions` | recorded sessions, newest first (`limit`, default 100) |
+
+Report parameters: `preset=today|this_month|last_month|last_30_days|this_year|last_year`
+**or** `from=YYYY-MM-DD&to=YYYY-MM-DD` (inclusive; default this month), `group=day|month|year`,
+`name=<user>` (omit for the whole server). Days/months/years follow `TW_TZ` (IANA name).
+The report has totals, a gap-free series per period, and per-user totals with share,
+session count and online time. Upload/download are from the user's point of view.
+
+Traffic is stored per user per hour. If polls were missed (web down, agent unreachable) the
+traffic of the gap is spread over its hours and flagged `estimated` instead of one spike.
+
 ## Tests
 
 ```

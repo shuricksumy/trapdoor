@@ -9,11 +9,14 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	_ "time/tzdata" // TW_TZ works in minimal containers without zoneinfo
 
 	"github.com/shuricksumy/tunnelward/internal/agent"
 	"github.com/shuricksumy/tunnelward/internal/config"
+	"github.com/shuricksumy/tunnelward/internal/history"
 	"github.com/shuricksumy/tunnelward/internal/httpx"
 	"github.com/shuricksumy/tunnelward/internal/pki"
+	"github.com/shuricksumy/tunnelward/internal/store"
 	"github.com/shuricksumy/tunnelward/internal/version"
 	"github.com/shuricksumy/tunnelward/internal/web"
 )
@@ -97,8 +100,27 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 	}
 	log = log.With("proc", "web")
 	client := agent.NewClient(cfg.AgentURL, cfg.AgentToken, cfg.AgentTimeout)
-	log.Info("listening", "addr", cfg.Listen, "agent", cfg.AgentURL, "version", version.Version)
-	return httpx.Serve(ctx, l, web.New(client, log).Handler())
+
+	db, err := store.Open(ctx, cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+
+	const agentID = "default" // multi-server later
+	col := &history.Collector{DB: db, Source: client, Agent: agentID, Interval: cfg.PollInterval, Log: log}
+	go col.Run(ctx)
+
+	if cfg.APIToken == "" {
+		log.Warn("TW_WEB_API_TOKEN not set: /api/v1 is disabled")
+	}
+	srv := web.New(web.Deps{
+		Agent: client, Stats: &history.Stats{DB: db, Agent: agentID},
+		APIToken: cfg.APIToken, Location: cfg.Location, Log: log,
+	})
+	log.Info("listening", "addr", cfg.Listen, "agent", cfg.AgentURL, "db", cfg.DBPath,
+		"tz", cfg.Location.String(), "version", version.Version)
+	return httpx.Serve(ctx, l, srv.Handler())
 }
 
 func runInitPKI(log *slog.Logger) error {

@@ -25,13 +25,23 @@ api() { curl -fsS -H "X-Tunnelward-Token: $TOKEN" "$@"; }
 
 export TW_AGENT_TOKEN=$TOKEN TW_AGENT_LISTEN=127.0.0.1:19090 \
 	TW_OPENVPN_DIR=$WORK TW_PKI_DIR=$WORK/pki TW_CRL_COPIES=- \
-	TW_OPENVPN_MGMT=127.0.0.1:12080
+	TW_OPENVPN_MGMT=127.0.0.1:12080 \
+	TW_WEB_LISTEN=127.0.0.1:18080 TW_AGENT_URL=$API TW_DB_PATH=$WORK/tw.db \
+	TW_WEB_API_TOKEN=e2e-web-token TW_POLL_INTERVAL=5s TW_TZ=UTC
+WEB=http://127.0.0.1:18080
+webapi() { curl -fsS -H "Authorization: Bearer e2e-web-token" "$@"; }
 
 log "init PKI and start agent"
 "$BIN" init-pki 2>/dev/null
 "$BIN" agent >"$WORK/agent.log" 2>&1 &
 PIDS+=($!)
 for _ in $(seq 50); do curl -fs "$API/healthz" >/dev/null 2>&1 && break; sleep 0.1; done
+
+log "start web (records session history every 5s)"
+"$BIN" web >"$WORK/web.log" 2>&1 &
+PIDS+=($!)
+for _ in $(seq 50); do curl -fs "$WEB/healthz" >/dev/null 2>&1 && break; sleep 0.1; done
+curl -s -o /dev/null -w "%{http_code}" "$WEB/api/v1/stats" | grep -q 401 || fail "web API open without token"
 
 log "issue server and client certificates"
 api -d '{"name":"server","kind":"server"}' "$API/v1/certs" >/dev/null
@@ -104,6 +114,8 @@ openvpn --config "$WORK/alice.ovpn" >"$WORK/live.log" 2>&1 &
 LIVE=$!
 PIDS+=($LIVE)
 wait_for 15 online alice || fail "alice not in /v1/sessions"
+ping -c 3 -i 0.3 -W 1 10.99.0.1 >/dev/null 2>&1 || true # some traffic through the tunnel
+sleep 6 # let the web process record at least one poll
 api "$API/v1/info" | grep -q '"openvpn_version":"OpenVPN 2' || fail "no openvpn_version in /v1/info"
 api -X DELETE "$API/v1/certs/alice/sessions" | grep -q '"killed":1' || fail "kick did not kill 1 session"
 wait_for 5 offline alice || fail "alice still online after kick"
@@ -143,5 +155,21 @@ grep -q "BEGIN ENCRYPTED PRIVATE KEY" "$WORK/bob.ovpn" || fail "bob key not encr
 echo bobpass1 >"$WORK/bob.pass"
 echo "askpass $WORK/bob.pass" >>"$WORK/bob.ovpn"
 connect "$WORK/bob.ovpn" "$WORK/client6.log" || fail "bob could not connect with passphrase"
+
+log "session history: alice's sessions and traffic were recorded"
+sleep 6
+webapi "$WEB/api/v1/stats?preset=today" >"$WORK/stats.json"
+python3 - "$WORK/stats.json" <<'PY' || fail "stats: $(cat "$WORK/stats.json")"
+import json, sys
+r = json.load(open(sys.argv[1]))
+alice = next(u for u in r["users"] if u["name"] == "alice")
+assert alice["sessions"] >= 2, alice
+assert alice["upload"] > 0 and alice["download"] > 0, alice
+assert alice["online_seconds"] > 0, alice
+assert r["series"][0]["upload"] == r["total"]["upload"], r
+print("    alice:", alice)
+PY
+webapi "$WEB/api/v1/history/sessions?preset=today&name=alice" | grep -q '"disconnected_at"' || fail "no closed session in history"
+webapi "$WEB/api/v1/stats.csv?preset=today" | grep -q "^[0-9-]*,alice," || fail "csv has no alice row"
 
 log "PASS"

@@ -2,49 +2,183 @@ package web
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/shuricksumy/tunnelward/internal/api"
+	"github.com/shuricksumy/tunnelward/internal/history"
+	"github.com/shuricksumy/tunnelward/internal/store"
 )
 
 type fakeAgent struct {
-	info api.AgentInfo
-	err  error
+	info     api.AgentInfo
+	err      error
+	sessions []api.Session
 }
 
-func (f fakeAgent) Info(context.Context) (api.AgentInfo, error) { return f.info, f.err }
+func (f *fakeAgent) Info(context.Context) (api.AgentInfo, error) { return f.info, f.err }
+func (f *fakeAgent) Sessions(context.Context) (api.Sessions, error) {
+	return api.Sessions{Sessions: f.sessions}, f.err
+}
 
-func getStatus(t *testing.T, a AgentClient) api.Status {
+const token = "test-token-0123456789"
+
+var now = time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)
+
+type testEnv struct {
+	t     *testing.T
+	h     http.Handler
+	agent *fakeAgent
+	col   *history.Collector
+	clock time.Time
+}
+
+func newTestEnv(t *testing.T, apiToken string) *testEnv {
 	t.Helper()
-	h := New(a, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/status", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status code = %d", rec.Code)
-	}
-	var st api.Status
-	if err := json.NewDecoder(rec.Body).Decode(&st); err != nil {
+	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "tw.db"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	return st
+	t.Cleanup(func() { _ = db.Close() })
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	e := &testEnv{t: t, agent: &fakeAgent{info: api.AgentInfo{Hostname: "vpn1"}}, clock: now}
+	e.col = &history.Collector{DB: db, Source: e.agent, Agent: "default", Log: log,
+		Now: func() time.Time { return e.clock }}
+	e.h = New(Deps{Agent: e.agent, Stats: &history.Stats{DB: db, Agent: "default"},
+		APIToken: apiToken, Location: time.UTC, Log: log, Now: func() time.Time { return now }}).Handler()
+	return e
 }
 
-func TestStatusAgentOK(t *testing.T) {
-	st := getStatus(t, fakeAgent{info: api.AgentInfo{Hostname: "vpn1"}})
-	if !st.AgentOK || st.Agent == nil || st.Agent.Hostname != "vpn1" {
-		t.Fatalf("unexpected status: %+v", st)
+func (e *testEnv) get(path, tok string) *httptest.ResponseRecorder {
+	e.t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	if tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
+	rec := httptest.NewRecorder()
+	e.h.ServeHTTP(rec, req)
+	return rec
+}
+
+func (e *testEnv) poll(at time.Time, sessions ...api.Session) {
+	e.t.Helper()
+	e.clock = at
+	e.agent.sessions = sessions
+	if err := e.col.Poll(context.Background()); err != nil {
+		e.t.Fatal(err)
 	}
 }
 
-func TestStatusAgentDown(t *testing.T) {
-	st := getStatus(t, fakeAgent{err: errors.New("connection refused")})
+func decode[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
+	t.Helper()
+	var v T
+	if err := json.NewDecoder(rec.Body).Decode(&v); err != nil {
+		t.Fatalf("decode %s: %v", rec.Body.String(), err)
+	}
+	return v
+}
+
+func TestTokenRequired(t *testing.T) {
+	e := newTestEnv(t, token)
+	if rec := e.get("/healthz", ""); rec.Code != http.StatusOK {
+		t.Errorf("healthz = %d", rec.Code)
+	}
+	for _, p := range []string{"/api/v1/status", "/api/v1/stats", "/api/v1/stats.csv", "/api/v1/history/sessions", "/api/v1/sessions"} {
+		for _, tok := range []string{"", "wrong"} {
+			if rec := e.get(p, tok); rec.Code != http.StatusUnauthorized {
+				t.Errorf("%s with %q: %d, want 401", p, tok, rec.Code)
+			}
+		}
+	}
+	if rec := e.get("/api/v1/status", token); rec.Code != http.StatusOK {
+		t.Errorf("status with token = %d", rec.Code)
+	}
+
+	off := newTestEnv(t, "")
+	rec := off.get("/api/v1/status", "")
+	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "TW_WEB_API_TOKEN") {
+		t.Errorf("no token configured: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStatus(t *testing.T) {
+	e := newTestEnv(t, token)
+	st := decode[api.Status](t, e.get("/api/v1/status", token))
+	if !st.AgentOK || st.Agent.Hostname != "vpn1" {
+		t.Errorf("status = %+v", st)
+	}
+	e.agent.err = errors.New("connection refused")
+	st = decode[api.Status](t, e.get("/api/v1/status", token))
 	if st.AgentOK || st.AgentError == "" {
-		t.Fatalf("unexpected status: %+v", st)
+		t.Errorf("agent down: %+v", st)
+	}
+	if rec := e.get("/api/v1/sessions", token); rec.Code != http.StatusBadGateway {
+		t.Errorf("live sessions with agent down = %d, want 502", rec.Code)
+	}
+}
+
+func TestStatsEndpoints(t *testing.T) {
+	e := newTestEnv(t, token)
+	day := time.Date(2026, 11, 3, 8, 0, 0, 0, time.UTC)
+	s := func(in, out int64) api.Session {
+		return api.Session{ClientID: 1, Name: "alice", RealAddress: "1.2.3.4:1", ConnectedSince: day, BytesReceived: in, BytesSent: out}
+	}
+	e.poll(day, s(0, 0))
+	e.poll(day.Add(30*time.Second), s(1000, 5000))
+	e.poll(day.Add(time.Minute))
+
+	// Default range = this month (now is 2026-11-18).
+	rep := decode[history.Report](t, e.get("/api/v1/stats", token))
+	if rep.From != "2026-11-01" || rep.To != "2026-11-18" || rep.Total.Upload != 1000 || rep.Total.Download != 5000 {
+		t.Errorf("default report = %+v", rep.Total)
+	}
+	if len(rep.Users) != 1 || rep.Users[0].Name != "alice" || rep.Users[0].Sessions != 1 {
+		t.Errorf("users = %+v", rep.Users)
+	}
+
+	rep = decode[history.Report](t, e.get("/api/v1/stats?preset=this_year&group=month&name=alice", token))
+	if len(rep.Series) != 11 || rep.Series[10].Period != "2026-11" || rep.Series[10].Download != 5000 {
+		t.Errorf("monthly = %+v", rep.Series)
+	}
+	rep = decode[history.Report](t, e.get("/api/v1/stats?from=2026-10-01&to=2026-10-31", token))
+	if rep.Total.Upload != 0 || len(rep.Series) != 31 {
+		t.Errorf("october = %+v (%d points)", rep.Total, len(rep.Series))
+	}
+
+	for _, bad := range []string{"?from=2026-11-01", "?from=x&to=y", "?preset=forever", "?group=week",
+		"?from=2026-11-05&to=2026-11-01", "?name=../x"} {
+		if rec := e.get("/api/v1/stats"+bad, token); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d, want 400", bad, rec.Code)
+		}
+	}
+
+	rec := e.get("/api/v1/stats.csv?from=2026-11-01&to=2026-11-30", token)
+	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "tunnelward-2026-11-01_2026-11-30.csv") {
+		t.Errorf("Content-Disposition = %q", cd)
+	}
+	records, err := csv.NewReader(rec.Body).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{
+		{"period", "name", "upload_bytes", "download_bytes", "estimated"},
+		{"2026-11-03", "alice", "1000", "5000", "false"},
+	}
+	if len(records) != 2 || strings.Join(records[1], ",") != strings.Join(want[1], ",") {
+		t.Errorf("csv = %v", records)
+	}
+
+	list := decode[[]history.Session](t, e.get("/api/v1/history/sessions?preset=this_month&name=alice", token))
+	if len(list) != 1 || list[0].Upload != 1000 || list[0].DurationSec != 30 || list[0].DisconnectedAt == nil {
+		t.Errorf("history sessions = %+v", list)
 	}
 }
