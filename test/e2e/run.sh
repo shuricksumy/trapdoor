@@ -362,14 +362,7 @@ if command -v wg >/dev/null && command -v wg-quick >/dev/null; then
 	wait_for 10 wgonline || fail "wgalice not in live sessions: $(api "$API/v1/servers/tdwg0/sessions")"
 	webapi "$WEB/api/v1/status" | grep -q '"id":"tdwg0"' || fail "web status does not list tdwg0"
 	webapi "$WEB/api/v1/servers/tdwg0/sessions" | grep -q '"name":"wgalice"' || fail "web live sessions lack wgalice"
-	log "wgalice connected and shows up live; disable cuts her off without restarting the interface"
-	port_before=$(wg show tdwg0 listen-port)
-	api -X PUT -d '{"disabled":true}' "$API/v1/servers/tdwg0/peers/wgalice" >/dev/null || fail "disable"
-	! wg show tdwg0 peers | grep -q . || fail "disabled peer still on the interface"
-	! wgping || fail "disabled client still gets through"
-	api -X PUT -d '{"disabled":false}' "$API/v1/servers/tdwg0/peers/wgalice" >/dev/null
-	wait_for 30 wgping || fail "enabled client cannot get through" # its next handshake, up to ~15s
-	[[ $(wg show tdwg0 listen-port) == "$port_before" ]] || fail "interface was restarted"
+	# The history polls every 5s; let it record the traffic before her session ends.
 	sleep 6
 	webapi "$WEB/api/v1/servers/tdwg0/stats?preset=today" >"$WORK/wg-stats.json"
 	python3 - "$WORK/wg-stats.json" <<'PY' || fail "WireGuard stats: $(cat "$WORK/wg-stats.json")"
@@ -379,6 +372,14 @@ a = next(u for u in r["users"] if u["name"] == "wgalice")
 assert a["upload"] > 20000 and a["download"] > 20000, a
 print("    wgalice:", a)
 PY
+	log "wgalice connected and shows up live; disable cuts her off without restarting the interface"
+	port_before=$(wg show tdwg0 listen-port)
+	api -X PUT -d '{"disabled":true}' "$API/v1/servers/tdwg0/peers/wgalice" >/dev/null || fail "disable"
+	! wg show tdwg0 peers | grep -q . || fail "disabled peer still on the interface"
+	! wgping || fail "disabled client still gets through"
+	api -X PUT -d '{"disabled":false}' "$API/v1/servers/tdwg0/peers/wgalice" >/dev/null
+	wait_for 30 wgping || fail "enabled client cannot get through" # its next handshake, up to ~15s
+	[[ $(wg show tdwg0 listen-port) == "$port_before" ]] || fail "interface was restarted"
 	ip netns exec twc wg-quick down /etc/wireguard/tdwc.conf >/dev/null 2>&1 || true
 	api -X DELETE "$API/v1/servers/tdwg0" || fail "remove WireGuard server"
 	! ip link show tdwg0 >/dev/null 2>&1 || fail "tdwg0 still there after remove"
