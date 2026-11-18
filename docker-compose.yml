@@ -45,6 +45,7 @@ services:
       TD_OPENVPN_MGMT: ${TD_OPENVPN_MGMT:-127.0.0.1:2080}
       TD_OPENVPN_RESTART: SIGTERM # the openvpn service starts OpenVPN again
       TD_FIREWALL: file # access rules are applied by the openvpn service
+      TD_WIREGUARD: "off" # WireGuard in Docker comes with the vpn container
       TD_OPENVPN_MGMT_PASSWORD: ${TD_OPENVPN_MGMT_PASSWORD:-}
       # the setup keeps OpenVPN on the published port
       TD_SETUP_PORT: "1194"

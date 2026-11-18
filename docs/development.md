@@ -15,7 +15,7 @@ UI development with hot reload: run `trapdoor web` on :8080, then `cd web && npm
 Run locally (two terminals), with a throw-away directory:
 
 ```
-export TD_AGENT_TOKEN=dev TD_OPENVPN_DIR=/tmp/tw TD_CRL_COPIES=- TD_FIREWALL=off
+export TD_AGENT_TOKEN=dev TD_OPENVPN_DIR=/tmp/td TD_CRL_COPIES=- TD_FIREWALL=off
 ./bin/trapdoor agent
 ./bin/trapdoor web       # second terminal; then: trapdoor user add admin
 ```

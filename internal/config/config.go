@@ -57,6 +57,15 @@ type Agent struct {
 	Firewall string
 	// IPTablesDir holds iptables/iptables-restore if not in PATH. TD_IPTABLES_DIR
 	IPTablesDir string
+	// WireGuard: how WireGuard servers are run: direct (wg / wg-quick in
+	// this process), file (the VPN container applies the config and writes
+	// `wg show` dumps) or off.                              TD_WIREGUARD
+	WireGuard string
+	// WireGuardDir holds <id>.json (trapdoor's state) and <id>.conf for
+	// every WireGuard server.                               TD_WIREGUARD_DIR
+	WireGuardDir string
+	// WGToolsDir holds wg / wg-quick if not in PATH.        TD_WG_TOOLS_DIR
+	WGToolsDir string
 }
 
 // Web is the configuration of the web/API process.
@@ -136,6 +145,12 @@ func LoadAgent() (Agent, error) {
 		return c, fmt.Errorf("TD_FIREWALL must be direct, file or off")
 	}
 	c.IPTablesDir = os.Getenv("TD_IPTABLES_DIR")
+	c.WireGuard = env("TD_WIREGUARD", "direct")
+	if c.WireGuard != "direct" && c.WireGuard != "file" && c.WireGuard != "off" {
+		return c, fmt.Errorf("TD_WIREGUARD must be direct, file or off")
+	}
+	c.WireGuardDir = env("TD_WIREGUARD_DIR", "/etc/wireguard")
+	c.WGToolsDir = os.Getenv("TD_WG_TOOLS_DIR")
 	c.SetupProto = os.Getenv("TD_SETUP_PROTO")
 	if c.SetupProto != "" && c.SetupProto != "udp" && c.SetupProto != "tcp" {
 		return c, fmt.Errorf("TD_SETUP_PROTO must be udp or tcp")

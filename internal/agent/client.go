@@ -337,3 +337,55 @@ func (c *Client) do(ctx context.Context, hc *http.Client, method, path string, i
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
+
+// CreateServer creates a WireGuard server on the agent host.
+func (c *Client) CreateServer(ctx context.Context, req api.CreateServer) (api.ServerInfo, error) {
+	var out api.ServerInfo
+	err := c.doJSON(ctx, http.MethodPost, "/v1/servers", req, &out)
+	return out, err
+}
+
+// RemoveServer removes the client's (WireGuard) server and its interface.
+func (c *Client) RemoveServer(ctx context.Context) error {
+	return c.doJSON(ctx, http.MethodDelete, "/v1/servers/"+url.PathEscape(c.server), nil, nil)
+}
+
+// Peers lists the WireGuard clients of the server.
+func (c *Client) Peers(ctx context.Context) ([]api.Peer, error) {
+	var out []api.Peer
+	err := c.doJSON(ctx, http.MethodGet, c.path("/peers"), nil, &out)
+	return out, err
+}
+
+// Peer returns one WireGuard client.
+func (c *Client) Peer(ctx context.Context, name string) (api.Peer, error) {
+	var out api.Peer
+	err := c.doJSON(ctx, http.MethodGet, c.path("/peers/"+url.PathEscape(name)), nil, &out)
+	return out, err
+}
+
+// AddPeer adds a WireGuard client with new keys.
+func (c *Client) AddPeer(ctx context.Context, req api.NewPeer) (api.Peer, error) {
+	var out api.Peer
+	err := c.doJSON(ctx, http.MethodPost, c.path("/peers"), req, &out)
+	return out, err
+}
+
+// UpdatePeer enables / disables a WireGuard client or changes its LANs.
+func (c *Client) UpdatePeer(ctx context.Context, name string, u api.PeerUpdate) (api.Peer, error) {
+	var out api.Peer
+	err := c.doJSON(ctx, http.MethodPut, c.path("/peers/"+url.PathEscape(name)), u, &out)
+	return out, err
+}
+
+// RemovePeer deletes a WireGuard client; it cannot connect any more.
+func (c *Client) RemovePeer(ctx context.Context, name string) error {
+	return c.doJSON(ctx, http.MethodDelete, c.path("/peers/"+url.PathEscape(name)), nil, nil)
+}
+
+// PeerConf returns a WireGuard client's configuration file.
+func (c *Client) PeerConf(ctx context.Context, name string) ([]byte, error) {
+	var out []byte
+	err := c.doJSON(ctx, http.MethodGet, c.path("/peers/"+url.PathEscape(name)+"/conf"), nil, &out)
+	return out, err
+}

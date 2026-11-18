@@ -82,6 +82,18 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 | DELETE | `…/sessions/{client_id}` | – | 204; disconnects one session |
 | DELETE | `…/certs/{name}/sessions` | – | `{"killed":n}`; disconnects all sessions of a name |
 
+### WireGuard
+
+| Method | Path | Body | Result |
+|---|---|---|---|
+| POST | `/v1/servers` | `{"type":"wireguard","id":"wg0","name","port","public_host","public_port","subnet","dns":[…],"mtu","allowed_ips":[…],"keepalive"}` | 201 server info; 409 for a used id, port or overlapping subnet |
+| DELETE | `/v1/servers/{id}` | – | 204; takes the interface down and deletes its files (WireGuard only) |
+| GET | `…/peers` | – | clients with live state (`connected`, `endpoint`, `last_handshake`, bytes) |
+| POST | `…/peers` | `{"name","address"?,"lan"?:[cidr],"no_psk"?}` | 201 client (keys generated, next free address) |
+| GET, PUT, DELETE | `…/peers/{name}` | PUT: `{"disabled"?,"lan"?}` | client / updated client / 204 |
+| GET | `…/peers/{name}/conf` | – | the client's configuration file (409 while disabled) |
+| GET | `…/sessions` | – | connected clients, as for OpenVPN (`DELETE …/sessions/{id}` is 409) |
+
 Revoke and delete also disconnect the client right away (otherwise OpenVPN would only
 notice at the next renegotiation, up to an hour later). Sessions need OpenVPN's management
 interface: `management 127.0.0.1 2080` in `server.conf` (`TD_OPENVPN_MGMT`, optional

@@ -15,7 +15,8 @@ type Health struct {
 
 // Server types.
 const (
-	TypeOpenVPN = "openvpn"
+	TypeOpenVPN   = "openvpn"
+	TypeWireGuard = "wireguard"
 )
 
 // AgentInfo is returned by GET /v1/info on the agent: the host and the VPN
@@ -42,6 +43,74 @@ type ServerInfo struct {
 	// OpenVPNVersion is empty when the management interface is unreachable.
 	OpenVPNVersion string `json:"openvpn_version,omitempty"`
 	MgmtError      string `json:"mgmt_error,omitempty"`
+
+	// WireGuard: the server's public key, port and subnet, the endpoint
+	// clients use, and whether the interface is up.
+	PublicKey  string `json:"public_key,omitempty"`
+	ListenPort int    `json:"listen_port,omitempty"`
+	Subnet     string `json:"subnet,omitempty"`
+	Endpoint   string `json:"endpoint,omitempty"`
+	Running    bool   `json:"running,omitempty"`
+	// Error is the last problem applying the configuration ("" = fine).
+	Error string `json:"error,omitempty"`
+}
+
+// CreateServer is the body of POST /v1/servers: a new WireGuard server.
+type CreateServer struct {
+	Type string `json:"type"` // TypeWireGuard
+	// ID is also the network interface name (e.g. wg0): lower-case letters,
+	// digits and dashes, at most 15 characters.
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Port is the UDP port the server listens on (default 51820).
+	Port int `json:"port,omitempty"`
+	// PublicHost and PublicPort are what clients connect to
+	// (PublicPort defaults to Port).
+	PublicHost string `json:"public_host"`
+	PublicPort int    `json:"public_port,omitempty"`
+	// Subnet of the VPN (default 10.9.0.0/24); the server takes the first address.
+	Subnet string   `json:"subnet,omitempty"`
+	DNS    []string `json:"dns,omitempty"`
+	MTU    int      `json:"mtu,omitempty"`
+	// AllowedIPs is what clients send through the tunnel
+	// (default 0.0.0.0/0, ::/0: everything).
+	AllowedIPs []string `json:"allowed_ips,omitempty"`
+	// Keepalive in seconds for clients behind NAT (default 25, -1 = off).
+	Keepalive int `json:"keepalive,omitempty"`
+}
+
+// Peer is a WireGuard client (GET /v1/servers/{id}/peers).
+type Peer struct {
+	Name      string    `json:"name"`
+	PublicKey string    `json:"public_key"`
+	Address   string    `json:"address"`       // the client's VPN address
+	LAN       []string  `json:"lan,omitempty"` // networks behind the client (site-to-site)
+	Disabled  bool      `json:"disabled"`      // kept, but not in the server config
+	HasPSK    bool      `json:"preshared_key"` // a preshared key is set
+	CreatedAt time.Time `json:"created_at"`
+	// Live state from the interface.
+	Connected     bool      `json:"connected"`
+	Endpoint      string    `json:"endpoint,omitempty"`
+	LastHandshake time.Time `json:"last_handshake,omitzero"`
+	BytesReceived int64     `json:"bytes_received"` // from the client
+	BytesSent     int64     `json:"bytes_sent"`     // to the client
+}
+
+// NewPeer is the body of POST /v1/servers/{id}/peers.
+type NewPeer struct {
+	Name string `json:"name"`
+	// Address is optional; the next free address of the subnet by default.
+	Address string   `json:"address,omitempty"`
+	LAN     []string `json:"lan,omitempty"`
+	// NoPSK skips the preshared key (it adds a layer against future
+	// quantum attacks and is on by default).
+	NoPSK bool `json:"no_psk,omitempty"`
+}
+
+// PeerUpdate is the body of PUT /v1/servers/{id}/peers/{name}.
+type PeerUpdate struct {
+	Disabled *bool    `json:"disabled,omitempty"`
+	LAN      []string `json:"lan,omitempty"` // replaces the list when not nil
 }
 
 // Status is returned by GET /api/v1/status on the web process.

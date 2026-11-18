@@ -11,6 +11,7 @@ for the HTTP API, [api.md](api.md).
 - [Client network settings](#client-network-settings)
 - [Access rules](#access-rules)
 - [Traffic history](#traffic-history)
+- [WireGuard servers](#wireguard-servers)
 - [Admin login and security](#admin-login-and-security)
 
 ## Setup
@@ -159,6 +160,33 @@ session count and online time. Upload/download are from the user's point of view
 
 Traffic is stored per user per hour. If polls were missed (web down, agent unreachable) the
 traffic of the gap is spread over its hours and flagged `estimated` instead of one spike.
+
+## WireGuard servers
+
+Next to OpenVPN, the agent can run WireGuard servers (so far through the
+[agent API](api.md#wireguard); the web UI follows). Each server is a network
+interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/24`:
+
+- The agent keeps each server in `TD_WIREGUARD_DIR` (default `/etc/wireguard`):
+  `<id>.json` with its keys and clients, and the `<id>.conf` it renders from it. Edits to
+  the `.conf` are overwritten.
+- Clients get a key pair, a preshared key (unless turned off) and the next free address.
+  Their configuration file is for the WireGuard apps; it sends `0.0.0.0/0, ::/0` through
+  the tunnel unless the server was created with other `allowed_ips`.
+- Adding, disabling and removing clients is applied with `wg syncconf`: nobody else is
+  disconnected. Disabling keeps the client but takes it off the interface; removing
+  deletes its keys.
+- WireGuard has no logins or sessions. A client counts as connected while its last
+  handshake is less than 3 minutes old; traffic history works as for OpenVPN.
+
+| `TD_WIREGUARD` | |
+|---|---|
+| `direct` (default) | the agent runs `wg-quick` / `wg` itself (host install as root, `wireguard-tools` installed) and turns on IP forwarding with FORWARD and NAT rules for the subnet |
+| `file` | the agent writes the files; the VPN container brings the interfaces up and reports `wg show` (coming with WireGuard in Docker) |
+| `off` | no WireGuard servers — the compose default for now |
+
+On Ubuntu, AppArmor lets `wg-quick` read configurations only from `/etc/wireguard`, so keep
+the default `TD_WIREGUARD_DIR` there.
 
 ## Admin login and security
 

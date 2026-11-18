@@ -109,7 +109,16 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 	log.Info("listening", "addr", cfg.Listen, "version", version.Version)
 	srv := agent.New(cfg, log, p)
 	go srv.ApplyFirewallAtStart(ctx)
-	return httpx.Serve(ctx, l, agent.NewHost(cfg.Token, log, srv).Handler())
+	host := agent.NewHost(cfg.Token, log, srv)
+	if cfg.WireGuard != "off" {
+		wgs, err := agent.LoadWireGuard(ctx, cfg, log)
+		if err != nil {
+			return fmt.Errorf("WireGuard servers: %w", err)
+		}
+		host.EnableWireGuard(cfg, wgs)
+		log.Info("WireGuard", "mode", cfg.WireGuard, "dir", cfg.WireGuardDir, "servers", len(wgs))
+	}
+	return httpx.Serve(ctx, l, host.Handler())
 }
 
 func runWeb(ctx context.Context, log *slog.Logger) error {
