@@ -22,6 +22,43 @@ func (s *Server) registerCertRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/certs/{name}/ovpn", s.handleProfile)
 	mux.HandleFunc("DELETE /api/v1/certs/{name}/sessions", s.handleKillName)
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}", s.handleKillSession)
+	mux.HandleFunc("GET /api/v1/certs/{name}/auth", s.handleGetClientAuth)
+	mux.HandleFunc("PUT /api/v1/certs/{name}/auth", s.handleUpdateClientAuth)
+}
+
+func (s *Server) handleGetClientAuth(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.name(w, r)
+	if !ok {
+		return
+	}
+	st, err := s.Agent.ClientAuth(r.Context(), name)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleUpdateClientAuth(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.name(w, r)
+	if !ok {
+		return
+	}
+	var req api.ClientAuthUpdate
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	st, err := s.Agent.UpdateClientAuth(r.Context(), name, req)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	action := "client2fa.update"
+	if req.TOTP != "" {
+		action = "client2fa.totp-" + req.TOTP
+	}
+	s.audit(r, action, name)
+	httpx.WriteJSON(w, http.StatusOK, st)
 }
 
 // name returns the {name} path value, or writes 400 if it is not a valid

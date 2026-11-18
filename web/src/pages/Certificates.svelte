@@ -4,6 +4,9 @@
   import { date, relative, certState } from '../lib/format.js';
   import { toast, route, setQuery } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
+  import TwoFactor from '../lib/TwoFactor.svelte';
+
+  let twoFactor = $state({ open: false, name: '' });
 
   let certs = $state([]);
   let online = $state(new Set());
@@ -210,6 +213,7 @@
                         <button onclick={() => act('disconnect', c.name)}>Disconnect</button>
                       {/if}
                       {#if c.status !== 'revoked'}
+                        <button onclick={(e) => { e.currentTarget.closest('details').open = false; twoFactor = { open: true, name: c.name }; }}>Two-factor login</button>
                         <button onclick={() => ask('renew', c.name)}>Renew</button>
                         <button class="danger" onclick={() => ask('revoke', c.name)}>Revoke</button>
                       {:else}
@@ -265,6 +269,8 @@
     <button class="btn primary" form="create" type="submit" disabled={busy || !nameOk}>{busy ? 'Creating…' : 'Create client'}</button>
   {/snippet}
 </Dialog>
+
+<TwoFactor bind:open={twoFactor.open} name={twoFactor.name} />
 
 <Dialog bind:open={confirm.open} title={confirmText[confirm.kind]?.title ?? ''}>
   <p><strong>{confirm.name}</strong>: {confirmText[confirm.kind]?.body}</p>

@@ -31,6 +31,8 @@ type AgentClient interface {
 	Profile(ctx context.Context, name string) ([]byte, error)
 	KillSession(ctx context.Context, clientID int64) error
 	KillName(ctx context.Context, name string) (int, error)
+	ClientAuth(ctx context.Context, name string) (api.ClientAuth, error)
+	UpdateClientAuth(ctx context.Context, name string, req api.ClientAuthUpdate) (api.ClientAuth, error)
 }
 
 // Deps are the web server's dependencies.

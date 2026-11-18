@@ -39,6 +39,10 @@ func TestCertManagement(t *testing.T) {
 		{http.MethodPost, "/api/v1/certs/alice/renew", `{"validity_days":10}`, http.StatusOK, `"status":"valid"`},
 		{http.MethodDelete, "/api/v1/certs/alice/sessions", "", http.StatusBadGateway, ""}, // management unreachable
 		{http.MethodDelete, "/api/v1/sessions/abc", "", http.StatusBadRequest, ""},
+		{http.MethodGet, "/api/v1/certs/alice/auth", "", http.StatusOK, `"totp":false`},
+		{http.MethodPut, "/api/v1/certs/alice/auth", `{"totp":"enable","static_password":"pin1"}`, http.StatusOK, `"otpauth_uri":"otpauth://totp/`},
+		{http.MethodGet, "/api/v1/certs/alice/auth", "", http.StatusOK, `"totp":true`},
+		{http.MethodPut, "/api/v1/certs/alice/auth", `{"totp":"bogus"}`, http.StatusBadRequest, ""},
 		{http.MethodDelete, "/api/v1/certs/alice", "", http.StatusNoContent, ""},
 		{http.MethodGet, "/api/v1/certs/alice", "", http.StatusOK, `"status":"revoked"`},
 	}

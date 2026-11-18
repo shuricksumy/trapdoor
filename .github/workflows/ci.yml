@@ -73,10 +73,12 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - name: Install openvpn
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq openvpn
-      - name: tls-crypt-v2 unit tests
-        run: go test -count=1 -v -run TLSCryptV2 ./internal/ovpn/
+      - name: Install openvpn and oathtool
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq openvpn oathtool
+      - name: Tests that need openvpn / oathtool
+        run: |
+          go test -count=1 -v -run TLSCryptV2 ./internal/ovpn/
+          go test -count=1 -v -run Oathtool ./internal/clientauth/
       - name: Build (with UI)
         run: make ui build
       - name: End-to-end
