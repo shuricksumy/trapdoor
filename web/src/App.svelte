@@ -1,5 +1,5 @@
 <script>
-  import { route, session, navigate, toasts } from './lib/state.svelte.js';
+  import { route, session, navigate, toasts, settings } from './lib/state.svelte.js';
   import { api } from './lib/api.js';
   import ThemeSwitch from './lib/ThemeSwitch.svelte';
   import Login from './pages/Login.svelte';
@@ -33,6 +33,14 @@
       })
       .catch(() => {})
       .finally(() => (session.checked = true));
+  });
+
+  // Server settings, once per login.
+  $effect(() => {
+    if (!session.user) return;
+    api('/status')
+      .then((st) => st.expiry_warn_days && (settings.expiryWarnDays = st.expiry_warn_days))
+      .catch(() => {});
   });
 
   $effect(() => {

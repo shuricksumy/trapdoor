@@ -20,6 +20,9 @@ type AgentInfo struct {
 	OpenVPNDir string `json:"openvpn_dir"`
 	PKIDir     string `json:"pki_dir"`
 	PKIReady   bool   `json:"pki_ready"`
+	// CA of the PKI (empty until it exists).
+	CAName     string    `json:"ca_name,omitempty"`
+	CANotAfter time.Time `json:"ca_not_after,omitzero"`
 	// OpenVPNVersion is empty when the management interface is unreachable.
 	OpenVPNVersion string `json:"openvpn_version,omitempty"`
 	MgmtError      string `json:"mgmt_error,omitempty"`
@@ -27,10 +30,13 @@ type AgentInfo struct {
 
 // Status is returned by GET /api/v1/status on the web process.
 type Status struct {
-	WebVersion string     `json:"web_version"`
-	AgentOK    bool       `json:"agent_ok"`
-	Agent      *AgentInfo `json:"agent,omitempty"`
-	AgentError string     `json:"agent_error,omitempty"`
+	WebVersion string `json:"web_version"`
+	// ExpiryWarnDays: client certificates expiring within this many days
+	// are flagged (TW_EXPIRY_WARN_DAYS).
+	ExpiryWarnDays int        `json:"expiry_warn_days"`
+	AgentOK        bool       `json:"agent_ok"`
+	Agent          *AgentInfo `json:"agent,omitempty"`
+	AgentError     string     `json:"agent_error,omitempty"`
 }
 
 // Error is the JSON body of every non-2xx response.
@@ -141,4 +147,18 @@ type ServerNetwork struct {
 	PushesFullTunnel bool              `json:"pushes_full_tunnel"`
 	Routes           []string          `json:"routes"`     // server-side "route" lines
 	StaticIPs        map[string]string `json:"static_ips"` // client → static address
+}
+
+// RenewManyRequest is the body of POST /api/v1/certs/renew.
+type RenewManyRequest struct {
+	Names        []string `json:"names"`
+	ValidityDays int      `json:"validity_days,omitempty"`
+}
+
+// RenewResult is one entry of the bulk renew answer.
+type RenewResult struct {
+	Name  string `json:"name"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+	Cert  *Cert  `json:"cert,omitempty"`
 }

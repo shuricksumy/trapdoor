@@ -1,7 +1,9 @@
 <script>
   import { onMount } from 'svelte';
   import { api, poll } from '../lib/api.js';
-  import { bytes, duration, relative, certState } from '../lib/format.js';
+  import { bytes, duration, relative, certState, date } from '../lib/format.js';
+  import { settings, toast } from '../lib/state.svelte.js';
+  import Dialog from '../lib/Dialog.svelte';
   import TodayTrace from '../lib/TodayTrace.svelte';
 
   let status = $state(null);
@@ -36,10 +38,27 @@
   const attention = $derived(
     certs
       .filter((c) => c.current && c.status !== 'revoked')
-      .map((c) => ({ c, st: certState(c) }))
+      .map((c) => ({ c, st: certState(c, c.kind === 'server' ? 90 : settings.expiryWarnDays) }))
       .filter(({ st }) => st.key === 'expiring' || st.key === 'expired')
       .sort((a, b) => new Date(a.c.not_after) - new Date(b.c.not_after)),
   );
+  const caDays = $derived(status?.agent?.ca_not_after ? (new Date(status.agent.ca_not_after) - Date.now()) / 86400000 : Infinity);
+
+  let renewServer = $state({ open: false, name: '', busy: false });
+  async function doRenewServer() {
+    renewServer.busy = true;
+    try {
+      await api(`/certs/${renewServer.name}/renew`, { method: 'POST' });
+      toast('Server certificate renewed. Restart OpenVPN to use it.');
+      renewServer.open = false;
+      await refresh();
+    } catch (e) {
+      toast(e.message, 'bad');
+    } finally {
+      renewServer.busy = false;
+    }
+  }
+
   const serverProblem = $derived(
     !status ? '' : !status.agent_ok ? 'The agent is not reachable, so nothing can be changed right now.' : status.agent?.mgmt_error ? 'OpenVPN does not answer on its management interface. Live sessions and kicking are unavailable.' : '',
   );
@@ -114,23 +133,41 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Needs attention</h2>
-      <a class="small" href="/certificates">Clients</a>
+      <a class="small" href="/certificates?show=expiring">Clients</a>
     </div>
-    {#if attention.length === 0}
-      <p class="empty">No certificates expire in the next 30 days.</p>
+    {#if attention.length === 0 && caDays >= 90}
+      <p class="empty">No certificates expire in the next {settings.expiryWarnDays} days.</p>
     {:else}
       <ul class="list">
+        {#if caDays < 90}
+          <li>
+            <span class="pill bad">CA: {status.agent.ca_name}</span>
+            <span class="muted small right">Expires {relative(status.agent.ca_not_after)} ({date(status.agent.ca_not_after)}). Every client stops working then.</span>
+          </li>
+        {/if}
         {#each attention as { c, st } (c.serial)}
           <li>
             <span class="pill {st.tone}">{c.name}</span>
             {#if c.kind === 'server'}<span class="faint small">server certificate</span>{/if}
             <span class="muted small right">{st.key === 'expired' ? 'Expired' : 'Expires'} {relative(c.not_after)}</span>
+            {#if c.kind === 'server'}
+              <button class="btn small" onclick={() => (renewServer = { open: true, name: c.name, busy: false })}>Renew</button>
+            {/if}
           </li>
         {/each}
       </ul>
     {/if}
   </section>
 </div>
+
+<Dialog bind:open={renewServer.open} title="Renew the server certificate?">
+  <p>A new certificate for <strong>{renewServer.name}</strong> is issued with the same key. Clients are not affected.</p>
+  <p class="muted">OpenVPN keeps using the old certificate until it is restarted, so restart it afterwards (for Docker: <code>docker compose restart openvpn</code>). If server.conf points to a copy of the certificate, update the copy first.</p>
+  {#snippet actions()}
+    <button class="btn" onclick={() => (renewServer.open = false)}>Cancel</button>
+    <button class="btn primary" disabled={renewServer.busy} onclick={doRenewServer}>{renewServer.busy ? 'Renewing…' : 'Renew'}</button>
+  {/snippet}
+</Dialog>
 
 <style>
   .page-head { margin-bottom: var(--space-5); }

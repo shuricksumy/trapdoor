@@ -50,6 +50,8 @@ type Deps struct {
 	CookieSecure bool
 	// TrustedProxies may set X-Forwarded-For (for login throttling and logs).
 	TrustedProxies []netip.Prefix
+	// ExpiryWarnDays flags certificates expiring within this many days.
+	ExpiryWarnDays int
 	Location       *time.Location
 	Log            *slog.Logger
 	Now            func() time.Time // nil = time.Now
@@ -70,6 +72,9 @@ func New(d Deps) *Server {
 	}
 	if d.Limiter == nil {
 		d.Limiter = &auth.Limiter{}
+	}
+	if d.ExpiryWarnDays == 0 {
+		d.ExpiryWarnDays = 30
 	}
 	return &Server{Deps: d}
 }
@@ -105,7 +110,7 @@ func (s *Server) Handler() http.Handler {
 func apiHealth() api.Health { return api.Health{Status: "ok"} }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	st := api.Status{WebVersion: version.Version}
+	st := api.Status{WebVersion: version.Version, ExpiryWarnDays: s.ExpiryWarnDays}
 	info, err := s.Agent.Info(r.Context())
 	if err != nil {
 		s.Log.Warn("agent unreachable", "err", err)
