@@ -46,11 +46,11 @@ func TestRender(t *testing.T) {
 		FullTunnel: true, TwoFactor: true, TLS: TLSCryptV2}
 	Defaults(&r)
 	p := Paths{CA: "easy-rsa/pki/ca.crt", Cert: "easy-rsa/pki/issued/server.crt", Key: "easy-rsa/pki/private/server.key",
-		CRL: "crl.pem", TLSKey: "tls-crypt-v2.key", CCD: "ccd", Management: "127.0.0.1 2080", AuthVerify: "/usr/local/bin/tunnelward auth-verify", Group: "nogroup"}
+		CRL: "crl.pem", TLSKey: "tls-crypt-v2.key", CCD: "ccd", Management: "127.0.0.1 2080", AuthVerify: "/usr/local/bin/trapdoor auth-verify", Group: "nogroup"}
 	conf := ServerConf(r, p, time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC))
 	for _, want := range []string{"port 1194\nproto tcp-server\n", "server 10.8.0.0 255.255.255.0", "tls-crypt-v2 tls-crypt-v2.key",
 		"crl-verify crl.pem", "client-config-dir ccd", `push "redirect-gateway def1 bypass-dhcp"`, `push "dhcp-option DNS 10.8.0.1"`,
-		`auth-user-pass-verify "/usr/local/bin/tunnelward auth-verify" via-file`, "management 127.0.0.1 2080", "group nogroup"} {
+		`auth-user-pass-verify "/usr/local/bin/trapdoor auth-verify" via-file`, "management 127.0.0.1 2080", "group nogroup"} {
 		if !strings.Contains(conf, want) {
 			t.Errorf("server.conf missing %q:\n%s", want, conf)
 		}

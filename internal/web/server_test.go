@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/agent"
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/auth"
-	"github.com/shuricksumy/tunnelward/internal/config"
-	"github.com/shuricksumy/tunnelward/internal/history"
-	"github.com/shuricksumy/tunnelward/internal/pki"
-	"github.com/shuricksumy/tunnelward/internal/store"
+	"github.com/shuricksumy/trapdoor/internal/agent"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/auth"
+	"github.com/shuricksumy/trapdoor/internal/config"
+	"github.com/shuricksumy/trapdoor/internal/history"
+	"github.com/shuricksumy/trapdoor/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/store"
 )
 
 // fakeAgent overrides Info/Sessions; certificate calls go to a real agent
@@ -53,7 +53,7 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T, apiToken string) *testEnv {
 	t.Helper()
-	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "tw.db"))
+	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "td.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func newTestEnv(t *testing.T, apiToken string) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ag := httptest.NewServer(agent.New(config.Agent{Token: "agent-secret", OpenVPNDir: t.TempDir(), CCDDir: t.TempDir(), TOTPIssuer: "tunnelward", MgmtAddr: "127.0.0.1:1"}, log, p).Handler())
+	ag := httptest.NewServer(agent.New(config.Agent{Token: "agent-secret", OpenVPNDir: t.TempDir(), CCDDir: t.TempDir(), TOTPIssuer: "trapdoor", MgmtAddr: "127.0.0.1:1"}, log, p).Handler())
 	t.Cleanup(ag.Close)
 	e := &testEnv{t: t, clock: now, agent: &fakeAgent{
 		Client: agent.NewClient(ag.URL, "agent-secret", 5*time.Second),
@@ -182,7 +182,7 @@ func TestStatsEndpoints(t *testing.T) {
 	}
 
 	rec := e.get("/api/v1/stats.csv?from=2026-11-01&to=2026-11-30", token)
-	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "tunnelward-2026-11-01_2026-11-30.csv") {
+	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "trapdoor-2026-11-01_2026-11-30.csv") {
 		t.Errorf("Content-Disposition = %q", cd)
 	}
 	records, err := csv.NewReader(rec.Body).ReadAll()

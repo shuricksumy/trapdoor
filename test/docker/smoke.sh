@@ -15,7 +15,7 @@ TOKEN=smoke-web-token
 CLIENT_PID=
 
 log() { echo "==> $*"; }
-dc() { docker compose -f "$WORK/docker-compose.yml" -p twsmoke "$@"; }
+dc() { docker compose -f "$WORK/docker-compose.yml" -p tdsmoke "$@"; }
 api() { curl -fsS -H "Authorization: Bearer $TOKEN" "$@"; }
 fail() {
 	echo "FAIL: $*" >&2
@@ -34,11 +34,11 @@ trap cleanup EXIT
 cp "$REPO/docker-compose.yml" "$WORK/"
 mkdir -p "$WORK/openvpn"
 cat >"$WORK/.env" <<ENV
-TW_IMAGE=$IMAGE
-TW_AGENT_TOKEN=$(openssl rand -hex 16)
-TW_WEB_API_TOKEN=$TOKEN
-TW_COOKIE_SECURE=false
-TW_TZ=Europe/Dublin
+TD_IMAGE=$IMAGE
+TD_AGENT_TOKEN=$(openssl rand -hex 16)
+TD_WEB_API_TOKEN=$TOKEN
+TD_COOKIE_SECURE=false
+TD_TZ=Europe/Dublin
 OPENVPN_DIR=$WORK/openvpn
 VPN_PORT=11194
 WEB_BIND=127.0.0.1:18080
@@ -75,7 +75,7 @@ api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "agent c
 dc exec -T openvpn sh -c 'netstat -ltn 2>/dev/null || ss -ltn' | grep -q '127.0.0.1:2080' || fail "management not on 127.0.0.1"
 
 log "admin user via CLI in the web container, login with cookie"
-echo "smoke-admin-password" | dc exec -T web tunnelward user add admin >/dev/null
+echo "smoke-admin-password" | dc exec -T web trapdoor user add admin >/dev/null
 JAR=$WORK/jar
 curl -fsS -c "$JAR" -H "Content-Type: application/json" -d '{"username":"admin","password":"smoke-admin-password"}' "$WEB/api/v1/auth/login" >/dev/null || fail "login"
 
@@ -125,19 +125,19 @@ grep -q "running again" "$WORK/rollback.json" || fail "OpenVPN not back after ro
 ! sudo grep -q "203.0.113.99" "$WORK/openvpn/server.conf" || fail "bad config still in place"
 grep -q "9.9.9.9" "$WORK/openvpn/server.conf" || fail "rolled back to the wrong version"
 
-log "access rules: written by the agent, applied by the openvpn container (TW_FIREWALL=file)"
+log "access rules: written by the agent, applied by the openvpn container (TD_FIREWALL=file)"
 api -X PUT -H "Content-Type: application/json" -m 30 \
 	-d '{"enabled":true,"default":"deny","rules":[{"to":"10.77.0.1","proto":"icmp","action":"allow"}]}' \
 	"$WEB/api/v1/firewall" >"$WORK/fw.json" || fail "save access rules"
 grep -q '"applied":true' "$WORK/fw.json" || fail "rules not applied: $(cat "$WORK/fw.json")"
-dc exec -T openvpn iptables -S TW-FWD | grep -q -- "-d 10.77.0.1/32 -p icmp -j ACCEPT" || fail "rule not in the container"
-dc exec -T openvpn iptables -C FORWARD -i tun+ -j TW-FWD || fail "no FORWARD jump"
+dc exec -T openvpn iptables -S TD-FWD | grep -q -- "-d 10.77.0.1/32 -p icmp -j ACCEPT" || fail "rule not in the container"
+dc exec -T openvpn iptables -C FORWARD -i tun+ -j TD-FWD || fail "no FORWARD jump"
 dc logs openvpn | grep -q "access rules applied" || fail "no apply log"
-! dc exec -T agent iptables -N TW-PROBE >/dev/null 2>&1 || fail "agent container can change the firewall"
+! dc exec -T agent iptables -N TD-PROBE >/dev/null 2>&1 || fail "agent container can change the firewall"
 
 log "web container is locked down"
-[[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' twsmoke-web-1) == true ]] || fail "web rootfs not read-only"
+[[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' tdsmoke-web-1) == true ]] || fail "web rootfs not read-only"
 [[ $(dc exec -T web id -u) == 10001 ]] || fail "web not running as uid 10001"
-[[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' twsmoke-openvpn-1) != *2080* ]] || fail "management port published"
+[[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' tdsmoke-openvpn-1) != *2080* ]] || fail "management port published"
 
 log "PASS"

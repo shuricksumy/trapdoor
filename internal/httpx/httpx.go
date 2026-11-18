@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/api"
 )
 
 // Listen opens a listener for "host:port" or "unix:/path".

@@ -106,7 +106,7 @@
     </section>
 
     <p class="hint">
-      The server must check logins: <code>auth-user-pass-verify "/usr/local/bin/tunnelward auth-verify" via-file</code>
+      The server must check logins: <code>auth-user-pass-verify "/usr/local/bin/trapdoor auth-verify" via-file</code>
       with <code>script-security 2</code> in server.conf, and <code>auth-user-pass</code> in client-template.txt.
     </p>
   {/if}

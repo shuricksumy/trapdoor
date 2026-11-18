@@ -57,11 +57,11 @@ jobs:
           date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           for target in amd64 arm64 arm:7; do
             arch=${target%%:*}; arm=${target#*:}; [ "$arm" = "$target" ] && arm=
-            name="tunnelward_${VERSION}_linux_${arch}${arm:+v$arm}"
+            name="trapdoor_${VERSION}_linux_${arch}${arm:+v$arm}"
             mkdir -p "build/$name"
             CGO_ENABLED=0 GOOS=linux GOARCH=$arch GOARM=$arm go build -trimpath \
-              -ldflags "-s -w -X github.com/shuricksumy/tunnelward/internal/version.Version=$VERSION -X github.com/shuricksumy/tunnelward/internal/version.Commit=$GITHUB_SHA -X github.com/shuricksumy/tunnelward/internal/version.Date=$date" \
-              -o "build/$name/tunnelward" ./cmd/tunnelward
+              -ldflags "-s -w -X github.com/shuricksumy/trapdoor/internal/version.Version=$VERSION -X github.com/shuricksumy/trapdoor/internal/version.Commit=$GITHUB_SHA -X github.com/shuricksumy/trapdoor/internal/version.Date=$date" \
+              -o "build/$name/trapdoor" ./cmd/trapdoor
             cp LICENSE README.md "build/$name/"
             tar -C build -czf "dist/$name.tar.gz" "$name"
           done

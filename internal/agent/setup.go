@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/httpx"
-	"github.com/shuricksumy/tunnelward/internal/pki"
-	"github.com/shuricksumy/tunnelward/internal/serverconf"
-	"github.com/shuricksumy/tunnelward/internal/setup"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/serverconf"
+	"github.com/shuricksumy/trapdoor/internal/setup"
 )
 
 // serverCertName is the common name of the server certificate the setup
@@ -189,7 +189,7 @@ func (s *Server) runSetup(ctx context.Context, req setup.Request) (api.SetupResu
 	// 6. OpenVPN under a supervisor (Docker) starts once server.conf exists.
 	res := api.SetupResult{ServerConf: conf, Warnings: toProblems(problems)}
 	if paths.Group == "" {
-		res.Warnings = append(res.Warnings, api.ConfigProblem{Message: "OpenVPN keeps running as root because the CRL is only in the PKI directory; set TW_CRL_COPIES=" +
+		res.Warnings = append(res.Warnings, api.ConfigProblem{Message: "OpenVPN keeps running as root because the CRL is only in the PKI directory; set TD_CRL_COPIES=" +
 			filepath.Join(dir, "crl.pem") + " and add user nobody / group nogroup on the Server page."})
 	}
 	wctx, cancel := context.WithTimeout(ctx, s.setupWait())
@@ -249,7 +249,7 @@ func (s *Server) setupPaths(req setup.Request) (setup.Paths, error) {
 	}
 	bin, err := os.Executable()
 	if err != nil {
-		bin = "/usr/local/bin/tunnelward"
+		bin = "/usr/local/bin/trapdoor"
 	}
 	ccdDir, _ := filepath.Abs(s.cfg.CCDDir)
 	p := setup.Paths{

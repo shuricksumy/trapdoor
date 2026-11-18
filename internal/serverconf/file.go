@@ -112,7 +112,7 @@ func (f *File) Write(raw, baseVersion string) (string, error) {
 	if fi, err := os.Stat(f.Path); err == nil {
 		mode = fi.Mode().Perm()
 	}
-	tmp := f.Path + ".tw-tmp"
+	tmp := f.Path + ".td-tmp"
 	if err := os.WriteFile(tmp, []byte(raw), mode); err != nil {
 		return "", err
 	}
@@ -125,7 +125,7 @@ func (f *File) Write(raw, baseVersion string) (string, error) {
 	return Version(raw), nil
 }
 
-func (f *File) backupDir() string { return filepath.Join(filepath.Dir(f.Path), "tunnelward-backups") }
+func (f *File) backupDir() string { return filepath.Join(filepath.Dir(f.Path), "trapdoor-backups") }
 
 var backupName = regexp.MustCompile(`^server\.conf\.\d{8}-\d{6}(-\d+)?$`)
 

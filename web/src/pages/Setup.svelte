@@ -90,7 +90,7 @@
 
 <header class="head">
   <h1>Set up the VPN server</h1>
-  <p class="muted">Answer three questions. tunnelward creates the certificate authority, the server certificate and keys, <code>server.conf</code> and the client profile template, then starts OpenVPN.</p>
+  <p class="muted">Answer three questions. trapdoor creates the certificate authority, the server certificate and keys, <code>server.conf</code> and the client profile template, then starts OpenVPN.</p>
 </header>
 
 {#if loadError}

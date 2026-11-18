@@ -54,17 +54,17 @@ func TestRender(t *testing.T) {
 	res := Render(p, Clients{IPs: map[string]netip.Addr{
 		"alice": netip.MustParseAddr("10.8.0.10"), "bob": netip.MustParseAddr("10.8.0.11"),
 	}, ClientToClient: true})
-	want := `# tunnelward access rules for VPN clients; written by the agent, do not edit
+	want := `# trapdoor access rules for VPN clients; written by the agent, do not edit
 *filter
-:TW-FWD - [0:0]
--F TW-FWD
--A TW-FWD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
--A TW-FWD -s 10.8.0.10/32 -d 192.168.1.0/24 -j ACCEPT
--A TW-FWD -s 10.8.0.11/32 -d 192.168.1.10/32 -p tcp -m multiport --dports 22,8000:8100 -j ACCEPT
--A TW-FWD -d 192.168.1.1/32 -p tcp -m multiport --dports 53 -j ACCEPT
--A TW-FWD -d 192.168.1.1/32 -p udp -m multiport --dports 53 -j ACCEPT
--A TW-FWD -d 10.0.0.0/8 -j REJECT --reject-with icmp-admin-prohibited
--A TW-FWD -j REJECT --reject-with icmp-admin-prohibited
+:TD-FWD - [0:0]
+-F TD-FWD
+-A TD-FWD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A TD-FWD -s 10.8.0.10/32 -d 192.168.1.0/24 -j ACCEPT
+-A TD-FWD -s 10.8.0.11/32 -d 192.168.1.10/32 -p tcp -m multiport --dports 22,8000:8100 -j ACCEPT
+-A TD-FWD -d 192.168.1.1/32 -p tcp -m multiport --dports 53 -j ACCEPT
+-A TD-FWD -d 192.168.1.1/32 -p udp -m multiport --dports 53 -j ACCEPT
+-A TD-FWD -d 10.0.0.0/8 -j REJECT --reject-with icmp-admin-prohibited
+-A TD-FWD -j REJECT --reject-with icmp-admin-prohibited
 COMMIT
 `
 	if res.Rules != want {
@@ -75,11 +75,11 @@ COMMIT
 	}
 
 	off := Render(Policy{Default: Deny, Rules: p.Rules}, Clients{})
-	if !strings.Contains(off.Rules, "-A TW-FWD -j RETURN\nCOMMIT") || strings.Contains(off.Rules, "ACCEPT") {
+	if !strings.Contains(off.Rules, "-A TD-FWD -j RETURN\nCOMMIT") || strings.Contains(off.Rules, "ACCEPT") {
 		t.Errorf("disabled:\n%s", off.Rules)
 	}
 	allow := Render(Policy{Enabled: true, Default: Allow, Rules: []Rule{{Client: "x", Proto: ProtoTCP, Action: Deny}}}, Clients{IPs: map[string]netip.Addr{"x": netip.MustParseAddr("10.8.0.5")}})
-	if !strings.Contains(allow.Rules, "-A TW-FWD -s 10.8.0.5/32 -p tcp -j REJECT --reject-with tcp-reset\n-A TW-FWD -j RETURN") {
+	if !strings.Contains(allow.Rules, "-A TD-FWD -s 10.8.0.5/32 -p tcp -j REJECT --reject-with tcp-reset\n-A TD-FWD -j RETURN") {
 		t.Errorf("allow default:\n%s", allow.Rules)
 	}
 }

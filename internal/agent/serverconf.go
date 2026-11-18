@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/httpx"
-	"github.com/shuricksumy/tunnelward/internal/serverconf"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/serverconf"
 )
 
 func (s *Server) registerServerConfigRoutes(mux *http.ServeMux) {

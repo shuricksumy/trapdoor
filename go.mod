@@ -1,4 +1,4 @@
-module github.com/shuricksumy/tunnelward
+module github.com/shuricksumy/trapdoor
 
 go 1.24.0
 

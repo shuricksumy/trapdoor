@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/store"
+	"github.com/shuricksumy/trapdoor/internal/store"
 )
 
 type clock struct {
@@ -22,7 +22,7 @@ func (c *clock) Add(d time.Duration) { c.mu.Lock(); c.t = c.t.Add(d); c.mu.Unloc
 
 func newService(t *testing.T) (*Service, *clock) {
 	t.Helper()
-	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "tw.db"))
+	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "td.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

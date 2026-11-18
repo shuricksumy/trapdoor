@@ -26,7 +26,7 @@ jobs:
       - name: test
         run: go test -race -count=1 ./...
       - name: build
-        run: make build && ./bin/tunnelward version
+        run: make build && ./bin/trapdoor version
 
   ui:
     runs-on: ubuntu-latest
@@ -61,9 +61,9 @@ jobs:
       - name: Compatibility tests
         run: go test -count=1 -run Compat -v ./internal/pki/
         env:
-          TW_EASYRSA_DIR: ${{ runner.temp }}/easyrsa
+          TD_EASYRSA_DIR: ${{ runner.temp }}/easyrsa
 
-  # Real OpenVPN server + client on the runner, using tunnelward's PKI and profiles.
+  # Real OpenVPN server + client on the runner, using trapdoor's PKI and profiles.
   e2e:
     runs-on: ubuntu-latest
     steps:
@@ -85,7 +85,7 @@ jobs:
       - name: Build (with UI)
         run: make ui build
       - name: End-to-end
-        run: sudo test/e2e/run.sh bin/tunnelward
+        run: sudo test/e2e/run.sh bin/trapdoor
 
   lint:
     runs-on: ubuntu-latest

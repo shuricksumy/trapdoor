@@ -6,7 +6,7 @@ package setup
 import (
 	"errors"
 	"fmt"
-	"github.com/shuricksumy/tunnelward/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/api"
 	"net/netip"
 	"regexp"
 	"slices"
@@ -45,7 +45,7 @@ func Defaults(r *Request) {
 		r.Subnet = "10.8.0.0/24"
 	}
 	if r.CAName == "" {
-		r.CAName = "tunnelward CA"
+		r.CAName = "trapdoor CA"
 	}
 	if r.KeyType == "" {
 		r.KeyType = "ec256"
@@ -109,7 +109,7 @@ type Paths struct {
 	TLSKey        string // e.g. tls-crypt-v2.key ("" for none)
 	CCD           string // e.g. ccd
 	Management    string // "127.0.0.1 2080"
-	AuthVerify    string // command, e.g. /usr/local/bin/tunnelward auth-verify --ccd /etc/openvpn/ccd
+	AuthVerify    string // command, e.g. /usr/local/bin/trapdoor auth-verify --ccd /etc/openvpn/ccd
 	Group         string // group to drop to: nogroup or nobody; "" keeps root
 }
 
@@ -120,7 +120,7 @@ func ServerConf(r Request, p Paths, now time.Time) string {
 	sub := netip.MustParsePrefix(r.Subnet)
 	var b strings.Builder
 	w := func(format string, a ...any) { fmt.Fprintf(&b, format+"\n", a...) }
-	w("# OpenVPN server, created by the tunnelward setup on %s.", now.UTC().Format("2006-01-02"))
+	w("# OpenVPN server, created by the trapdoor setup on %s.", now.UTC().Format("2006-01-02"))
 	w("# Edit it on the Server page; every change is checked and backed up.")
 	w("")
 	w("port %d", r.Port)
@@ -174,7 +174,7 @@ func ServerConf(r Request, p Paths, now time.Time) string {
 		w(`auth-user-pass-verify "%s" via-file`, p.AuthVerify)
 	}
 	w("")
-	w("# Used by tunnelward for live sessions and restarts; keep it on localhost.")
+	w("# Used by trapdoor for live sessions and restarts; keep it on localhost.")
 	w("management %s", p.Management)
 	w("verb 3")
 	return b.String()

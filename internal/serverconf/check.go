@@ -21,7 +21,7 @@ type Problem struct {
 
 // Check validates config text before it is written: the openvpn binary
 // parses it (unknown options, bad values), referenced files must exist, and
-// options tunnelward relies on are reported when missing. dir is the
+// options trapdoor relies on are reported when missing. dir is the
 // directory OpenVPN runs in (relative paths resolve against it).
 func Check(ctx context.Context, raw, dir, openvpnBin string) []Problem {
 	var out []Problem
@@ -119,10 +119,10 @@ func Check(ctx context.Context, raw, dir, openvpnBin string) []Problem {
 		}
 	}
 	if !have["server"] && !have["mode"] {
-		add(true, `"server" is missing: tunnelward manages a server with a VPN subnet`)
+		add(true, `"server" is missing: trapdoor manages a server with a VPN subnet`)
 	}
 	if !have["management"] {
-		add(false, `no "management" line: live sessions, kicking and restarts from tunnelward will not work`)
+		add(false, `no "management" line: live sessions, kicking and restarts from trapdoor will not work`)
 	}
 	if !have["crl-verify"] {
 		add(false, `no "crl-verify" line: revoked clients can still connect`)
@@ -134,7 +134,7 @@ func Check(ctx context.Context, raw, dir, openvpnBin string) []Problem {
 }
 
 func parseWithOpenVPN(ctx context.Context, raw, dir, bin string) (string, error) {
-	f, err := os.CreateTemp("", "tw-server-*.conf")
+	f, err := os.CreateTemp("", "td-server-*.conf")
 	if err != nil {
 		return "", err
 	}

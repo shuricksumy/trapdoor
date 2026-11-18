@@ -40,7 +40,7 @@
         <path d="M19 36c0-7.2 5.8-13 13-13s13 5.8 13 13" fill="none" stroke="var(--upload)" stroke-width="5" stroke-linecap="round" />
       </svg>
     </div>
-    <h1>tunnelward</h1>
+    <h1>trapdoor</h1>
     <p class="muted">Log in to manage your VPN server.</p>
 
     {#if error}<div class="banner bad" role="alert">{error}</div>{/if}

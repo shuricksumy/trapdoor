@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/store"
+	"github.com/shuricksumy/trapdoor/internal/store"
 )
 
 // Group is the period size of a report series.

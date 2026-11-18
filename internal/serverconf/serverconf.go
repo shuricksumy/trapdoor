@@ -238,7 +238,7 @@ func Apply(raw string, s Settings) string {
 		}
 	}
 	if len(missing) > 0 {
-		out = append(out, "", "# Added by tunnelward")
+		out = append(out, "", "# Added by trapdoor")
 		out = append(out, missing...)
 	}
 	return strings.Join(out, "\n") + "\n"

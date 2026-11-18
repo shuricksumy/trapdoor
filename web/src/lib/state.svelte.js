@@ -48,7 +48,7 @@ export const settings = $state({ expiryWarnDays: 30, setupNeeded: false });
 const media = matchMedia('(prefers-color-scheme: dark)');
 function load() {
   try {
-    return localStorage.getItem('tw-theme') || 'auto';
+    return localStorage.getItem('td-theme') || 'auto';
   } catch {
     return 'auto';
   }
@@ -62,7 +62,7 @@ function apply() {
 export function setTheme(choice) {
   theme.choice = choice;
   try {
-    localStorage.setItem('tw-theme', choice);
+    localStorage.setItem('td-theme', choice);
   } catch {
     /* private mode: keep for this visit only */
   }

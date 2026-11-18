@@ -1,4 +1,4 @@
-# How tunnelward works
+# How trapdoor works
 
 Details behind the pages of the web UI. For installing, see the [README](../README.md);
 for the HTTP API, [api.md](api.md).
@@ -36,22 +36,22 @@ management interface on 127.0.0.1.
 ## Client profiles
 
 `.ovpn` files are built like openvpn-ui did, so existing servers produce the same files:
-`<TW_OPENVPN_DIR>/client-template.txt` + inline `<ca>`, `<cert>`, `<key>` + the
+`<TD_OPENVPN_DIR>/client-template.txt` + inline `<ca>`, `<cert>`, `<key>` + the
 control-channel key matching `server.conf` (`tls-crypt`, `tls-auth` with `key-direction 1`,
 or a per-client `tls-crypt-v2` key). tls-crypt-v2 client keys live in `keys-v2/<name>.key`;
-existing ones are reused, new ones are created with `openvpn --genkey` (`TW_OPENVPN_BIN`).
+existing ones are reused, new ones are created with `openvpn --genkey` (`TD_OPENVPN_BIN`).
 
 ## Client two-factor login
 
 Per client, in the UI (Clients → More → Two-factor login) or `PUT /api/v1/certs/{name}/auth`:
 an authenticator code (TOTP, HMAC-SHA256, 6 digits, 30 s) and/or a static password. The
 device logs in with username = its certificate name and password = static password followed
-by the code. OpenVPN checks it with tunnelward:
+by the code. OpenVPN checks it with trapdoor:
 
 ```
 # server.conf
 script-security 2
-auth-user-pass-verify "/usr/local/bin/tunnelward auth-verify" via-file
+auth-user-pass-verify "/usr/local/bin/trapdoor auth-verify" via-file
 # client-template.txt
 auth-user-pass
 ```
@@ -76,22 +76,22 @@ VPN subnet, topology, DNS and search domain for clients, full tunnel, client-to-
 duplicate-cn, max clients, server routes, routes pushed to everyone) and a raw editor for
 the whole `server.conf`. Every other line and comment in the file is kept.
 
-- Before saving, the config is checked: OpenVPN itself parses it, plus tunnelward's checks
+- Before saving, the config is checked: OpenVPN itself parses it, plus trapdoor's checks
   (values OpenVPN only checks at startup, referenced key/cert files and directories exist,
   missing `management` / `crl-verify` / `client-config-dir` are pointed out)
 - A preview shows exactly which lines change; saving keeps a backup (last 10, in
-  `tunnelward-backups/`) and is refused if the file changed in the meantime
+  `trapdoor-backups/`) and is refused if the file changed in the meantime
 - "Networks behind clients" offers the LANs set on clients that still lack a `route` line
 - **Apply and restart** restarts OpenVPN through the management interface and waits for it;
   if it does not come back within 30 s, the config it ran with before is restored and it is
   started again
-- Restart method `TW_OPENVPN_RESTART`: `SIGHUP` (default; OpenVPN re-reads its config) or
+- Restart method `TD_OPENVPN_RESTART`: `SIGHUP` (default; OpenVPN re-reads its config) or
   `SIGTERM` when a supervisor starts it again — the Docker image's `openvpn` service does
   that inside the same container, so the agent keeps its shared network
 
 ## Expiring certificates
 
-- Client certificates expiring within `TW_EXPIRY_WARN_DAYS` (default 30) are flagged in the UI
+- Client certificates expiring within `TD_EXPIRY_WARN_DAYS` (default 30) are flagged in the UI
   and logged by the web process at start and once a day; the CA is flagged 90 days ahead
   (when it expires, every client stops working at once).
 - Clients → select several (or "Select them" on the banner) → **Renew selected**, or
@@ -114,7 +114,7 @@ Per client, in the UI (Clients → More → Network) or `PUT /api/v1/certs/{name
 
 Addresses are checked against `server` / `topology` in `server.conf` and against the other
 clients' static addresses. A LAN behind a client also needs `route <net> <mask>` in
-`server.conf`: tunnelward warns with the exact line to add. `server.conf` needs
+`server.conf`: trapdoor warns with the exact line to add. `server.conf` needs
 `client-config-dir ccd`. Changes apply when the client reconnects (the UI offers to reconnect
 it). The 2FA lines and any other lines in the file are kept; openvpn-ui's files are read as they are.
 
@@ -125,16 +125,16 @@ clients) to a network or address, optionally limited to TCP/UDP ports or ping, c
 the top; the first match decides, then the default (allow or block). Replies to allowed
 traffic always pass.
 
-The agent renders them into the iptables chain `TW-FWD`, jumped to from `INPUT` and
+The agent renders them into the iptables chain `TD-FWD`, jumped to from `INPUT` and
 `FORWARD` for traffic from `tun` devices, so they cover the server itself and everything
 behind it. Rules match a client by its fixed VPN address; the page assigns free addresses
 (from the top of the subnet) to clients that have none. With `client-to-client` OpenVPN
 forwards traffic between clients itself, so the rules cannot see it.
 
-| `TW_FIREWALL` | |
+| `TD_FIREWALL` | |
 |---|---|
 | `direct` (default) | the agent runs `iptables-restore` itself (host install as root) |
-| `file` | the agent writes `tunnelward-firewall.rules`; the OpenVPN container (the one with `NET_ADMIN`) applies it and reports back — the compose default |
+| `file` | the agent writes `trapdoor-firewall.rules`; the OpenVPN container (the one with `NET_ADMIN`) applies it and reports back — the compose default |
 | `off` | the agent never touches the firewall |
 
 Nothing is changed until rules are saved for the first time. In direct mode the agent
@@ -142,18 +142,18 @@ restores them when it starts.
 
 ## Traffic history
 
-The web process asks the agent for the connected clients every `TW_POLL_INTERVAL` (default
+The web process asks the agent for the connected clients every `TD_POLL_INTERVAL` (default
 30 s) and stores sessions and traffic per client per hour in its SQLite database. If polls
 were missed (web down, agent unreachable) the traffic of the gap is spread over its hours and
 marked *estimated* instead of showing up as one spike.
 
 The Traffic page shows any date range by day, month or year, for the whole server or one
 client, with each client's share, session count and online time, and exports CSV. Days,
-months and years follow `TW_TZ`. Upload and download are from the client's point of view.
+months and years follow `TD_TZ`. Upload and download are from the client's point of view.
 
 API report parameters: `preset=today|this_month|last_month|last_30_days|this_year|last_year`
 **or** `from=YYYY-MM-DD&to=YYYY-MM-DD` (inclusive; default this month), `group=day|month|year`,
-`name=<user>` (omit for the whole server). Days/months/years follow `TW_TZ` (IANA name).
+`name=<user>` (omit for the whole server). Days/months/years follow `TD_TZ` (IANA name).
 The report has totals, a gap-free series per period, and per-user totals with share,
 session count and online time. Upload/download are from the user's point of view.
 
@@ -162,20 +162,20 @@ traffic of the gap is spread over its hours and flagged `estimated` instead of o
 
 ## Admin login and security
 
-Create admins with the CLI (`tunnelward user add <name>`, also `passwd`, `del`, `list`); the
-password comes from stdin or `TW_ADMIN_PASSWORD`.
+Create admins with the CLI (`trapdoor user add <name>`, also `passwd`, `del`, `list`); the
+password comes from stdin or `TD_ADMIN_PASSWORD`.
 
 - Passwords: PBKDF2-SHA256, 600 000 iterations, at least 10 characters
-- Session cookie `tw_session`: random 256-bit token, stored only as a SHA-256 hash; `HttpOnly`,
-  `SameSite=Strict`, `Secure` (set `TW_COOKIE_SECURE=false` only for plain-HTTP testing)
-- Logged out after `TW_SESSION_IDLE` (default 12h) of inactivity, and after 7 days at most;
+- Session cookie `td_session`: random 256-bit token, stored only as a SHA-256 hash; `HttpOnly`,
+  `SameSite=Strict`, `Secure` (set `TD_COOKIE_SECURE=false` only for plain-HTTP testing)
+- Logged out after `TD_SESSION_IDLE` (default 12h) of inactivity, and after 7 days at most;
   changing a password logs out all sessions of that user
 - Failed logins throttled: 10 per IP and 30 per username per 15 minutes; unknown usernames take
   as long as wrong passwords
 - Requests that change something are refused when they come from another site (CSRF)
-- Behind a reverse proxy set `TW_TRUSTED_PROXIES` so the real client IP is used
+- Behind a reverse proxy set `TD_TRUSTED_PROXIES` so the real client IP is used
 - Every change is logged as `audit action=... target=... by=<user>`
-- Strict Content-Security-Policy, no CDN: the UI and its fonts are served by tunnelward itself
+- Strict Content-Security-Policy, no CDN: the UI and its fonts are served by trapdoor itself
 
 The pieces are separated so that the part facing the browser has no privileges:
 

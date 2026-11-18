@@ -42,7 +42,7 @@ type Options struct {
 
 // InitOptions configure a new certificate authority.
 type InitOptions struct {
-	CommonName string        // CA common name, default "tunnelward CA"
+	CommonName string        // CA common name, default "trapdoor CA"
 	KeyType    KeyType       // default DefaultKeyType
 	Validity   time.Duration // default DefaultCAValidity
 }
@@ -80,7 +80,7 @@ func Init(dir string, init InitOptions, opts Options) (*Store, error) {
 		return nil, fmt.Errorf("%w: %s", ErrAlreadyExists, s.path("ca.crt"))
 	}
 	if init.CommonName == "" {
-		init.CommonName = "tunnelward CA"
+		init.CommonName = "trapdoor CA"
 	}
 	if init.KeyType.Algo == "" {
 		init.KeyType = DefaultKeyType

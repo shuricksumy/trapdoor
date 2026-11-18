@@ -8,12 +8,12 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/auth"
-	"github.com/shuricksumy/tunnelward/internal/history"
-	"github.com/shuricksumy/tunnelward/internal/httpx"
-	"github.com/shuricksumy/tunnelward/internal/version"
-	"github.com/shuricksumy/tunnelward/internal/webui"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/auth"
+	"github.com/shuricksumy/trapdoor/internal/history"
+	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/version"
+	"github.com/shuricksumy/trapdoor/internal/webui"
 )
 
 // AgentClient is the subset of the agent API the web process uses.

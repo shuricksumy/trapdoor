@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/history"
-	"github.com/shuricksumy/tunnelward/internal/httpx"
-	"github.com/shuricksumy/tunnelward/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/history"
+	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/pki"
 )
 
 // parseQuery reads ?preset= or ?from=&to= (YYYY-MM-DD, inclusive, in the
@@ -65,7 +65,7 @@ func (s *Server) handleStatsCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition",
-		fmt.Sprintf(`attachment; filename="tunnelward-%s_%s.csv"`, rep.From, rep.To))
+		fmt.Sprintf(`attachment; filename="trapdoor-%s_%s.csv"`, rep.From, rep.To))
 	cw := csv.NewWriter(w)
 	_ = cw.Write([]string{"period", "name", "upload_bytes", "download_bytes", "estimated"})
 	for _, row := range rep.Rows {

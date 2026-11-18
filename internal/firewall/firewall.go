@@ -1,5 +1,5 @@
-// Package firewall turns tunnelward's access rules for VPN clients into an
-// iptables chain (TW-FWD, jumped to from INPUT and FORWARD for traffic from
+// Package firewall turns trapdoor's access rules for VPN clients into an
+// iptables chain (TD-FWD, jumped to from INPUT and FORWARD for traffic from
 // tun devices) and applies it, either directly or through a file that the
 // OpenVPN container applies (Docker: only that container has NET_ADMIN).
 package firewall
@@ -9,15 +9,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/shuricksumy/tunnelward/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/api"
 	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
 )
 
-// Chain is the iptables chain tunnelward owns.
-const Chain = "TW-FWD"
+// Chain is the iptables chain trapdoor owns.
+const Chain = "TD-FWD"
 
 // Actions and defaults.
 const (
@@ -182,7 +182,7 @@ func Render(p Policy, c Clients) Result {
 	var b strings.Builder
 	var res Result
 	w := func(format string, a ...any) { fmt.Fprintf(&b, format+"\n", a...) }
-	w("# tunnelward access rules for VPN clients; written by the agent, do not edit")
+	w("# trapdoor access rules for VPN clients; written by the agent, do not edit")
 	w("*filter")
 	w(":%s - [0:0]", Chain)
 	w("-F %s", Chain)

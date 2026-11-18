@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/store"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/store"
 )
 
 type fakeSource struct {
@@ -33,7 +33,7 @@ type env struct {
 
 func newEnv(t *testing.T, start time.Time) *env {
 	t.Helper()
-	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "tw.db"))
+	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "td.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

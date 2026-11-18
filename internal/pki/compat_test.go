@@ -1,7 +1,7 @@
 package pki
 
 // Compatibility tests against the real easyrsa and openssl CLIs.
-// They run only when TW_EASYRSA_DIR points at an unpacked EasyRSA 3.x release
+// They run only when TD_EASYRSA_DIR points at an unpacked EasyRSA 3.x release
 // and openssl is on PATH (CI does both; see .github/workflows/ci.yml).
 
 import (
@@ -20,9 +20,9 @@ type easyrsa struct {
 
 func newEasyRSA(t *testing.T) *easyrsa {
 	t.Helper()
-	dir := os.Getenv("TW_EASYRSA_DIR")
+	dir := os.Getenv("TD_EASYRSA_DIR")
 	if dir == "" {
-		t.Skip("TW_EASYRSA_DIR not set")
+		t.Skip("TD_EASYRSA_DIR not set")
 	}
 	if _, err := exec.LookPath("openssl"); err != nil {
 		t.Skip("openssl not found")
@@ -77,8 +77,8 @@ func statusOf(t *testing.T, s *Store, name string) Status {
 	return c.Status
 }
 
-// An easyrsa-created PKI is managed by tunnelward, and easyrsa still works on it.
-func TestCompatEasyRSAToTunnelward(t *testing.T) {
+// An easyrsa-created PKI is managed by trapdoor, and easyrsa still works on it.
+func TestCompatEasyRSAToTrapdoor(t *testing.T) {
 	e := newEasyRSA(t)
 	e.run("init-pki")
 	e.run("--req-cn=Compat CA", "build-ca", "nopass")
@@ -137,7 +137,7 @@ func TestCompatEasyRSAToTunnelward(t *testing.T) {
 		t.Error("superseded carol cert still verifies")
 	}
 
-	// easyrsa keeps working on the PKI tunnelward wrote.
+	// easyrsa keeps working on the PKI trapdoor wrote.
 	e.run("build-client-full", "dave", "nopass")
 	e.run("show-cert", "carol")
 	e.run("revoke", "carol")
@@ -155,8 +155,8 @@ func TestCompatEasyRSAToTunnelward(t *testing.T) {
 	}
 }
 
-// A tunnelward-created PKI can be used by easyrsa.
-func TestCompatTunnelwardToEasyRSA(t *testing.T) {
+// A trapdoor-created PKI can be used by easyrsa.
+func TestCompatTrapdoorToEasyRSA(t *testing.T) {
 	e := newEasyRSA(t)
 	s, err := Init(e.pki, InitOptions{CommonName: "TW CA"}, Options{})
 	if err != nil {
@@ -171,7 +171,7 @@ func TestCompatTunnelwardToEasyRSA(t *testing.T) {
 	if _, err := s.Issue(ctx(), IssueRequest{Name: "frank"}); err != nil {
 		t.Fatal(err)
 	}
-	e.run("revoke", "frank") // easyrsa revokes a cert tunnelward issued
+	e.run("revoke", "frank") // easyrsa revokes a cert trapdoor issued
 	e.run("gen-crl")
 
 	if st := statusOf(t, s, "frank"); st != StatusRevoked {

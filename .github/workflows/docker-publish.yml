@@ -34,7 +34,7 @@ jobs:
         with:
           context: .
           load: true
-          tags: tunnelward:smoke
+          tags: trapdoor:smoke
           build-args: |
             VERSION=smoke
             COMMIT=${{ github.sha }}
@@ -43,7 +43,7 @@ jobs:
 
       - name: Compose files are valid (plain and with Traefik)
         run: |
-          export TW_AGENT_TOKEN=x
+          export TD_AGENT_TOKEN=x
           docker compose -f docker-compose.yml config -q
           docker compose -f docker-compose.yml -f docker-compose.traefik.yml config --format json > traefik.json
           jq -e '(.services.web.ports // []) == [] and (.services.web.labels["traefik.enable"] == "true")' traefik.json
@@ -52,7 +52,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq openvpn
 
       - name: Smoke test
-        run: test/docker/smoke.sh tunnelward:smoke
+        run: test/docker/smoke.sh trapdoor:smoke
 
   build-and-push:
     needs: smoke

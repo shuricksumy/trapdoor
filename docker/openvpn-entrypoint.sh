@@ -4,7 +4,7 @@
 # - NAT for VPN clients: VPN_NAT_SUBNET=auto (the "server" line of
 #   server.conf, checked at every start) or a CIDR; empty = none.
 #   [VPN_NAT_IFACE=eth0]
-# - supervises OpenVPN: when it exits (tunnelward restarts it with SIGTERM
+# - supervises OpenVPN: when it exits (trapdoor restarts it with SIGTERM
 #   through the management interface, or it crashes) it is started again in
 #   this container, so the agent sharing this network namespace keeps working.
 #   docker stop still stops everything.
@@ -18,18 +18,18 @@ if [ ! -c /dev/net/tun ]; then
 	chmod 600 /dev/net/tun
 fi
 
-# Access rules from tunnelward (TW_FIREWALL=file): the agent writes the
+# Access rules from trapdoor (TD_FIREWALL=file): the agent writes the
 # rules file, this container (the one with NET_ADMIN) applies it and reports
 # "ok <sha256>" or "error <sha256> <message>" in the status file.
-FW_RULES=$(dirname "$CONF")/tunnelward-firewall.rules
-FW_STATUS=$(dirname "$CONF")/tunnelward-firewall.status
+FW_RULES=$(dirname "$CONF")/trapdoor-firewall.rules
+FW_STATUS=$(dirname "$CONF")/trapdoor-firewall.status
 fw_sum=
 fw_apply() {
 	sum=$(sha256sum "$FW_RULES" | cut -d' ' -f1)
 	[ "$sum" = "$fw_sum" ] && return 0
 	if out=$(iptables-restore --noflush <"$FW_RULES" 2>&1) &&
 		out=$(for c in INPUT FORWARD; do
-			iptables -C "$c" -i tun+ -j TW-FWD 2>/dev/null || iptables -I "$c" 1 -i tun+ -j TW-FWD || exit 1
+			iptables -C "$c" -i tun+ -j TD-FWD 2>/dev/null || iptables -I "$c" 1 -i tun+ -j TD-FWD || exit 1
 		done 2>&1); then
 		echo "ok $sum" >"$FW_STATUS.tmp"
 		echo "openvpn: access rules applied"

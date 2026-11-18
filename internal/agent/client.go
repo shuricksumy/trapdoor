@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/api"
 )
 
 // Client calls the agent API. It is used by the web process.

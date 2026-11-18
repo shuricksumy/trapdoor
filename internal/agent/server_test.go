@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/config"
-	"github.com/shuricksumy/tunnelward/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/config"
+	"github.com/shuricksumy/trapdoor/internal/httpx"
 )
 
 func testServer(t *testing.T) *httptest.Server {

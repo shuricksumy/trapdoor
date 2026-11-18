@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shuricksumy/tunnelward/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/pki"
 )
 
 const template = `client

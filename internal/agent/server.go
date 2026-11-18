@@ -1,4 +1,4 @@
-// Package agent implements the privileged tunnelward agent and its HTTP API.
+// Package agent implements the privileged trapdoor agent and its HTTP API.
 package agent
 
 import (
@@ -11,16 +11,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/ccd"
-	"github.com/shuricksumy/tunnelward/internal/clientauth"
-	"github.com/shuricksumy/tunnelward/internal/config"
-	"github.com/shuricksumy/tunnelward/internal/httpx"
-	"github.com/shuricksumy/tunnelward/internal/mgmt"
-	"github.com/shuricksumy/tunnelward/internal/ovpn"
-	"github.com/shuricksumy/tunnelward/internal/pki"
-	"github.com/shuricksumy/tunnelward/internal/serverconf"
-	"github.com/shuricksumy/tunnelward/internal/version"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/ccd"
+	"github.com/shuricksumy/trapdoor/internal/clientauth"
+	"github.com/shuricksumy/trapdoor/internal/config"
+	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/mgmt"
+	"github.com/shuricksumy/trapdoor/internal/ovpn"
+	"github.com/shuricksumy/trapdoor/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/serverconf"
+	"github.com/shuricksumy/trapdoor/internal/version"
 )
 
 // Server is the agent HTTP API.

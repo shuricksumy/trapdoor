@@ -68,7 +68,7 @@ func TestApplyPreserves(t *testing.T) {
 		"# DNS from the local resolver\npush \"dhcp-option DNS 10.8.0.1\"\nroute", // set replaced at first position
 		"route 192.168.50.0 255.255.255.0\nroute 192.168.60.0 255.255.255.0",
 		"user nobody", "status /var/log/openvpn/status.log", "verb 3",
-		"# Added by tunnelward\nclient-to-client\npush \"route 192.168.1.0 255.255.255.0\"",
+		"# Added by trapdoor\nclient-to-client\npush \"route 192.168.1.0 255.255.255.0\"",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)

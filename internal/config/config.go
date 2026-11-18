@@ -1,7 +1,7 @@
-// Package config loads tunnelward settings from environment variables.
+// Package config loads trapdoor settings from environment variables.
 //
 // Every setting has a safe default so the binary starts with no configuration
-// in development. All variables use the TW_ prefix.
+// in development. All variables use the TD_ prefix.
 package config
 
 import (
@@ -17,112 +17,112 @@ import (
 // Agent is the configuration of the privileged agent process.
 type Agent struct {
 	// Listen is the address the agent API binds to: "host:port" for TCP or
-	// "unix:/path/to/socket" for a unix socket.            TW_AGENT_LISTEN
+	// "unix:/path/to/socket" for a unix socket.            TD_AGENT_LISTEN
 	Listen string
-	// Token is the shared secret the web process must send. TW_AGENT_TOKEN
+	// Token is the shared secret the web process must send. TD_AGENT_TOKEN
 	Token string
 	// SocketGID, when >= 0, becomes the group of the unix socket so a
-	// non-root web container can connect (mode 0660).    TW_AGENT_SOCKET_GID
+	// non-root web container can connect (mode 0660).    TD_AGENT_SOCKET_GID
 	SocketGID int
-	// OpenVPNDir is the OpenVPN config directory.           TW_OPENVPN_DIR
+	// OpenVPNDir is the OpenVPN config directory.           TD_OPENVPN_DIR
 	OpenVPNDir string
-	// PKIDir is the easyrsa-compatible PKI directory.       TW_PKI_DIR
+	// PKIDir is the easyrsa-compatible PKI directory.       TD_PKI_DIR
 	PKIDir string
-	// MgmtAddr is the OpenVPN management interface address. TW_OPENVPN_MGMT
+	// MgmtAddr is the OpenVPN management interface address. TD_OPENVPN_MGMT
 	MgmtAddr string
-	// MgmtPassword for "management ... pw-file" setups.  TW_OPENVPN_MGMT_PASSWORD
+	// MgmtPassword for "management ... pw-file" setups.  TD_OPENVPN_MGMT_PASSWORD
 	MgmtPassword string
-	// CCDDir holds per-client files (2FA lines).        TW_CCD_DIR (default <openvpn dir>/ccd)
+	// CCDDir holds per-client files (2FA lines).        TD_CCD_DIR (default <openvpn dir>/ccd)
 	CCDDir string
-	// TOTPIssuer is the name shown in authenticator apps. TW_TOTP_ISSUER
+	// TOTPIssuer is the name shown in authenticator apps. TD_TOTP_ISSUER
 	TOTPIssuer string
-	// OpenVPNBin is the openvpn binary (tls-crypt-v2 keys). TW_OPENVPN_BIN
+	// OpenVPNBin is the openvpn binary (tls-crypt-v2 keys). TD_OPENVPN_BIN
 	OpenVPNBin string
 	// RestartSignal restarts OpenVPN via management: SIGHUP (re-read config)
-	// or SIGTERM when a supervisor starts it again (Docker image). TW_OPENVPN_RESTART
+	// or SIGTERM when a supervisor starts it again (Docker image). TD_OPENVPN_RESTART
 	RestartSignal string
-	// CAPassphrase unlocks an encrypted CA key.            TW_CA_PASSPHRASE
+	// CAPassphrase unlocks an encrypted CA key.            TD_CA_PASSPHRASE
 	CAPassphrase string
 	// CRLCopies get a copy of crl.pem after every change
-	// (comma-separated; "-" disables).                     TW_CRL_COPIES
+	// (comma-separated; "-" disables).                     TD_CRL_COPIES
 	CRLCopies []string
 	// Setup* describe a container that publishes a fixed port: the setup
 	// wizard then keeps OpenVPN on SetupPort/SetupProto and suggests
-	// SetupPublicPort to clients.  TW_SETUP_PORT, TW_SETUP_PROTO, TW_SETUP_PUBLIC_PORT
+	// SetupPublicPort to clients.  TD_SETUP_PORT, TD_SETUP_PROTO, TD_SETUP_PUBLIC_PORT
 	SetupPort       int
 	SetupProto      string
 	SetupPublicPort int
 	// Firewall: how access rules are applied: direct (iptables in this
-	// process), file (the OpenVPN container applies them) or off. TW_FIREWALL
+	// process), file (the OpenVPN container applies them) or off. TD_FIREWALL
 	Firewall string
-	// IPTablesDir holds iptables/iptables-restore if not in PATH. TW_IPTABLES_DIR
+	// IPTablesDir holds iptables/iptables-restore if not in PATH. TD_IPTABLES_DIR
 	IPTablesDir string
 }
 
 // Web is the configuration of the web/API process.
 type Web struct {
-	// Listen is the HTTP address for browsers.              TW_WEB_LISTEN
+	// Listen is the HTTP address for browsers.              TD_WEB_LISTEN
 	Listen string
 	// AgentURL is where the agent API is reachable:
-	// "http://host:port" or "unix:/path/to/socket".         TW_AGENT_URL
+	// "http://host:port" or "unix:/path/to/socket".         TD_AGENT_URL
 	AgentURL string
-	// AgentToken must match the agent's TW_AGENT_TOKEN.     TW_AGENT_TOKEN
+	// AgentToken must match the agent's TD_AGENT_TOKEN.     TD_AGENT_TOKEN
 	AgentToken string
-	// DBPath is the SQLite database file.                   TW_DB_PATH
+	// DBPath is the SQLite database file.                   TD_DB_PATH
 	DBPath string
-	// AgentTimeout bounds each call to the agent.           TW_AGENT_TIMEOUT
+	// AgentTimeout bounds each call to the agent.           TD_AGENT_TIMEOUT
 	AgentTimeout time.Duration
 	// APIToken optionally lets scripts call /api/v1/* with
-	// "Authorization: Bearer"; disabled if empty.         TW_WEB_API_TOKEN
+	// "Authorization: Bearer"; disabled if empty.         TD_WEB_API_TOKEN
 	APIToken string
-	// CookieSecure marks the login cookie HTTPS-only.     TW_COOKIE_SECURE (default true)
+	// CookieSecure marks the login cookie HTTPS-only.     TD_COOKIE_SECURE (default true)
 	CookieSecure bool
-	// TrustedProxies may set X-Forwarded-For (CIDRs).     TW_TRUSTED_PROXIES
+	// TrustedProxies may set X-Forwarded-For (CIDRs).     TD_TRUSTED_PROXIES
 	TrustedProxies []netip.Prefix
 	// ExpiryWarnDays flags client certificates expiring
-	// within this many days.                              TW_EXPIRY_WARN_DAYS (default 30)
+	// within this many days.                              TD_EXPIRY_WARN_DAYS (default 30)
 	ExpiryWarnDays int
-	// SessionIdle logs out inactive admins.               TW_SESSION_IDLE (default 12h)
+	// SessionIdle logs out inactive admins.               TD_SESSION_IDLE (default 12h)
 	SessionIdle time.Duration
-	// Location for day/month/year boundaries in reports.  TW_TZ (IANA, default local)
+	// Location for day/month/year boundaries in reports.  TD_TZ (IANA, default local)
 	Location *time.Location
-	// PollInterval for recording session history.         TW_POLL_INTERVAL
+	// PollInterval for recording session history.         TD_POLL_INTERVAL
 	PollInterval time.Duration
 }
 
 // ErrNoToken is returned when the shared agent token is not set.
-var ErrNoToken = errors.New("TW_AGENT_TOKEN must be set")
+var ErrNoToken = errors.New("TD_AGENT_TOKEN must be set")
 
 // LoadAgent reads agent settings from the environment.
 func LoadAgent() (Agent, error) {
-	openvpnDir := env("TW_OPENVPN_DIR", "/etc/openvpn")
+	openvpnDir := env("TD_OPENVPN_DIR", "/etc/openvpn")
 	gid := -1
-	if v := os.Getenv("TW_AGENT_SOCKET_GID"); v != "" {
+	if v := os.Getenv("TD_AGENT_SOCKET_GID"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			return Agent{}, fmt.Errorf("TW_AGENT_SOCKET_GID must be a group number")
+			return Agent{}, fmt.Errorf("TD_AGENT_SOCKET_GID must be a group number")
 		}
 		gid = n
 	}
 	c := Agent{
 		SocketGID:     gid,
-		Listen:        env("TW_AGENT_LISTEN", "127.0.0.1:9090"),
-		Token:         os.Getenv("TW_AGENT_TOKEN"),
+		Listen:        env("TD_AGENT_LISTEN", "127.0.0.1:9090"),
+		Token:         os.Getenv("TD_AGENT_TOKEN"),
 		OpenVPNDir:    openvpnDir,
-		PKIDir:        env("TW_PKI_DIR", openvpnDir+"/easy-rsa/pki"),
-		MgmtAddr:      env("TW_OPENVPN_MGMT", "127.0.0.1:2080"),
-		OpenVPNBin:    env("TW_OPENVPN_BIN", "openvpn"),
-		CCDDir:        env("TW_CCD_DIR", openvpnDir+"/ccd"),
-		RestartSignal: env("TW_OPENVPN_RESTART", "SIGHUP"),
-		TOTPIssuer:    env("TW_TOTP_ISSUER", "tunnelward"),
-		MgmtPassword:  os.Getenv("TW_OPENVPN_MGMT_PASSWORD"),
-		CAPassphrase:  os.Getenv("TW_CA_PASSPHRASE"),
-		CRLCopies:     list(env("TW_CRL_COPIES", openvpnDir+"/crl.pem")),
+		PKIDir:        env("TD_PKI_DIR", openvpnDir+"/easy-rsa/pki"),
+		MgmtAddr:      env("TD_OPENVPN_MGMT", "127.0.0.1:2080"),
+		OpenVPNBin:    env("TD_OPENVPN_BIN", "openvpn"),
+		CCDDir:        env("TD_CCD_DIR", openvpnDir+"/ccd"),
+		RestartSignal: env("TD_OPENVPN_RESTART", "SIGHUP"),
+		TOTPIssuer:    env("TD_TOTP_ISSUER", "trapdoor"),
+		MgmtPassword:  os.Getenv("TD_OPENVPN_MGMT_PASSWORD"),
+		CAPassphrase:  os.Getenv("TD_CA_PASSPHRASE"),
+		CRLCopies:     list(env("TD_CRL_COPIES", openvpnDir+"/crl.pem")),
 	}
 	for _, v := range []struct {
 		name string
 		dst  *int
-	}{{"TW_SETUP_PORT", &c.SetupPort}, {"TW_SETUP_PUBLIC_PORT", &c.SetupPublicPort}} {
+	}{{"TD_SETUP_PORT", &c.SetupPort}, {"TD_SETUP_PUBLIC_PORT", &c.SetupPublicPort}} {
 		if raw := os.Getenv(v.name); raw != "" {
 			n, err := strconv.Atoi(raw)
 			if err != nil || n < 1 || n > 65535 {
@@ -131,17 +131,17 @@ func LoadAgent() (Agent, error) {
 			*v.dst = n
 		}
 	}
-	c.Firewall = env("TW_FIREWALL", "direct")
+	c.Firewall = env("TD_FIREWALL", "direct")
 	if c.Firewall != "direct" && c.Firewall != "file" && c.Firewall != "off" {
-		return c, fmt.Errorf("TW_FIREWALL must be direct, file or off")
+		return c, fmt.Errorf("TD_FIREWALL must be direct, file or off")
 	}
-	c.IPTablesDir = os.Getenv("TW_IPTABLES_DIR")
-	c.SetupProto = os.Getenv("TW_SETUP_PROTO")
+	c.IPTablesDir = os.Getenv("TD_IPTABLES_DIR")
+	c.SetupProto = os.Getenv("TD_SETUP_PROTO")
 	if c.SetupProto != "" && c.SetupProto != "udp" && c.SetupProto != "tcp" {
-		return c, fmt.Errorf("TW_SETUP_PROTO must be udp or tcp")
+		return c, fmt.Errorf("TD_SETUP_PROTO must be udp or tcp")
 	}
 	if c.RestartSignal != "SIGHUP" && c.RestartSignal != "SIGTERM" {
-		return c, fmt.Errorf("TW_OPENVPN_RESTART must be SIGHUP or SIGTERM")
+		return c, fmt.Errorf("TD_OPENVPN_RESTART must be SIGHUP or SIGTERM")
 	}
 	if c.Token == "" {
 		return c, ErrNoToken
@@ -151,50 +151,50 @@ func LoadAgent() (Agent, error) {
 
 // LoadWeb reads web settings from the environment.
 func LoadWeb() (Web, error) {
-	timeout, err := time.ParseDuration(env("TW_AGENT_TIMEOUT", "30s"))
+	timeout, err := time.ParseDuration(env("TD_AGENT_TIMEOUT", "30s"))
 	if err != nil {
-		return Web{}, fmt.Errorf("TW_AGENT_TIMEOUT: %w", err)
+		return Web{}, fmt.Errorf("TD_AGENT_TIMEOUT: %w", err)
 	}
-	poll, err := time.ParseDuration(env("TW_POLL_INTERVAL", "30s"))
+	poll, err := time.ParseDuration(env("TD_POLL_INTERVAL", "30s"))
 	if err != nil || poll < 5*time.Second {
-		return Web{}, fmt.Errorf("TW_POLL_INTERVAL must be a duration of at least 5s")
+		return Web{}, fmt.Errorf("TD_POLL_INTERVAL must be a duration of at least 5s")
 	}
 	loc := time.Local
-	if tz := os.Getenv("TW_TZ"); tz != "" {
+	if tz := os.Getenv("TD_TZ"); tz != "" {
 		if loc, err = time.LoadLocation(tz); err != nil {
-			return Web{}, fmt.Errorf("TW_TZ: %w", err)
+			return Web{}, fmt.Errorf("TD_TZ: %w", err)
 		}
 	}
-	idle, err := time.ParseDuration(env("TW_SESSION_IDLE", "12h"))
+	idle, err := time.ParseDuration(env("TD_SESSION_IDLE", "12h"))
 	if err != nil || idle < time.Minute {
-		return Web{}, fmt.Errorf("TW_SESSION_IDLE must be a duration of at least 1m")
+		return Web{}, fmt.Errorf("TD_SESSION_IDLE must be a duration of at least 1m")
 	}
-	warnDays, err := strconv.Atoi(env("TW_EXPIRY_WARN_DAYS", "30"))
+	warnDays, err := strconv.Atoi(env("TD_EXPIRY_WARN_DAYS", "30"))
 	if err != nil || warnDays < 1 || warnDays > 365 {
-		return Web{}, fmt.Errorf("TW_EXPIRY_WARN_DAYS must be 1-365")
+		return Web{}, fmt.Errorf("TD_EXPIRY_WARN_DAYS must be 1-365")
 	}
 	var proxies []netip.Prefix
-	for _, p := range list(env("TW_TRUSTED_PROXIES", "-")) {
+	for _, p := range list(env("TD_TRUSTED_PROXIES", "-")) {
 		pfx, err := netip.ParsePrefix(p)
 		if err != nil {
 			addr, err2 := netip.ParseAddr(p)
 			if err2 != nil {
-				return Web{}, fmt.Errorf("TW_TRUSTED_PROXIES: %q is not a CIDR or IP", p)
+				return Web{}, fmt.Errorf("TD_TRUSTED_PROXIES: %q is not a CIDR or IP", p)
 			}
 			pfx = netip.PrefixFrom(addr, addr.BitLen())
 		}
 		proxies = append(proxies, pfx.Masked())
 	}
 	c := Web{
-		Listen:         env("TW_WEB_LISTEN", ":8080"),
-		AgentURL:       env("TW_AGENT_URL", "http://127.0.0.1:9090"),
-		AgentToken:     os.Getenv("TW_AGENT_TOKEN"),
-		DBPath:         env("TW_DB_PATH", "./data/tunnelward.db"),
+		Listen:         env("TD_WEB_LISTEN", ":8080"),
+		AgentURL:       env("TD_AGENT_URL", "http://127.0.0.1:9090"),
+		AgentToken:     os.Getenv("TD_AGENT_TOKEN"),
+		DBPath:         env("TD_DB_PATH", "./data/trapdoor.db"),
 		AgentTimeout:   timeout,
-		APIToken:       os.Getenv("TW_WEB_API_TOKEN"),
+		APIToken:       os.Getenv("TD_WEB_API_TOKEN"),
 		Location:       loc,
 		PollInterval:   poll,
-		CookieSecure:   env("TW_COOKIE_SECURE", "true") != "false",
+		CookieSecure:   env("TD_COOKIE_SECURE", "true") != "false",
 		TrustedProxies: proxies,
 		SessionIdle:    idle,
 	}

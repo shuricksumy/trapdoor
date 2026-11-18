@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/shuricksumy/tunnelward/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/pki"
 )
 
 // Store is a client-config-dir.
@@ -107,7 +107,7 @@ func writeKeepMode(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	tmp := path + ".tw-tmp"
+	tmp := path + ".td-tmp"
 	if err := os.WriteFile(tmp, data, mode); err != nil {
 		return err
 	}

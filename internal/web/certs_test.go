@@ -3,7 +3,7 @@ package web
 import (
 	"context"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/api"
 	"net/http"
 	"strings"
 	"testing"

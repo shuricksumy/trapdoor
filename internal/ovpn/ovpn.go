@@ -19,7 +19,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/shuricksumy/tunnelward/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/pki"
 )
 
 // TLSMode is the control-channel protection configured on the server.

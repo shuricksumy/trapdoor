@@ -1,9 +1,9 @@
-// Package pki implements the certificate authority operations tunnelward needs.
+// Package pki implements the certificate authority operations trapdoor needs.
 //
 // The implementation is pure Go (crypto/x509) and keeps the same layout on
 // disk as easyrsa 3.x, so existing openvpn-ui / easyrsa PKIs work without
 // re-issuing certificates, and the easyrsa CLI keeps working on a PKI that
-// tunnelward manages:
+// trapdoor manages:
 //
 //	ca.crt, private/ca.key
 //	issued/<name>.crt, private/<name>.key, reqs/<name>.req

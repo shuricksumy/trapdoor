@@ -27,7 +27,7 @@ type Net struct {
 	LAN        []netip.Prefix // iroute: networks behind the client
 }
 
-const header = "# tunnelward: network settings"
+const header = "# trapdoor: network settings"
 
 // Parse reads the network lines of a ccd file.
 func Parse(ccd string) (Net, error) {

@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuricksumy/tunnelward/internal/api"
-	"github.com/shuricksumy/tunnelward/internal/config"
-	"github.com/shuricksumy/tunnelward/internal/mgmt"
+	"github.com/shuricksumy/trapdoor/internal/api"
+	"github.com/shuricksumy/trapdoor/internal/config"
+	"github.com/shuricksumy/trapdoor/internal/mgmt"
 )
 
 // restartingMgmt simulates OpenVPN: after a signal the old process keeps
@@ -87,7 +87,7 @@ func call(t *testing.T, srv *httptest.Server, method, path string, body any, out
 		r = strings.NewReader(string(b))
 	}
 	req, _ := http.NewRequest(method, srv.URL+path, r)
-	req.Header.Set("X-Tunnelward-Token", "secret")
+	req.Header.Set("X-Trapdoor-Token", "secret")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
