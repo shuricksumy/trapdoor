@@ -1,336 +1,159 @@
 # tunnelward
 
-Web management for an OpenVPN server — certificates, clients, 2FA, routing and live sessions.
+[![CI](https://github.com/shuricksumy/tunnelward/actions/workflows/ci.yml/badge.svg)](https://github.com/shuricksumy/tunnelward/actions/workflows/ci.yml)
+[![Build](https://github.com/shuricksumy/tunnelward/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/shuricksumy/tunnelward/actions/workflows/docker-publish.yml)
+[![CodeQL](https://github.com/shuricksumy/tunnelward/actions/workflows/codeql.yml/badge.svg)](https://github.com/shuricksumy/tunnelward/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/shuricksumy/tunnelward)](https://github.com/shuricksumy/tunnelward/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-> **Status:** early development. Not usable yet. See [ROADMAP.md](ROADMAP.md).
+A web UI for your own OpenVPN server. Set the server up in a few clicks, create a profile
+for every phone and laptop, see who is connected and how much traffic each device used,
+and decide which networks each device may reach.
 
-tunnelward is the successor to [openvpn-ui](https://github.com/shuricksumy/openvpn-ui),
-rebuilt as a client–server application with a native Go PKI.
+tunnelward is the successor to [openvpn-ui](https://github.com/shuricksumy/openvpn-ui) and
+works with an existing openvpn-ui directory as it is: same certificates, same profiles,
+same two-factor logins.
 
-## Architecture
+| Overview | Phone (dark theme) |
+| --- | --- |
+| <img src="docs/screenshots/overview.png" width="560"> | <img src="docs/screenshots/mobile-dark.png" width="220"> |
 
-```
-[ Browser ] → [ tunnelward web ] ──HTTP API──▶ [ tunnelward agent ] → openvpn / PKI / firewall
-               users, DB, UI                     privileged, runs next to OpenVPN
-```
+| Clients | Traffic | Access rules |
+| --- | --- | --- |
+| <img src="docs/screenshots/clients.png" width="300"> | <img src="docs/screenshots/traffic-dark.png" width="300"> | <img src="docs/screenshots/access.png" width="300"> |
 
-- **agent** — the only privileged part. Owns the PKI (easyrsa-compatible layout on disk,
-  implemented in Go — no easyrsa or shell scripts at runtime), OpenVPN config, process
-  control, management interface and client auth.
-- **web** — unprivileged. Admin users, database, REST API for the frontend, serves the UI.
+## Features
 
-Both run from the same binary:
+- **Setup** that creates the certificate authority, keys and `server.conf` with modern
+  defaults (tls-crypt-v2, AES-GCM, TLS 1.2+) ([what it asks](docs/guide.md#setup))
+- **Clients**: create, download the `.ovpn` profile, revoke, restore, renew (also in bulk),
+  optional key passphrase; warnings before certificates expire
+- **Two-factor login** per client with an authenticator app (QR code) and/or a static password
+- **Connected now**: live sessions with traffic, disconnect a device
+- **Traffic history** per client and for the whole server: any date range, by day, month or
+  year, CSV export
+- **Network per client**: fixed VPN address, routes, networks behind a client (site-to-site),
+  all traffic through the VPN
+- **Access rules**: which client may reach which network or port; everything else allowed or
+  blocked
+- **Server settings** in a form or as raw `server.conf`, checked by OpenVPN before saving,
+  with a preview of the changes, backups and restart with automatic rollback
+- Light / dark / auto theme, works on phones
+- Secure by design: the web UI has no privileges, admin passwords are hashed, login attempts
+  are throttled, no external scripts or CDNs
 
-```
-tunnelward agent   # privileged side
-tunnelward web     # web UI + API
-tunnelward version
-```
+## Quick start (Docker)
 
-## Web UI
+You need a Linux server with Docker and a UDP port reachable from the internet.
 
-The UI (Svelte 5 + Vite, in `web/`) is embedded in the binary and served by `tunnelward web`:
-overview with today's connection timeline, clients (certificates), live sessions, and traffic
-statistics with day / month / year views, presets, per-client shares and CSV export.
-Light, dark or automatic theme; works on phones. Strict Content-Security-Policy, no CDN:
-fonts (IBM Plex) are bundled.
-
-## Docker
-
-One image (`ghcr.io/shuricksumy/tunnelward`, amd64 + arm64) runs three services
-from [docker-compose.yml](docker-compose.yml):
-
-| Service | Runs as | Privileges | Purpose |
-|---|---|---|---|
-| `openvpn` | root | `NET_ADMIN`, `/dev/net/tun` | the OpenVPN server (+ optional NAT) |
-| `agent` | root | none; shares `openvpn`'s network | PKI, profiles, sessions via management on `127.0.0.1` |
-| `web` | uid 10001 | none, read-only filesystem | UI + API, database in a volume |
-
-Web and agent talk over a unix socket on a shared volume, so the agent has no network port,
-and OpenVPN's management interface is never published.
-
-### Existing OpenVPN directory (e.g. from openvpn-ui)
-
-```
-cp .env.example .env                 # set TW_AGENT_TOKEN, TW_TZ, OPENVPN_DIR
+```bash
+mkdir tunnelward && cd tunnelward
+curl -fsSLO https://raw.githubusercontent.com/shuricksumy/tunnelward/main/docker-compose.yml
+curl -fsSL -o .env https://raw.githubusercontent.com/shuricksumy/tunnelward/main/.env.example
+sed -i "s/^TW_AGENT_TOKEN=.*/TW_AGENT_TOKEN=$(openssl rand -hex 32)/" .env
+nano .env                                    # time zone (TW_TZ), VPN port; the rest can stay
 docker compose up -d
-docker compose exec -it web tunnelward user add admin
+docker compose exec -it web tunnelward user add admin    # choose your admin password
 ```
 
-Expected layout in `OPENVPN_DIR` (the openvpn-ui defaults): `server.conf`,
-`client-template.txt`, `easy-rsa/pki/`, `crl.pem` (kept up to date by the agent).
-`server.conf` needs `management 127.0.0.1 2080` (openvpn-ui's `0.0.0.0 2080` also works
-inside the shared network namespace, but nothing else can reach it there).
+1. Open the web UI. It listens on `127.0.0.1:8080` of the server, so either put it behind
+   your reverse proxy ([below](#reverse-proxy)) or, for a first look, open an SSH tunnel:
+   `ssh -L 8080:127.0.0.1:8080 <server>` and browse to http://localhost:8080.
+2. Log in. The setup opens: enter the address clients connect to (a hostname or your public
+   IP), pick the options and press **Create the server**.
+3. Forward the VPN port (`VPN_PORT`, UDP 1194 by default) from your router or cloud firewall
+   to this server.
+4. **Clients → New client**, then **Download profile** and import it in the OpenVPN app on the
+   device (OpenVPN Connect, Tunnelblick, network-manager-openvpn, …).
 
-### New install
+## Moving from openvpn-ui
 
-```
-cp .env.example .env                 # set TW_AGENT_TOKEN, TW_TZ, VPN_PORT, VPN_PROTO
-docker compose up -d                 # openvpn waits until server.conf exists
-docker compose exec -it web tunnelward user add admin
-```
+tunnelward reads openvpn-ui's directory as it is (`server.conf`, `client-template.txt`,
+`easy-rsa/pki`, `ccd/`): certificates, profiles, routes and two-factor logins keep working.
 
-Log in: the setup opens by itself. It asks for the public address, protocol and port,
-the VPN subnet, full/split tunnel, DNS and two-factor login, then creates the certificate
-authority (EC P-256 by default), the `server` certificate, the tls-crypt-v2 key,
-`server.conf` and `client-template.txt`, and waits for OpenVPN to start. Nothing is
-overwritten: an existing PKI is reused, and the setup refuses when `server.conf` exists.
+1. Back up the directory.
+2. Stop the openvpn-ui containers.
+3. In `.env` set `OPENVPN_DIR` to that directory, then `docker compose up -d` and create an
+   admin as above.
+4. Check that `server.conf` has a `management` line (openvpn-ui's `management 0.0.0.0 2080`
+   works; `127.0.0.1 2080` is better). The Server page points out anything missing.
 
-In Docker OpenVPN listens on 1194 inside the container; `VPN_PORT` / `VPN_PROTO` set what
-is published and what client profiles use. `VPN_NAT_SUBNET=auto` (default) masquerades the
-`server` subnet of `server.conf` and follows it when it changes.
+Admin users are not taken over: create them with `tunnelward user add`.
 
-### HTTPS
+## Reverse proxy
 
-The UI listens on `127.0.0.1:8080`. Put a reverse proxy with TLS in front (Traefik, Caddy,
-nginx) and set `TW_TRUSTED_PROXIES` to its address. `TW_COOKIE_SECURE=false` is only for a
-first local test over plain HTTP.
+Put the web UI behind HTTPS. With **Traefik** use the ready-made override:
 
-## Development
-
-Requires Go 1.24+ and, for the UI, Node 22.
-
-```
-make ui      # web/ → internal/webui/dist (embedded by the next build)
-make build   # → bin/tunnelward (without `make ui` the UI shows a "not built" notice)
-make test
-make lint    # needs golangci-lint
+```bash
+curl -fsSLO https://raw.githubusercontent.com/shuricksumy/tunnelward/main/docker-compose.traefik.yml
+# in .env: COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml, TW_HOSTNAME, TRAEFIK_NETWORK
+docker compose up -d
 ```
 
-UI development with hot reload: run `tunnelward web` on :8080, then `cd web && npm run dev`
-(Vite proxies `/api` to it).
+It removes the host port, joins your Traefik network and adds the router labels; adjust the
+entrypoint, certificate resolver and middlewares (an Authelia line is included, commented
+out) in the file. With **Caddy, nginx** or anything else, proxy to `WEB_BIND` and set
+`TW_TRUSTED_PROXIES` to the proxy's address so login throttling sees real client IPs.
 
-Run locally (two terminals):
+## Updating
 
-```
-TW_AGENT_TOKEN=dev ./bin/tunnelward agent
-TW_AGENT_TOKEN=dev ./bin/tunnelward web
-curl localhost:8080/api/v1/status
-```
-
-## Agent API
-
-All `/v1/*` requests need the header `X-Tunnelward-Token: <TW_AGENT_TOKEN>`.
-Errors are JSON `{"error": "..."}` with 400 / 401 / 404 / 409 / 503.
-
-| Method | Path | Body | Result |
-|---|---|---|---|
-| GET | `/healthz` | – | `{"status":"ok"}` (no token) |
-| GET | `/v1/info` | – | version, dirs, `pki_ready` |
-| GET | `/v1/setup` | – | `needed`, `has_pki`, defaults, container-fixed port/proto |
-| GET / PUT | `/v1/firewall` | access rules `{enabled, default, rules[]}` | rules, generated iptables text, `applied`, warnings |
-| POST | `/v1/firewall/addresses` | `{"names":[...]}` | gives clients fixed VPN addresses |
-| POST | `/v1/setup` | wizard answers (`public_host`, `port`, `proto`, `subnet`, `dns`, `tls`, …) | creates PKI, keys, `server.conf`; 409 when it exists |
-| GET | `/v1/certs` | – | all entries (history included; `current` marks the newest per name) |
-| POST | `/v1/certs` | `{"name","kind"?,"passphrase"?,"validity_days"?}` | 201 cert |
-| GET | `/v1/certs/{name}` | – | current cert |
-| POST | `/v1/certs/{name}/revoke` | – | cert |
-| POST | `/v1/certs/{name}/unrevoke` | – | cert |
-| POST | `/v1/certs/{name}/renew` | `{"validity_days"?}` | new cert (same key; old one revoked as superseded) |
-| DELETE | `/v1/certs/{name}` | – | 204; revokes and deletes key material, stays in CRL |
-| GET | `/v1/certs/{name}/ovpn` | – | `.ovpn` profile (409 unless the cert is valid) |
-| POST | `/v1/crl` | – | 204; regenerates `crl.pem` |
-| GET | `/v1/sessions` | – | connected clients + server traffic counters |
-| DELETE | `/v1/sessions/{client_id}` | – | 204; disconnects one session |
-| DELETE | `/v1/certs/{name}/sessions` | – | `{"killed":n}`; disconnects all sessions of a name |
-
-Revoke and delete also disconnect the client right away (otherwise OpenVPN would only
-notice at the next renegotiation, up to an hour later). Sessions need OpenVPN's management
-interface: `management 127.0.0.1 2080` in `server.conf` (`TW_OPENVPN_MGMT`, optional
-`TW_OPENVPN_MGMT_PASSWORD` for `pw-file` setups); 502 when it is unreachable.
-
-Try it with a throw-away PKI:
-
-```
-export TW_AGENT_TOKEN=dev TW_PKI_DIR=/tmp/tw/pki TW_CRL_COPIES=-
-./bin/tunnelward init-pki
-./bin/tunnelward agent &
-curl -H "X-Tunnelward-Token: dev" -d '{"name":"alice"}' localhost:9090/v1/certs
+```bash
+docker compose pull && docker compose up -d
 ```
 
-### Client profiles
+Images on GitHub Container Registry, `ghcr.io/shuricksumy/tunnelward` (amd64 and arm64):
 
-`.ovpn` files are built like openvpn-ui did, so existing servers produce the same files:
-`<TW_OPENVPN_DIR>/client-template.txt` + inline `<ca>`, `<cert>`, `<key>` + the
-control-channel key matching `server.conf` (`tls-crypt`, `tls-auth` with `key-direction 1`,
-or a per-client `tls-crypt-v2` key). tls-crypt-v2 client keys live in `keys-v2/<name>.key`;
-existing ones are reused, new ones are created with `openvpn --genkey` (`TW_OPENVPN_BIN`).
+| Tag | Built from |
+| --- | --- |
+| `latest` | the `main` branch |
+| `1.2.3`, `1.2` | releases (set `TW_IMAGE=ghcr.io/shuricksumy/tunnelward:1.2` in `.env` for a stable setup) |
 
-## Client two-factor login
+## Backups
 
-Per client, in the UI (Clients → More → Two-factor login) or `PUT /api/v1/certs/{name}/auth`:
-an authenticator code (TOTP, HMAC-SHA256, 6 digits, 30 s) and/or a static password. The
-device logs in with username = its certificate name and password = static password followed
-by the code. OpenVPN checks it with tunnelward:
+Everything that matters is in two places:
 
-```
-# server.conf
-script-security 2
-auth-user-pass-verify "/usr/local/bin/tunnelward auth-verify" via-file
-# client-template.txt
-auth-user-pass
-```
+- **`OPENVPN_DIR`** (default `./openvpn`): the certificate authority and all client keys,
+  `server.conf`, per-client settings. Losing it means re-issuing every profile, so back it up
+  and keep it private.
+- **The `web-data` volume**: admin users and traffic history.
+  `docker compose stop web && docker compose cp web:/data/tunnelward.db ./tunnelward.db && docker compose start web`
 
-The settings live in `ccd/<name>` exactly as openvpn-ui wrote them (`#2FA_KEY:` hex secret,
-`#2FA_USER:`, `#STATIC_PASS:`), so existing enrolments keep working without `oathtool` or
-`auth_client.sh`. Differences from openvpn-ui's script:
+## Settings
 
-- the username must match the certificate: one client's password and code cannot be used with
-  another client's certificate (the old script allowed that)
-- new static passwords are stored hashed (`#STATIC_PASS_HASH:`); old plain ones still work
-- codes from the previous and next 30-second step are accepted (clock drift)
-- other lines in `ccd/<name>` (routes, `ifconfig-push`) are never touched; deleting the client
-  deletes its `ccd` file
+Set in `.env` next to `docker-compose.yml`:
 
-Use an authenticator app that supports SHA-256 codes (some apps only do SHA-1).
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TW_AGENT_TOKEN` | — | Shared secret between the web UI and the agent; required, long and random |
+| `TW_TZ` | `UTC` | Time zone for days, months and years in traffic reports, e.g. `Europe/Berlin` |
+| `OPENVPN_DIR` | `./openvpn` | OpenVPN directory on the host |
+| `VPN_PORT` / `VPN_PROTO` | `1194` / `udp` | Port and protocol published for VPN clients |
+| `VPN_NAT_SUBNET` | `auto` | NAT for VPN clients: `auto` follows `server.conf`, or a subnet, or empty for none |
+| `WEB_BIND` | `127.0.0.1:8080` | Where the web UI listens on the host |
+| `TW_COOKIE_SECURE` | `true` | `false` only for testing over plain HTTP |
+| `TW_TRUSTED_PROXIES` | — | Reverse proxy addresses (CIDRs) allowed to pass the client IP |
+| `TW_WEB_API_TOKEN` | — | Optional token for scripts: `Authorization: Bearer …` ([API](docs/api.md)) |
+| `TW_EXPIRY_WARN_DAYS` | `30` | Warn this many days before a client certificate expires |
+| `TW_SESSION_IDLE` | `12h` | Admin logout after this much inactivity |
+| `TW_TOTP_ISSUER` | `tunnelward` | Name shown in authenticator apps |
+| `TW_IMAGE` | `…/tunnelward:latest` | Image to run |
 
-## Server configuration
+## Without Docker
 
-**Server** page (or `/api/v1/server/config`): a form for the common options (port, protocol,
-VPN subnet, topology, DNS and search domain for clients, full tunnel, client-to-client,
-duplicate-cn, max clients, server routes, routes pushed to everyone) and a raw editor for
-the whole `server.conf`. Every other line and comment in the file is kept.
+Each [release](https://github.com/shuricksumy/tunnelward/releases) has Linux binaries
+(amd64, arm64, armv7) with the web UI built in. Run `tunnelward agent` as root next to
+OpenVPN and `tunnelward web` as an unprivileged user, with the same `TW_AGENT_TOKEN`; see
+[docs/guide.md](docs/guide.md#admin-login-and-security) for how the parts fit together and
+[`internal/config/config.go`](internal/config/config.go) for every setting.
 
-- Before saving, the config is checked: OpenVPN itself parses it, plus tunnelward's checks
-  (values OpenVPN only checks at startup, referenced key/cert files and directories exist,
-  missing `management` / `crl-verify` / `client-config-dir` are pointed out)
-- A preview shows exactly which lines change; saving keeps a backup (last 10, in
-  `tunnelward-backups/`) and is refused if the file changed in the meantime
-- "Networks behind clients" offers the LANs set on clients that still lack a `route` line
-- **Apply and restart** restarts OpenVPN through the management interface and waits for it;
-  if it does not come back within 30 s, the config it ran with before is restored and it is
-  started again
-- Restart method `TW_OPENVPN_RESTART`: `SIGHUP` (default; OpenVPN re-reads its config) or
-  `SIGTERM` when a supervisor starts it again — the Docker image's `openvpn` service does
-  that inside the same container, so the agent keeps its shared network
+## Documentation
 
-## Expiring certificates
-
-- Client certificates expiring within `TW_EXPIRY_WARN_DAYS` (default 30) are flagged in the UI
-  and logged by the web process at start and once a day; the CA is flagged 90 days ahead
-  (when it expires, every client stops working at once).
-- Clients → select several (or "Select them" on the banner) → **Renew selected**, or
-  `POST /api/v1/certs/renew {"names":[…],"validity_days":…}` with a result per name.
-- Renewing keeps each key; a client's old certificate is revoked, so every renewed device
-  needs its new profile.
-- Renewing the **server** certificate keeps the old one valid (moved to `renewed/issued/`, as
-  easyrsa does): OpenVPN uses it until it is restarted with the new one.
-
-## Client network settings
-
-Per client, in the UI (Clients → More → Network) or `PUT /api/v1/certs/{name}/network`:
-
-| Setting | Written to `ccd/<name>` |
-|---|---|
-| static VPN address | `ifconfig-push 10.8.0.50 255.255.255.0` (net30: the /30 peer address) |
-| networks the client can reach | `push "route 192.168.1.0 255.255.255.0"` |
-| networks behind the client (site-to-site) | `iroute 192.168.50.0 255.255.255.0` |
-| all traffic through the VPN | `push "redirect-gateway def1"` |
-
-Addresses are checked against `server` / `topology` in `server.conf` and against the other
-clients' static addresses. A LAN behind a client also needs `route <net> <mask>` in
-`server.conf`: tunnelward warns with the exact line to add. `server.conf` needs
-`client-config-dir ccd`. Changes apply when the client reconnects (the UI offers to reconnect
-it). The 2FA lines and any other lines in the file are kept; openvpn-ui's files are read as they are.
-
-## Access rules
-
-The Access page decides which networks VPN clients can reach: rules from a client (or all
-clients) to a network or address, optionally limited to TCP/UDP ports or ping, checked from
-the top; the first match decides, then the default (allow or block). Replies to allowed
-traffic always pass.
-
-The agent renders them into the iptables chain `TW-FWD`, jumped to from `INPUT` and
-`FORWARD` for traffic from `tun` devices, so they cover the server itself and everything
-behind it. Rules match a client by its fixed VPN address; the page assigns free addresses
-(from the top of the subnet) to clients that have none. With `client-to-client` OpenVPN
-forwards traffic between clients itself, so the rules cannot see it.
-
-| `TW_FIREWALL` | |
-|---|---|
-| `direct` (default) | the agent runs `iptables-restore` itself (host install as root) |
-| `file` | the agent writes `tunnelward-firewall.rules`; the OpenVPN container (the one with `NET_ADMIN`) applies it and reports back — the compose default |
-| `off` | the agent never touches the firewall |
-
-Nothing is changed until rules are saved for the first time. In direct mode the agent
-restores them when it starts.
-
-## Web API
-
-The web process records session history (polling the agent every `TW_POLL_INTERVAL`,
-default 30s) into SQLite (`TW_DB_PATH`) and serves reports.
-
-### Login
-
-Create the first admin, then log in from the browser (or curl):
-
-```
-TW_DB_PATH=./data/tunnelward.db tunnelward user add admin   # password from stdin or TW_ADMIN_PASSWORD
-tunnelward user list | passwd <name> | del <name>
-```
-
-- Passwords: PBKDF2-SHA256, 600 000 iterations, at least 10 characters
-- Session cookie `tw_session`: random 256-bit token, stored only as a SHA-256 hash; `HttpOnly`,
-  `SameSite=Strict`, `Secure` (set `TW_COOKIE_SECURE=false` only for plain-HTTP testing)
-- Logged out after `TW_SESSION_IDLE` (default 12h) of inactivity, and after 7 days at most;
-  changing a password logs out all sessions of that user
-- Failed logins throttled: 10 per IP and 30 per username per 15 minutes (429 + `Retry-After`);
-  unknown usernames take as long as wrong passwords
-- CSRF: state-changing requests from another site are refused (Fetch Metadata / Origin)
-- Behind a reverse proxy set `TW_TRUSTED_PROXIES` (CIDRs) so the real client IP is used
-- Scripts can use `Authorization: Bearer <TW_WEB_API_TOKEN>` instead (optional; off when unset)
-
-| Method | Path | Result |
-|---|---|---|
-| POST | `/api/v1/auth/login` | `{"username","password"}` → sets the session cookie |
-| POST | `/api/v1/auth/logout` | 204 |
-| GET | `/api/v1/auth/me` | current user |
-| POST | `/api/v1/auth/password` | `{"current_password","new_password"}` → 204, logs out everywhere |
-| GET | `/api/v1/status` | web version + agent reachability |
-| GET | `/api/v1/sessions` | live sessions (from the agent) |
-| GET | `/api/v1/stats` | traffic report (below) |
-| GET | `/api/v1/stats.csv` | same, as CSV: period, name, upload, download, estimated |
-| GET | `/api/v1/history/sessions` | recorded sessions, newest first (`limit`, default 100) |
-| GET, POST | `/api/v1/certs` | list / issue certificates (same bodies as the agent API) |
-| GET, PUT | `/api/v1/server/config` | server.conf as `raw` + `settings`; save with `{"base_version", "raw"\|"settings"}` (422 with `problems`, 409 if changed) |
-| POST | `/api/v1/server/config/check` | dry run: resulting `raw` + `problems` |
-| POST | `/api/v1/server/restart` | `{"rollback":true}` → `{"ok","seconds","rolled_back","error"}` |
-| GET | `/api/v1/server/backups`, `/api/v1/server/backups/{name}` | earlier versions |
-| POST | `/api/v1/certs/renew` | bulk renew: `{"names":[…],"validity_days":…}` → result per name |
-| GET, DELETE | `/api/v1/certs/{name}` | get / delete |
-| POST | `/api/v1/certs/{name}/revoke`, `/unrevoke`, `/renew` | |
-| GET | `/api/v1/certs/{name}/ovpn` | download the `.ovpn` profile |
-| DELETE | `/api/v1/certs/{name}/sessions`, `/api/v1/sessions/{client_id}` | disconnect |
-| GET | `/api/v1/network` | VPN subnet, topology, server routes, static addresses in use |
-| GET, PUT | `/api/v1/certs/{name}/network` | `{"static_ip","full_tunnel","routes":[cidr],"lan":[cidr]}`, response adds `warnings` |
-| GET, PUT | `/api/v1/certs/{name}/auth` | 2FA status / change: `{"totp":"enable\|reset\|disable","static_password":"…","remove_static":true}`; a new key's secret and `otpauth://` URI are returned once |
-
-Certificate and session calls are passed to the agent; every change is logged as
-`audit action=... target=... by=<user>`.
-
-Report parameters: `preset=today|this_month|last_month|last_30_days|this_year|last_year`
-**or** `from=YYYY-MM-DD&to=YYYY-MM-DD` (inclusive; default this month), `group=day|month|year`,
-`name=<user>` (omit for the whole server). Days/months/years follow `TW_TZ` (IANA name).
-The report has totals, a gap-free series per period, and per-user totals with share,
-session count and online time. Upload/download are from the user's point of view.
-
-Traffic is stored per user per hour. If polls were missed (web down, agent unreachable) the
-traffic of the gap is spread over its hours and flagged `estimated` instead of one spike.
-
-## Tests
-
-```
-make test                # unit tests
-sudo test/e2e/run.sh     # real OpenVPN server + client on localhost (needs openvpn)
-```
-
-CI also runs PKI compatibility tests against real easyrsa + openssl.
-
-## Configuration
-
-All settings come from environment variables (prefix `TW_`); see
-[`internal/config/config.go`](internal/config/config.go) for the full list and defaults.
+- [How tunnelward works](docs/guide.md): setup, profiles, two-factor login, server
+  settings, client networks, access rules, traffic history, security
+- [HTTP API](docs/api.md)
+- [Development](docs/development.md): building, tests, GitHub Actions, releases
+- [Roadmap](ROADMAP.md)
 
 ## License
 
-MIT
+[MIT](LICENSE)
