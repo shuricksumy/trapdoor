@@ -42,7 +42,12 @@ show) [ -f ` + tools + `/up-$2 ] || { echo "Unable to access interface: No such 
 syncconf) cat >` + tools + `/synced-$2 ;;
 esac
 `
-	for name, body := range map[string]string{"wg-quick": wgq, "wg": wgs} {
+	// -C fails until the rule was inserted, like the real iptables.
+	ipt := `#!/bin/sh
+echo iptables "$@" >>` + calls + `
+if [ "$1" = -C ] || [ "$3" = -C ]; then grep -qF -- "$(echo "$@" | sed 's/-C/-I/')" ` + calls + `; exit $?; fi
+`
+	for name, body := range map[string]string{"wg-quick": wgq, "wg": wgs, "iptables": ipt} {
 		if err := os.WriteFile(filepath.Join(tools, name), []byte(body), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -76,7 +81,11 @@ func read(t *testing.T, path string) string {
 func TestWireGuardServer(t *testing.T) {
 	tools, calls := fakeWG(t)
 	dir := t.TempDir()
-	cfg := config.Agent{WireGuard: "direct", WireGuardDir: dir, WGToolsDir: tools}
+	fwd := filepath.Join(t.TempDir(), "ip_forward")
+	old := ipForwardPath
+	ipForwardPath = fwd
+	t.Cleanup(func() { ipForwardPath = old })
+	cfg := config.Agent{WireGuard: "direct", WireGuardDir: dir, WGToolsDir: tools, IPTablesDir: tools}
 	c, _ := wgHost(t, cfg)
 	ctx := context.Background()
 
@@ -94,8 +103,18 @@ func TestWireGuardServer(t *testing.T) {
 	}
 	conf := read(t, filepath.Join(dir, "wg0.conf"))
 	if !strings.Contains(conf, "Address = 10.9.0.1/24") || !strings.Contains(conf, "ListenPort = 51820") ||
-		!strings.Contains(conf, "MASQUERADE") {
+		strings.Contains(conf, "PostUp") {
 		t.Errorf("server conf:\n%s", conf)
+	}
+	log := read(t, calls)
+	for _, want := range []string{"iptables -I FORWARD -i wg0 -j ACCEPT", "iptables -I FORWARD -o wg0 -j ACCEPT",
+		"iptables -t nat -I POSTROUTING -s 10.9.0.0/24 ! -o wg0 -j MASQUERADE"} {
+		if strings.Count(log, want) != 1 {
+			t.Errorf("want %q once in:\n%s", want, log)
+		}
+	}
+	if read(t, fwd) != "1\n" {
+		t.Error("IP forwarding not turned on")
 	}
 	if fi, _ := os.Stat(filepath.Join(dir, "wg0.json")); fi.Mode().Perm() != 0o600 {
 		t.Errorf("state file mode %v", fi.Mode())
@@ -234,8 +253,8 @@ func TestWireGuardServer(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "wg0.json")); !os.IsNotExist(err) {
 		t.Errorf("state left behind: %v", err)
 	}
-	if !strings.Contains(read(t, calls), "wg-quick down") {
-		t.Error("interface not taken down")
+	if log := read(t, calls); !strings.Contains(log, "wg-quick down") || !strings.Contains(log, "iptables -t nat -D POSTROUTING -s 10.9.0.0/24 ! -o wg0 -j MASQUERADE") {
+		t.Errorf("interface not taken down or NAT left:\n%s", log)
 	}
 	if all, _ := c.Info(ctx); len(all.Servers) != 0 {
 		t.Errorf("servers after remove = %+v", all.Servers)

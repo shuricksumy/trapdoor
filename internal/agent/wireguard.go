@@ -76,6 +76,9 @@ type wgSession struct {
 	baseRx, baseTx int64
 }
 
+// ipForwardPath turns on IPv4 forwarding for direct mode (tests change it).
+var ipForwardPath = "/proc/sys/net/ipv4/ip_forward"
+
 // Defaults for new WireGuard servers.
 const (
 	wgDefaultPort      = 51820
@@ -89,7 +92,7 @@ func newWGServer(cfg config.Agent, log *slog.Logger, st wgState) *WGServer {
 	if cfg.WireGuard == "file" {
 		s.run = wgFile{dir: cfg.WireGuardDir, now: time.Now}
 	} else {
-		s.run = wgDirect{toolsDir: cfg.WGToolsDir}
+		s.run = wgDirect{toolsDir: cfg.WGToolsDir, iptablesDir: cfg.IPTablesDir, ipForward: ipForwardPath}
 	}
 	return s
 }
@@ -252,17 +255,6 @@ func (s *WGServer) save(ctx context.Context) error {
 func (s *WGServer) serverConfig() string {
 	srv := wg.Server{PrivateKey: s.st.PrivateKey, Address: []netip.Prefix{s.st.Address},
 		ListenPort: s.st.ListenPort, MTU: s.st.MTU}
-	if s.mode == "direct" {
-		// On a plain host wg-quick sets up forwarding and NAT for the subnet;
-		// in Docker the VPN container does that.
-		sn := s.subnet().String()
-		srv.Extra = []wg.Setting{
-			{Key: "PostUp", Value: "sysctl -q -w net.ipv4.ip_forward=1; iptables -I FORWARD -i %i -j ACCEPT; iptables -I FORWARD -o %i -j ACCEPT; " +
-				"iptables -t nat -A POSTROUTING -s " + sn + " -o $(ip route | awk '/^default/ {print $5; exit}') -j MASQUERADE"},
-			{Key: "PostDown", Value: "iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; " +
-				"iptables -t nat -D POSTROUTING -s " + sn + " -o $(ip route | awk '/^default/ {print $5; exit}') -j MASQUERADE"},
-		}
-	}
 	var peers []wg.Peer
 	for _, p := range s.st.Peers {
 		if p.Disabled {
@@ -280,7 +272,7 @@ func (s *WGServer) applyLocked(ctx context.Context, restart bool) {
 		return
 	}
 	restart = restart || (s.applied.IsValid() && s.applied != s.st.Address)
-	if err := s.run.Apply(ctx, s.st.ID, s.confPath(), restart); err != nil {
+	if err := s.run.Apply(ctx, s.st.ID, s.confPath(), s.subnet(), s.applied.Masked(), restart); err != nil {
 		s.applyErr = err.Error()
 		s.log.Warn("WireGuard config not applied", "err", err)
 		return
@@ -292,7 +284,7 @@ func (s *WGServer) applyLocked(ctx context.Context, restart bool) {
 func (s *WGServer) remove(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.run.Down(ctx, s.st.ID, s.confPath()); err != nil {
+	if err := s.run.Down(ctx, s.st.ID, s.confPath(), s.subnet()); err != nil {
 		return err
 	}
 	for _, ext := range []string{".conf", ".json", ".dump", ".error"} {
