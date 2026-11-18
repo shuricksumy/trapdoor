@@ -145,6 +145,27 @@ func (c *Client) UpdateClientAuth(ctx context.Context, name string, req api.Clie
 	return out, err
 }
 
+// ServerNetwork returns the VPN network from server.conf.
+func (c *Client) ServerNetwork(ctx context.Context) (api.ServerNetwork, error) {
+	var out api.ServerNetwork
+	err := c.doJSON(ctx, http.MethodGet, "/v1/network", nil, &out)
+	return out, err
+}
+
+// ClientNetwork returns a client's network settings.
+func (c *Client) ClientNetwork(ctx context.Context, name string) (api.ClientNetwork, error) {
+	var out api.ClientNetwork
+	err := c.doJSON(ctx, http.MethodGet, "/v1/certs/"+url.PathEscape(name)+"/network", nil, &out)
+	return out, err
+}
+
+// SetClientNetwork replaces a client's network settings.
+func (c *Client) SetClientNetwork(ctx context.Context, name string, n api.ClientNetwork) (api.ClientNetwork, error) {
+	var out api.ClientNetwork
+	err := c.doJSON(ctx, http.MethodPut, "/v1/certs/"+url.PathEscape(name)+"/network", n, &out)
+	return out, err
+}
+
 // GenCRL regenerates the CRL.
 func (c *Client) GenCRL(ctx context.Context) error {
 	return c.doJSON(ctx, http.MethodPost, "/v1/crl", nil, nil)

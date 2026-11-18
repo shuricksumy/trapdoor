@@ -43,6 +43,10 @@ func TestCertManagement(t *testing.T) {
 		{http.MethodPut, "/api/v1/certs/alice/auth", `{"totp":"enable","static_password":"pin1"}`, http.StatusOK, `"otpauth_uri":"otpauth://totp/`},
 		{http.MethodGet, "/api/v1/certs/alice/auth", "", http.StatusOK, `"totp":true`},
 		{http.MethodPut, "/api/v1/certs/alice/auth", `{"totp":"bogus"}`, http.StatusBadRequest, ""},
+		{http.MethodGet, "/api/v1/network", "", http.StatusOK, `"topology":"net30"`},
+		{http.MethodPut, "/api/v1/certs/alice/network", `{"routes":["192.168.1.0/24"],"lan":[],"full_tunnel":true}`, http.StatusOK, `"full_tunnel":true`},
+		{http.MethodGet, "/api/v1/certs/alice/network", "", http.StatusOK, `"192.168.1.0/24"`},
+		{http.MethodPut, "/api/v1/certs/alice/network", `{"routes":["bad"],"lan":[]}`, http.StatusBadRequest, ""},
 		{http.MethodDelete, "/api/v1/certs/alice", "", http.StatusNoContent, ""},
 		{http.MethodGet, "/api/v1/certs/alice", "", http.StatusOK, `"status":"revoked"`},
 	}

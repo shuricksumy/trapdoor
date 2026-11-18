@@ -5,8 +5,11 @@
   import { toast, route, setQuery } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
   import TwoFactor from '../lib/TwoFactor.svelte';
+  import NetworkDialog from '../lib/NetworkDialog.svelte';
 
   let twoFactor = $state({ open: false, name: '' });
+  let network = $state({ open: false, name: '' });
+  let staticIPs = $state({});
 
   let certs = $state([]);
   let online = $state(new Set());
@@ -25,6 +28,11 @@
       loadError = e.message;
     } finally {
       loaded = true;
+    }
+    try {
+      staticIPs = (await api('/network')).static_ips ?? {};
+    } catch {
+      staticIPs = {};
     }
     try {
       const live = await api('/sessions');
@@ -191,6 +199,7 @@
                   {c.name}
                 </span>
                 {#if !c.current}<span class="faint small">replaced</span>{/if}
+                {#if c.current && staticIPs[c.name]}<span class="mono faint small ip">{staticIPs[c.name]}</span>{/if}
               </td>
               <td class="c-status"><span class="pill {c.st.tone}">{c.st.label}</span></td>
               <td class="c-valid">
@@ -213,6 +222,7 @@
                         <button onclick={() => act('disconnect', c.name)}>Disconnect</button>
                       {/if}
                       {#if c.status !== 'revoked'}
+                        <button onclick={(e) => { e.currentTarget.closest('details').open = false; network = { open: true, name: c.name }; }}>Network</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; twoFactor = { open: true, name: c.name }; }}>Two-factor login</button>
                         <button onclick={() => ask('renew', c.name)}>Renew</button>
                         <button class="danger" onclick={() => ask('revoke', c.name)}>Revoke</button>
@@ -271,6 +281,7 @@
 </Dialog>
 
 <TwoFactor bind:open={twoFactor.open} name={twoFactor.name} />
+<NetworkDialog bind:open={network.open} name={network.name} online={online.has(network.name)} onsaved={load} />
 
 <Dialog bind:open={confirm.open} title={confirmText[confirm.kind]?.title ?? ''}>
   <p><strong>{confirm.name}</strong>: {confirmText[confirm.kind]?.body}</p>
@@ -310,6 +321,7 @@
 
   .name { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  .ip { margin-left: var(--space-2); }
   tr.old td { color: var(--ink-3); }
   tr.old .name { font-weight: 400; }
   td.actions { text-align: right; white-space: nowrap; }

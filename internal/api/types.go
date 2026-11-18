@@ -122,3 +122,23 @@ type ClientAuthUpdate struct {
 	// RemoveStatic removes the static password.
 	RemoveStatic bool `json:"remove_static,omitempty"`
 }
+
+// ClientNetwork is a client's network settings (GET/PUT /v1/certs/{name}/network).
+type ClientNetwork struct {
+	StaticIP   string   `json:"static_ip,omitempty"` // empty = dynamic
+	FullTunnel bool     `json:"full_tunnel"`         // all traffic through the VPN
+	Routes     []string `json:"routes"`              // CIDRs pushed to the client
+	LAN        []string `json:"lan"`                 // CIDRs behind the client (iroute)
+	Warnings   []string `json:"warnings,omitempty"`  // response only
+}
+
+// ServerNetwork is the VPN network as configured in server.conf (GET /v1/network).
+type ServerNetwork struct {
+	Subnet           string            `json:"subnet,omitempty"`
+	ServerIP         string            `json:"server_ip,omitempty"`
+	Topology         string            `json:"topology"`
+	ClientConfigDir  bool              `json:"client_config_dir"`
+	PushesFullTunnel bool              `json:"pushes_full_tunnel"`
+	Routes           []string          `json:"routes"`     // server-side "route" lines
+	StaticIPs        map[string]string `json:"static_ips"` // client → static address
+}
