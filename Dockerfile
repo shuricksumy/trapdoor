@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
       -ldflags "-s -w -X github.com/shuricksumy/tunnelward/internal/version.Version=$VERSION -X github.com/shuricksumy/tunnelward/internal/version.Commit=$COMMIT -X github.com/shuricksumy/tunnelward/internal/version.Date=$DATE" \
       -o /out/tunnelward ./cmd/tunnelward
 
-FROM alpine:3.22
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 # openvpn: the server itself, and `openvpn --genkey` for tls-crypt-v2 client keys (agent)
 # iptables: NAT for VPN clients (openvpn service only)
 RUN apk add --no-cache openvpn iptables ca-certificates \
