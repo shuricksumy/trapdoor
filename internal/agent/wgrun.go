@@ -73,7 +73,15 @@ func (d wgDirect) Apply(ctx context.Context, id, conf string, subnet, prev netip
 		if err != nil {
 			return err
 		}
-		if _, err = d.run(ctx, stripped, "wg", "syncconf", id, "/dev/stdin"); err != nil {
+		// A file next to conf, not /dev/stdin: AppArmor lets wg read only
+		// /etc/wireguard on Ubuntu.
+		sync := strings.TrimSuffix(conf, ".conf") + ".sync"
+		if err := os.WriteFile(sync, stripped, 0o600); err != nil {
+			return err
+		}
+		_, err = d.run(ctx, nil, "wg", "syncconf", id, sync)
+		_ = os.Remove(sync)
+		if err != nil {
 			return err
 		}
 	} else {
@@ -87,7 +95,7 @@ func (d wgDirect) Apply(ctx context.Context, id, conf string, subnet, prev netip
 		}
 	}
 	if prev.IsValid() && prev != subnet {
-		d.route(ctx, id, prev, false)
+		_ = d.route(ctx, id, prev, false) // best effort: the old rules only linger
 	}
 	return d.route(ctx, id, subnet, true)
 }
@@ -99,8 +107,7 @@ func (d wgDirect) Down(ctx context.Context, id, conf string, subnet netip.Prefix
 	if _, err := d.run(ctx, nil, "wg-quick", "down", conf); err != nil {
 		return err
 	}
-	d.route(ctx, id, subnet, false)
-	return nil
+	return d.route(ctx, id, subnet, false)
 }
 
 // route turns on IPv4 forwarding and adds (or removes) the rules that let

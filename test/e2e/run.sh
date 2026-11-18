@@ -343,6 +343,8 @@ if command -v wg >/dev/null && command -v wg-quick >/dev/null; then
 	grep -q '"running":true' "$WORK/wg-create.json" || fail "WireGuard interface not up: $(cat "$WORK/wg-create.json")"
 	ip link show tdwg0 >/dev/null || fail "no tdwg0 interface"
 	api -d '{"name":"wgalice"}' "$API/v1/servers/tdwg0/peers" >/dev/null || fail "add peer"
+	! api "$API/v1/servers/tdwg0/info" | grep -q '"error"' || fail "peer not applied: $(api "$API/v1/servers/tdwg0/info")"
+	wg show tdwg0 peers | grep -q . || fail "peer not on the interface"
 	# Ubuntu's AppArmor profile lets wg-quick read configs only from /etc/wireguard.
 	(umask 077 && api "$API/v1/servers/tdwg0/peers/wgalice/conf" >/etc/wireguard/tdwc.conf)
 	ip netns exec twc wg-quick up /etc/wireguard/tdwc.conf >"$WORK/wg-client.log" 2>&1 || fail "client wg-quick up"

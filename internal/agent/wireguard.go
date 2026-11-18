@@ -287,7 +287,7 @@ func (s *WGServer) remove(ctx context.Context) error {
 	if err := s.run.Down(ctx, s.st.ID, s.confPath(), s.subnet()); err != nil {
 		return err
 	}
-	for _, ext := range []string{".conf", ".json", ".dump", ".error"} {
+	for _, ext := range []string{".conf", ".json", ".dump", ".error", ".sync"} {
 		if err := os.Remove(wgPath(s.dir, s.st.ID, ext)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}

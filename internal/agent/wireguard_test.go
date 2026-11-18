@@ -39,7 +39,7 @@ echo wg "$@" >>` + calls + `
 case $1 in
 show) [ -f ` + tools + `/up-$2 ] || { echo "Unable to access interface: No such device" >&2; exit 1; }
 	[ "$3" = dump ] && cat ` + tools + `/dump-$2 2>/dev/null; exit 0 ;;
-syncconf) cat >` + tools + `/synced-$2 ;;
+syncconf) cp "$3" ` + tools + `/synced-$2 ;;
 esac
 `
 	// -C fails until the rule was inserted, like the real iptables.
