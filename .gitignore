@@ -1,0 +1,25 @@
+# Build output
+/bin/
+/dist/
+
+# Go
+*.test
+*.out
+coverage.*
+
+# Local data / secrets — never commit real PKI or config
+/data/
+*.db
+*.key
+*.pem
+.env
+
+# Frontend
+node_modules/
+web/build/
+web/.svelte-kit/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
