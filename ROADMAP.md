@@ -69,7 +69,8 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
       (junk packets, S1–S4, H1–H4 single values or ranges, optional I1–I5; levels 1.5 and 2.0,
       2.0 by default), random values within the documented limits, matching client configs
       for the AmneziaWG apps; `amneziawg-go` built into the image (no kernel module needed)
-  - [ ] Later: AmneziaWG 3.1 extras (header protection, timing ranges, random trailers)
+  - [x] AmneziaWG 3.1 level: header protection, random trailers, no cookie replies, client
+        timing ranges, optional content padding; smoke-tested with a real 3.1 client
 - [x] Several OpenVPN servers (e.g. UDP 1194 + TCP 443), each with its own directory, PKI,
       management port and tun device; the container supervisor runs all of them
 - [ ] Access rules for WireGuard / AmneziaWG interfaces; two-factor login

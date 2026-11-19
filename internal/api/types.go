@@ -67,12 +67,15 @@ const (
 	// AWGLevel20 adds S3/S4 and H1-H4 ranges: harder to detect, needs
 	// current AmneziaWG apps.
 	AWGLevel20 = "2.0"
+	// AWGLevel31 adds header protection, random trailers, no cookie
+	// replies and random client timings: needs AmneziaWG 3.1 apps.
+	AWGLevel31 = "3.1"
 )
 
 // Obfuscation are AmneziaWG's [Interface] settings. Zero values are left
 // out (AmneziaWG then behaves like plain WireGuard for that mechanism).
 type Obfuscation struct {
-	Level string `json:"level"` // AWGLevel15 or AWGLevel20
+	Level string `json:"level"` // AWGLevel15, AWGLevel20 or AWGLevel31
 	// Junk packets before the handshake: count and size range.
 	Jc   int `json:"jc"`
 	Jmin int `json:"jmin"`
@@ -95,6 +98,26 @@ type Obfuscation struct {
 	I3 string `json:"i3,omitempty"`
 	I4 string `json:"i4,omitempty"`
 	I5 string `json:"i5,omitempty"`
+
+	// AmneziaWG 3.1 (level AWGLevel31 only).
+	// HeaderProtectionKey encrypts the header fields (base64, like a
+	// WireGuard key); the same on server and clients. Needs S1-S4 >= 12.
+	HeaderProtectionKey string `json:"header_protection_key,omitempty"`
+	// RandomTrailers appends random bytes to every packet; both sides.
+	RandomTrailers bool `json:"random_trailers,omitempty"`
+	// ContentPadding pads data packets by a random size from the range
+	// ("a" or "a-b" bytes); both sides.
+	ContentPadding string `json:"content_padding,omitempty"`
+	// DisableCookies: the server sends no cookie replies, which active
+	// probing can recognize (it also loses WireGuard's handshake flood
+	// protection). Server only.
+	DisableCookies bool `json:"disable_cookies,omitempty"`
+	// Client timings in seconds ("a" or "a-b": random within the range),
+	// so handshakes and keepalives do not follow WireGuard's fixed clock.
+	RekeyAfterTime   string `json:"rekey_after_time,omitempty"`
+	RejectAfterTime  string `json:"reject_after_time,omitempty"`
+	RekeyTimeout     string `json:"rekey_timeout,omitempty"`
+	KeepaliveTimeout string `json:"keepalive_timeout,omitempty"`
 }
 
 // CreateServer is the body of POST /v1/servers: a new WireGuard server.

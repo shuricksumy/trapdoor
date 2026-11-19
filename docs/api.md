@@ -94,7 +94,7 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 
 | Method | Path | Body | Result |
 |---|---|---|---|
-| POST | `/v1/servers` | `{"type":"wireguard"\|"amneziawg","id":"wg0","name","port","public_host","public_port","subnet","dns":[…],"mtu","allowed_ips":[…],"keepalive"}`; AmneziaWG also `"awg_level":"2.0"\|"1.5"` and optional `"obfuscation":{jc,jmin,jmax,s1…s4,h1…h4,i1…i5}` (only `i1`–`i5`: the rest is generated) | 201 server info (with `obfuscation`); 409 for a used id, port or overlapping subnet |
+| POST | `/v1/servers` | `{"type":"wireguard"\|"amneziawg","id":"wg0","name","port","public_host","public_port","subnet","dns":[…],"mtu","allowed_ips":[…],"keepalive"}`; AmneziaWG also `"awg_level":"2.0"\|"1.5"\|"3.1"` and optional `"obfuscation":{jc,jmin,jmax,s1…s4,h1…h4,i1…i5}` plus at 3.1 `header_protection_key,random_trailers,content_padding,disable_cookies,rekey_after_time,reject_after_time,rekey_timeout,keepalive_timeout` (only `i1`–`i5`: the rest is generated) | 201 server info (with `obfuscation`); 409 for a used id, port or overlapping subnet |
 | POST | `/v1/servers` | `{"type":"openvpn","id":"ovpn-tcp","name","port":443,"proto":"udp"\|"tcp"}`: an OpenVPN server in `TD_OPENVPN_SERVERS_DIR/<id>/`, then set up with `…/setup` | 201 server info; 409 for a used id or port |
 | DELETE | `/v1/servers/{id}` | – | 204; WireGuard: takes the interface down and deletes its files; added OpenVPN server: stops it and moves its directory to `.removed/` (the first server: 409) |
 | GET | `…/peers` | – | clients with live state (`connected`, `endpoint`, `last_handshake`, bytes) |

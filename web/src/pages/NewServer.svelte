@@ -195,6 +195,10 @@
         <span><strong>Strongest</strong> (AmneziaWG 2.0): hardest to detect. Every device needs an up-to-date AmneziaWG app.</span>
       </label>
       <label class="choice">
+        <input type="radio" bind:group={f.level} value="3.1" />
+        <span><strong>Newest</strong> (3.1): also hides packet headers, sizes and timing. Only for AmneziaWG apps that support 3.1.</span>
+      </label>
+      <label class="choice">
         <input type="radio" bind:group={f.level} value="1.5" />
         <span><strong>Most compatible</strong> (1.5): also works with older AmneziaWG apps and the Linux kernel module.</span>
       </label>

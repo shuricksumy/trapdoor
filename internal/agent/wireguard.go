@@ -208,8 +208,8 @@ func createWGServer(req api.CreateServer) (wgState, error) {
 	st := wgState{Type: req.Type, ID: req.ID, Name: strings.TrimSpace(req.Name), ListenPort: req.Port,
 		PublicHost: strings.TrimSpace(req.PublicHost), PublicPort: req.PublicPort, MTU: req.MTU, Keepalive: req.Keepalive}
 	if st.Type == api.TypeAmneziaWG {
-		if req.AWGLevel != "" && req.AWGLevel != api.AWGLevel15 && req.AWGLevel != api.AWGLevel20 {
-			return st, errors.New("awg_level must be 1.5 or 2.0")
+		if req.AWGLevel != "" && req.AWGLevel != api.AWGLevel15 && req.AWGLevel != api.AWGLevel20 && req.AWGLevel != api.AWGLevel31 {
+			return st, errors.New("awg_level must be 1.5, 2.0 or 3.1")
 		}
 		o := wg.GenerateObfuscation(req.AWGLevel)
 		switch r := req.Obfuscation; {
@@ -298,10 +298,11 @@ func (s *WGServer) endpoint() string {
 }
 
 // mtu is the configured MTU; AmneziaWG's S4 bytes in front of every data
-// packet come off WireGuard's default 1420 unless one is set.
+// packet (and content padding, 3.1) come off WireGuard's default 1420
+// unless one is set.
 func (s *WGServer) mtu() int {
-	if s.st.MTU == 0 && s.st.Obfuscation != nil && s.st.Obfuscation.S4 > 0 {
-		return 1420 - s.st.Obfuscation.S4
+	if o := s.st.Obfuscation; s.st.MTU == 0 && o != nil && o.S4+wg.PaddingMax(*o) > 0 {
+		return 1420 - o.S4 - wg.PaddingMax(*o)
 	}
 	return s.st.MTU
 }
