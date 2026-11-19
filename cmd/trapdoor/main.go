@@ -16,6 +16,7 @@ import (
 	_ "time/tzdata" // TD_TZ works in minimal containers without zoneinfo
 
 	"github.com/shuricksumy/trapdoor/internal/agent"
+	"github.com/shuricksumy/trapdoor/internal/api"
 	"github.com/shuricksumy/trapdoor/internal/auth"
 	"github.com/shuricksumy/trapdoor/internal/clientauth"
 	"github.com/shuricksumy/trapdoor/internal/config"
@@ -126,6 +127,17 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 		host.EnableWireGuard(cfg, wgs)
 		log.Info("WireGuard", "mode", cfg.WireGuard, "dir", cfg.WireGuardDir, "servers", len(wgs))
 	}
+	host.SetNames(cfg.Machine, cfg.NodeName)
+	if cfg.JoinURL != "" {
+		_, fp, err := agent.AgentCert(cfg.TLSCert, cfg.TLSKey)
+		if err != nil {
+			return err
+		}
+		go func() {
+			_ = agent.Join(ctx, log, cfg.JoinURL, api.JoinRequest{Token: cfg.JoinToken, Name: cfg.NodeName,
+				URL: cfg.NodeURL, Fingerprint: fp, AgentToken: cfg.Token})
+		}()
+	}
 	return httpx.Serve(ctx, l, host.Handler())
 }
 
@@ -203,7 +215,7 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 		log.Warn("TD_COOKIE_SECURE=false: login cookie is sent over plain HTTP")
 	}
 	srv := web.New(web.Deps{
-		Agent: agents, Hosts: agents, Backup: agents, Stats: &history.Stats{DB: db},
+		Agent: agents, Hosts: agents, Backup: agents, JoinSecret: cfg.JoinSecret, Stats: &history.Stats{DB: db},
 		Auth: authSvc, APIToken: cfg.APIToken, CookieSecure: cfg.CookieSecure,
 		TrustedProxies: cfg.TrustedProxies, Location: cfg.Location, Log: log,
 		ExpiryWarnDays: cfg.ExpiryWarnDays,

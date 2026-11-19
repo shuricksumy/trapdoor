@@ -51,13 +51,18 @@ server). Below, `…` stands for that prefix.
 | GET | `/api/v1/servers` | every server (with `container`, `host`) with `clients`, `connected`, `today_in`, `today_out` (bytes since midnight in `TD_TZ`), `stopped`, `autostart` |
 | POST | `/api/v1/servers/{server}/start`, `…/stop` | start / stop a server (answer: its info, `note` when there is something to do, e.g. start OpenVPN with systemd) |
 | PUT | `/api/v1/servers/{server}/autostart` | `{"autostart": true\|false}` |
-| GET | `/api/v1/hosts` | other machines: `[{"name","url","version","hostname","error"}]` (asks each one) |
-| POST | `/api/v1/hosts` | `{"name":"vps","url":"https://203.0.113.5:9443","token","fingerprint":"sha256:…"}`: connects once, then saves (same name: replaced); 400 when the agent does not answer, the token or the certificate is wrong |
-| DELETE | `/api/v1/hosts/{name}` | forget a host (its servers keep running there) |
+| GET | `/api/v1/nodes` | the other nodes: `[{"name","machine","url","version","hostname","containers","error"}]` (asks each one) |
+| POST | `/api/v1/nodes` | add a node by hand: `{"name":"vps","url":"https://203.0.113.5:9443","token","fingerprint":"sha256:…"}`: connects once, then saves (same name: replaced); 400 when the agent does not answer, the token or the certificate is wrong |
+| DELETE | `/api/v1/nodes/{name}` | forget a node (its servers keep running there) |
+| POST | `/api/v1/nodes/tokens` | `{"name":"vps","hours":24}` (both optional; name empty: any) → 201 `{"token":"tdj_…","name","expires_at"}`, a one-time join token (shown once; at most 30 days) |
+| POST | `/api/v1/nodes/join` | **no login**: a node joins, `{"token","name","url","fingerprint","agent_token"}`; allowed with an unused join token (for that name), `TD_JOIN_SECRET`, or the fingerprint the node already has; the web UI connects back before it answers 201 (like `POST /api/v1/nodes`); 401 for an invalid, used or expired token |
 
-Servers on another host have the id `<host>.<id>` (e.g. `vps.wg0`) in every
+`/api/v1/hosts` (GET, POST, DELETE) is the same as `/api/v1/nodes`, kept for scripts.
+
+Servers on another node have the id `<node>.<id>` (e.g. `vps.wg0`) in every
 `/api/v1/servers/{server}/…` path and in `agent.servers` of `/api/v1/status`, with `"host"`
-set; `agent.hosts` lists the hosts and whether they answer.
+set; `agent.hosts` lists the other nodes and whether they answer, `agent.machine` and
+`agent.node` name the own node (`TD_MACHINE`, `TD_NODE_NAME`).
 | GET, POST | `…/peers` | WireGuard clients: list / add (body as the agent's) |
 | POST | `…/peers/bulk` | add several clients |
 | GET, PUT | `…/settings` | WireGuard server settings and client defaults |

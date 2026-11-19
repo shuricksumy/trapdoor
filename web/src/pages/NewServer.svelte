@@ -1,6 +1,6 @@
 <script>
   import { api, reloadServers, upload } from '../lib/api.js';
-  import { canRun, containerFor, machineName, typeNames } from '../lib/location.js';
+  import { canRun, containerFor, machineName, machines, typeNames } from '../lib/location.js';
   import { navigate, selectServer, servers, toast } from '../lib/state.svelte.js';
 
   import { route } from '../lib/state.svelte.js';
@@ -15,6 +15,8 @@
   const asked = route.query.get('type');
   const initial = kinds[asked] || asked === 'restore' ? asked : 'wireguard';
   let type = $state(initial);
+  // ?node=<name>: from "Add a server on this node" (Nodes page).
+  const askedNode = route.query.get('node') ?? '';
   const isOVPN = $derived(type === 'openvpn');
   // Restore: the containers of the chosen machine, by type.
   const containerList = $derived(
@@ -62,7 +64,7 @@
     return { id: freeID(k.prefix, machine), port: k.port + taken, subnet: `10.${k.net + taken}.0.0/24` };
   }
   let f = $state({
-    ...defaults(initial === 'restore' ? 'wireguard' : initial),
+    ...defaults(initial === 'restore' ? 'wireguard' : initial, askedNode),
     name: '',
     host: '',
     level: '2.0',
@@ -70,7 +72,7 @@
     dns: '',
     publicPort: '',
     proto: 'tcp',
-    machine: '', // '' = this machine, else a host name
+    machine: askedNode, // the node: '' = the own one, else its name
     mtu: '',
     allowed: '0.0.0.0/0, ::/0',
     keepalive: 25,
@@ -151,7 +153,7 @@
 <header class="head">
   <h1>Add a server</h1>
   {#if isRestore}
-    <p class="muted">Bring a server back from its backup file, on this machine or another one: with its keys, clients, settings and traffic history.</p>
+    <p class="muted">Bring a server back from its backup file, on this node or another one: with its keys, clients, settings and traffic history.</p>
   {:else if isOVPN}
     <p class="muted">A second OpenVPN server next to your other servers, for example on TCP 443 for networks that block other ports. It gets its own certificates and clients; the setup comes next.</p>
   {:else}
@@ -161,6 +163,21 @@
 
 <form class="panel form" onsubmit={create}>
   {#if error}<div class="banner bad" role="alert">{error}</div>{/if}
+
+  <!-- Where first: the node (and so the machine and container) the server runs on. -->
+  {#if servers.hosts.length}
+    <label class="field">
+      <span>Node</span>
+      <select bind:value={f.machine} onchange={() => isRestore || Object.assign(f, defaults(type, f.machine))}>
+        {#each machines() as m (m.machine)}
+          <optgroup label="Machine {m.machine}">
+            {#each m.nodes as n (n.key)}<option value={n.key} disabled={!!n.error}>node {n.name}{n.own ? ' (with this web UI)' : ''}{n.error ? ' (not reachable)' : ''}</option>{/each}
+          </optgroup>
+        {/each}
+      </select>
+      <span class="hint">A node is an agent with its VPN container. <a href="/nodes">Nodes</a> shows them all and adds new ones.</span>
+    </label>
+  {/if}
 
   <div class="kinds" role="radiogroup" aria-label="Type">
     <button type="button" role="radio" aria-checked={type === 'openvpn'} class:on={type === 'openvpn'} disabled={!canRun('openvpn', f.machine)} title={canRun('openvpn', f.machine) ? '' : `OpenVPN is turned off on ${machineName(f.machine)}`} onclick={() => pick('openvpn')}>
@@ -181,15 +198,6 @@
     </button>
   </div>
 
-  {#if servers.hosts.length}
-    <label class="field">
-      <span>Machine</span>
-      <select bind:value={f.machine} onchange={() => isRestore || Object.assign(f, defaults(type, f.machine))}>
-        <option value="">This machine</option>
-        {#each servers.hosts as h (h.name)}<option value={h.name} disabled={!!h.error}>{h.name}{h.error ? ' (not reachable)' : ''}</option>{/each}
-      </select>
-    </label>
-  {/if}
 
   {#if isRestore}
     <label class="field">
@@ -204,7 +212,7 @@
     </label>
     <label class="check">
       <input type="checkbox" bind:checked={replace} />
-      <span>Replace a server with the same id on that machine (its current clients and keys are swapped for the backup's)</span>
+      <span>Replace a server with the same id on that node (its current clients and keys are swapped for the backup's)</span>
     </label>
   {:else}
   <div class="grid">
@@ -321,7 +329,7 @@
       Restores the server in the backup on <strong>{machineName(f.machine)}</strong>{#if containerList}, in the container for its type ({containerList}){/if}.
     {:else}
       Adds <strong>{typeNames[type]} {f.id || '…'}</strong> on <strong>{machineName(f.machine)}</strong>{#if containerFor(type, f.machine)}, in container <strong class="mono">{containerFor(type, f.machine)}</strong>{/if}, {isOVPN ? (f.proto || 'udp').toUpperCase() : 'UDP'} port {f.port || '…'}.
-      {#if !canRun(type, f.machine)}<span class="bad">{typeNames[type]} is turned off on that machine.</span>{/if}
+      {#if !canRun(type, f.machine)}<span class="bad">{typeNames[type]} is turned off on that node.</span>{/if}
     {/if}
   </div>
 

@@ -78,3 +78,36 @@ func TestLoadAgentOpenVPNOff(t *testing.T) {
 		t.Error("TD_OPENVPN=maybe accepted")
 	}
 }
+
+func TestLoadAgentJoin(t *testing.T) {
+	t.Setenv("TD_AGENT_TOKEN", "x")
+	t.Setenv("TD_JOIN_URL", "http://web:8080")
+	if _, err := LoadAgent(); err == nil {
+		t.Error("TD_JOIN_URL without the rest accepted")
+	}
+	t.Setenv("TD_JOIN_TOKEN", "tdj_x")
+	t.Setenv("TD_NODE_NAME", "office")
+	t.Setenv("TD_NODE_URL", "https://vpn-office:9443")
+	t.Setenv("TD_MACHINE", "docker-host")
+	if _, err := LoadAgent(); err == nil {
+		t.Error("joining without TLS accepted")
+	}
+	t.Setenv("TD_AGENT_LISTEN", ":9443")
+	t.Setenv("TD_AGENT_TLS", "auto")
+	c, err := LoadAgent()
+	if err != nil || c.JoinToken != "tdj_x" || c.NodeName != "office" || c.Machine != "docker-host" {
+		t.Fatalf("join settings: %+v, %v", c, err)
+	}
+}
+
+func TestLoadWebJoinSecret(t *testing.T) {
+	t.Setenv("TD_AGENT_TOKEN", "x")
+	t.Setenv("TD_JOIN_SECRET", "short")
+	if _, err := LoadWeb(); err == nil {
+		t.Error("a short TD_JOIN_SECRET accepted")
+	}
+	t.Setenv("TD_JOIN_SECRET", "a-secret-of-at-least-24-chars")
+	if c, err := LoadWeb(); err != nil || c.JoinSecret == "" {
+		t.Fatalf("secret: %v", err)
+	}
+}

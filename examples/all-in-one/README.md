@@ -71,6 +71,6 @@ same number inside and outside) and run `docker compose up -d`.
   its network); `docker compose up -d` does both.
 - All servers share one network stack. Clients of different servers are kept apart by the
   access rules (each server has its own chain), not by separate kernels' routing tables.
-  When that is not enough, see [Separate containers](../separate-containers/).
+  When that is not enough, see [Nodes](../nodes/).
 - The host needs the WireGuard kernel module (Linux 5.6+) for WireGuard; AmneziaWG runs in
   userspace (`amneziawg-go`) and needs nothing.

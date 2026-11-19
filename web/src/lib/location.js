@@ -1,30 +1,64 @@
-// Where a server runs: the machine (this one, or a host added under Hosts)
-// and the container (TD_CONTAINER_* of that machine's agent).
+// Where a server runs: machine › node › container.
+//
+// A node is an agent with its VPN container(s): this web UI's own node ('' in
+// ids and API calls) and the nodes that joined or were added under Nodes
+// (their servers have a "host"). Several nodes can share a machine
+// (TD_MACHINE); a node without one is a machine of its own.
 
 import { servers } from './state.svelte.js';
 
 export const typeNames = { openvpn: 'OpenVPN', wireguard: 'WireGuard', amneziawg: 'AmneziaWG' };
 
-/** The machine's name for a server or a host name ('' = this machine). */
-export function machineName(hostOrServer) {
-  const h = typeof hostOrServer === 'string' ? hostOrServer : (hostOrServer?.host ?? '');
-  return h || 'This machine';
+const hostKey = (hostOrServer) => (typeof hostOrServer === 'string' ? hostOrServer : (hostOrServer?.host ?? ''));
+
+/**
+ * A node by its name ('' = the own one): { key, name, machine, containers, error, hostname, version, url }.
+ */
+export function nodeOf(hostOrServer) {
+  const key = hostKey(hostOrServer);
+  if (!key) {
+    return { key: '', name: servers.node || 'main', machine: servers.machine || 'This machine', containers: servers.containers, own: true };
+  }
+  const h = servers.hosts.find((x) => x.name === key);
+  return { key, name: key, machine: h?.machine || key, containers: h?.containers ?? null, error: h?.error, hostname: h?.hostname, version: h?.version, url: h?.url };
 }
 
-/** "This machine · vpn-wireguard" for a server (the container only when known). */
+/** All nodes grouped by machine: [{ machine, nodes: [...] }], the own machine first. */
+export function machines() {
+  const all = [nodeOf(''), ...servers.hosts.map((h) => nodeOf(h.name))];
+  const out = [];
+  for (const n of all) {
+    let g = out.find((m) => m.machine === n.machine);
+    if (!g) out.push((g = { machine: n.machine, nodes: [] }));
+    g.nodes.push(n);
+  }
+  return out;
+}
+
+/** "node main on this machine", "node vps on machine vps-frankfurt" for a node or a server. */
+export function nodeTitle(hostOrServer) {
+  const n = nodeOf(hostOrServer);
+  return n.own && !servers.machine ? `node ${n.name} on this machine` : `node ${n.name} on machine ${n.machine}`;
+}
+
+/** Kept for older callers: the node title. */
+export const machineName = nodeTitle;
+
+/** "This machine › node main · container vpn-wireguard" for a server. */
 export function where(s) {
   if (!s) return '';
-  return s.container ? `${machineName(s)} · container ${s.container}` : machineName(s);
+  const n = nodeOf(s);
+  const c = s.container || '';
+  return `${n.machine} › node ${n.name}${c ? ` · container ${c}` : ''}`;
 }
 
-/** The container a new server of a type would run in on a machine ('' = this one). */
+/** The container a new server of a type would run in on a node ('' = the own one). */
 export function containerFor(type, host = '') {
-  const map = host ? servers.hosts.find((h) => h.name === host)?.containers : servers.containers;
-  return map?.[type] ?? '';
+  return nodeOf(host).containers?.[type] ?? '';
 }
 
-/** Whether a machine can run a type at all (when it says what it runs). */
+/** Whether a node can run a type at all (when it says what it runs). */
 export function canRun(type, host = '') {
-  const map = host ? servers.hosts.find((h) => h.name === host)?.containers : servers.containers;
+  const map = nodeOf(host).containers;
   return !map || type in map;
 }

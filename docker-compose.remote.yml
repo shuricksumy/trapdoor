@@ -1,12 +1,14 @@
-# trapdoor on another machine: the VPN servers and the agent, no web UI.
-# The web UI on your main machine manages it (Hosts → Add a host).
+# A node on another machine: the VPN servers and the agent, no web UI.
+# The web UI on your main machine manages it (Nodes).
 #
 #   cp .env.example .env        # set TD_AGENT_TOKEN (openssl rand -hex 32)
+#   # Nodes → Add a node → With a join token: put the TD_JOIN_* / TD_NODE_* lines in .env
 #   docker compose -f docker-compose.remote.yml up -d
-#   docker compose -f docker-compose.remote.yml exec agent trapdoor agent-cert
 #
-# Then add the host in the web UI with https://<this machine>:${AGENT_PORT},
-# the token and the fingerprint printed above. The agent API is reachable
+# The node then joins by itself. Without a join token: add it by hand (Nodes → Add a
+# node → By hand) with https://<this machine>:${AGENT_PORT}, the token and the
+# fingerprint of `docker compose -f docker-compose.remote.yml exec agent trapdoor
+# agent-cert`. The agent API is reachable
 # from the network (TLS, token): allow AGENT_PORT only from the machine that
 # runs the web UI, e.g. ufw allow from 203.0.113.10 to any port 9443 proto tcp.
 
@@ -51,6 +53,12 @@ services:
       TD_AGENT_TOKEN: ${TD_AGENT_TOKEN:?set TD_AGENT_TOKEN in .env}
       TD_AGENT_LISTEN: ":9443"
       TD_AGENT_TLS: auto # self-signed certificate in OPENVPN_DIR, pinned by the web UI
+      # Join the web UI at start (Nodes → Add a node → With a join token); empty: add by hand
+      TD_JOIN_URL: ${TD_JOIN_URL:-}
+      TD_JOIN_TOKEN: ${TD_JOIN_TOKEN:-}
+      TD_NODE_NAME: ${TD_NODE_NAME:-}
+      TD_NODE_URL: ${TD_NODE_URL:-}
+      TD_MACHINE: ${TD_MACHINE:-}
       TD_OPENVPN_MGMT: ${TD_OPENVPN_MGMT:-127.0.0.1:2080}
       TD_OPENVPN_RESTART: SIGTERM # the vpn service starts OpenVPN again
       TD_FIREWALL: file # access rules are applied by the vpn service

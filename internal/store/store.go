@@ -118,6 +118,15 @@ var migrations = []string{
 		fingerprint TEXT    NOT NULL,
 		created_at  INTEGER NOT NULL
 	) WITHOUT ROWID;`,
+
+	// 5: one-time tokens nodes join with (only a hash is kept)
+	`CREATE TABLE join_tokens (
+		token_hash  BLOB    PRIMARY KEY,
+		name        TEXT    NOT NULL DEFAULT '', -- the node it is for; '' = any
+		created_at  INTEGER NOT NULL,
+		expires_at  INTEGER NOT NULL,
+		used_at     INTEGER
+	) WITHOUT ROWID;`,
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -220,4 +229,30 @@ func (db *DB) Snapshot(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return tmp, nil
+}
+
+// CreateJoinToken keeps a new join token's hash.
+func (db *DB) CreateJoinToken(ctx context.Context, hash []byte, name string, now, expires int64) error {
+	_, err := db.ExecContext(ctx, `INSERT INTO join_tokens (token_hash, name, created_at, expires_at) VALUES (?, ?, ?, ?)`,
+		hash, name, now, expires)
+	return err
+}
+
+// JoinTokenFor reports whether hash is an unused, unexpired token for a
+// node called name (or for any name).
+func (db *DB) JoinTokenFor(ctx context.Context, hash []byte, name string, now int64) (bool, error) {
+	var n int
+	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM join_tokens WHERE token_hash = ? AND used_at IS NULL
+		AND expires_at > ? AND (name = '' OR name = ?)`, hash, now, name).Scan(&n)
+	return n > 0, err
+}
+
+// UseJoinToken marks a token used; false when it was used meanwhile.
+func (db *DB) UseJoinToken(ctx context.Context, hash []byte, now int64) (bool, error) {
+	res, err := db.ExecContext(ctx, `UPDATE join_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL`, now, hash)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }

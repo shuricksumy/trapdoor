@@ -355,37 +355,66 @@ AmneziaWG in *Add a server*.
   The compose file publishes `AWG_PORT` (default 51830), the same inside and outside:
   create the first AmneziaWG server with that port.
 
-## Several hosts
+## Nodes
 
-One web UI can manage VPN servers on several machines. The machine with the web UI runs the
-usual `docker-compose.yml`; every other machine runs `docker-compose.remote.yml`: the `vpn`
-container and the agent, no web UI.
+A **node** is an agent with its `vpn` container: it runs VPN servers of any type. A
+**machine** can have several nodes (e.g. one per network, each with its own network stack,
+NAT and firewall), and one web UI manages the nodes on every machine. The UI shows it as
+*machine › node › VPN server*: the **Nodes** page lists the machines with their nodes and
+each node's servers, *Add a server* asks for the node first, and every page shows where the
+selected server runs (e.g. *vps › node vps · container vpn*).
 
-1. On the other machine: `.env` with its own `TD_AGENT_TOKEN`, then
+The node next to the web UI is the one in `docker-compose.yml` (unix socket). Its name and
+machine come from `TD_NODE_NAME` and `TD_MACHINE` (default *main* on *This machine*).
+Other nodes run an agent with TLS and join the web UI by themselves:
+
+**A node on another machine** (`docker-compose.remote.yml`: the `vpn` container and the
+agent, no web UI):
+
+1. In the web UI: **Nodes → Add a node → With a join token**: a name (e.g. `vps`), how long
+   the token is valid, the machine and the node's address. It shows the lines for the
+   node's `.env`: `TD_JOIN_URL` (this web UI), `TD_JOIN_TOKEN` (one-time, `tdj_…`),
+   `TD_NODE_NAME`, `TD_NODE_URL` (how the web UI reaches the node's agent, e.g.
+   `https://203.0.113.5:9443`) and `TD_MACHINE`.
+2. On the other machine: `.env` with its own `TD_AGENT_TOKEN` and those lines, then
    `docker compose -f docker-compose.remote.yml up -d`.
-2. `docker compose -f docker-compose.remote.yml exec agent trapdoor agent-cert` prints the
-   agent's certificate fingerprint (the agent's log shows it too).
-3. In the web UI: Hosts → Add a host, with a name (e.g. `vps`), `https://<address>:9443`
-   (`AGENT_PORT`), the token and the fingerprint. trapdoor connects once before saving.
 
-Its servers then appear in the server list, grouped by machine, and *Add a server* asks on
-which machine. They work like local ones: clients, sessions, traffic history, access rules,
+At start the agent sends the token, its address, its certificate fingerprint and its agent
+token to `TD_JOIN_URL/api/v1/nodes/join`. The web UI connects back with that certificate
+pinned and adds the node (it retries every 10 seconds until the web UI answers). The token is
+used up then; later starts of the same node (same certificate) join without one.
+
+**Nodes in the web UI's own compose file** join with `TD_JOIN_SECRET` (set on the web
+service, at least 24 characters) as their `TD_JOIN_TOKEN`: see
+[examples/nodes](../examples/nodes/).
+
+**By hand** (an agent without join settings): `docker compose -f docker-compose.remote.yml
+exec agent trapdoor agent-cert` prints the fingerprint; then *Nodes → Add a node → By hand*
+with a name, `https://<address>:9443` (`AGENT_PORT`), its `TD_AGENT_TOKEN` and the
+fingerprint. trapdoor connects once before saving.
+
+A node's servers work like local ones: clients, sessions, traffic history, access rules,
 setup.
 
-- A server on another host has the id `<host>.<id>` in the web API and in the traffic
-  history (e.g. `vps.wg0`); this machine's servers keep their ids.
-- The remote agent listens on TCP with TLS 1.3 (`TD_AGENT_TLS=auto`) and a self-signed
+- A server on another node has the id `<node>.<id>` in the web API and in the traffic
+  history (e.g. `vps.wg0`); the own node's servers keep their ids.
+- The node's agent listens on TCP with TLS 1.3 (`TD_AGENT_TLS=auto`) and a self-signed
   certificate it creates on first start (`trapdoor-agent.crt` / `.key` in its OpenVPN
   directory). The web UI trusts exactly that certificate (its SHA-256 fingerprint, like an SSH
   host key) and sends the token with every request. Still, allow the agent port only from the
   machine with the web UI.
-- The host list (with tokens) is kept in the web database. Removing a host only forgets it:
-  its servers keep running there, and their history stays.
-- A host that does not answer is shown on the Hosts page with the error; the other servers
-  keep working.
+- A join token is shown once; only its hash is kept. A join with a different certificate
+  for an existing node name needs a new token (or the secret).
+- `TD_JOIN_URL` should be `https://` when the node is on another machine: the join request
+  carries the node's agent token.
+- The node list (with tokens) is kept in the web database. Removing a node only forgets it:
+  its servers keep running there, and their history stays. A node with join settings joins
+  again at its next start; remove them from its `.env`.
+- A node that does not answer is shown on the Nodes and Servers pages with the error; the
+  other servers keep working.
 - An agent that should run no OpenVPN server (e.g. one only for WireGuard) gets
-  `TD_OPENVPN=off`: then it has no "openvpn" server at all. More layouts (separate
-  containers per VPN type, the host's network, private networks between machines):
+  `TD_OPENVPN=off`: then it has no "openvpn" server at all. More layouts (several nodes in
+  one compose file, the host's network, private networks between machines):
   [examples](../examples/).
 
 ## Backup and restore

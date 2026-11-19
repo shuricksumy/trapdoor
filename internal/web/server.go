@@ -92,6 +92,9 @@ type Deps struct {
 	Hosts HostManager
 	// Backup gives the agents' parts of a backup (nil: no backups).
 	Backup BackupSource
+	// JoinSecret lets nodes started with it join without a one-time token
+	// (TD_JOIN_SECRET; empty = only tokens).
+	JoinSecret string
 	// Stats is the history database; its Agent field is set per request to
 	// the server in the URL.
 	Stats   *history.Stats
@@ -152,6 +155,7 @@ func (s *Server) Handler() http.Handler {
 		httpx.WriteJSON(w, http.StatusOK, apiHealth())
 	})
 	s.registerAuthRoutes(mux, api)
+	mux.HandleFunc("POST /api/v1/nodes/join", s.handleJoin) // a node, with its join token
 	mux.Handle("/api/", s.requireAuth(api))
 	ui := webui.Handler()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

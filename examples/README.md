@@ -2,17 +2,19 @@
 
 trapdoor is three programs in one image: **web** (the UI and API, no privileges), **agent**
 (writes the VPN configuration, certificates and rules) and **vpn** (the only container with
-network privileges: it runs the VPN servers, NAT and firewall rules). How you place them is
-up to you. Three setups:
+network privileges: it runs the VPN servers, NAT and firewall rules). An agent with its
+`vpn` container is a **node**; it can run any VPN type. A machine can have several nodes, and
+one web UI manages the nodes on every machine. The UI shows it as *machine › node › VPN
+server*. Three setups:
 
 | Example | What runs where | Choose it when |
 | --- | --- | --- |
-| [All in one](all-in-one/) | one machine, one `vpn` container runs every OpenVPN, WireGuard and AmneziaWG server | the usual case: simple, one place to publish ports |
-| [Separate containers](separate-containers/) | one machine, one compose file, a `vpn` container and a folder per VPN type (`vpn-openvpn`, `vpn-wireguard`, `vpn-amneziawg`) | the VPN types should not share a network stack, or need different networking (e.g. WireGuard on the host network) |
-| [Remote machines](remote/) | the web UI on one machine, VPN servers on others | VPN servers in several places (a VPS, home, an office), managed from one UI |
+| [All in one](all-in-one/) | one machine, one node: one `vpn` container runs every OpenVPN, WireGuard and AmneziaWG server | the usual case: simple, one place to publish ports |
+| [Nodes](nodes/) | one machine, one compose file: the web UI and several nodes (`main`, `office`, `guest`), each an agent + `vpn` container with its own folder | groups of VPN servers that must not share a network stack, or need different networking (e.g. one node on the host network) |
+| [Remote machines](remote/) | the web UI on one machine, nodes on others, joining with a one-time token | VPN servers in several places (a VPS, home, an office), managed from one UI |
 
-The setups combine: a remote machine can itself use separate containers, and any machine
-can be added to the web UI under **Hosts**.
+The setups combine: a remote machine can run several nodes too, and every node shows up
+under **Nodes**.
 
 ## All in one
 
@@ -27,19 +29,20 @@ can be added to the web UI under **Hosts**.
 One `vpn` container, one set of published ports, one firewall. Servers are separated by
 trapdoor's access rules (iptables chains per server), not by network stacks.
 
-## Separate containers
+## Nodes
 
 ```
- browser ──▶ web ──▶ agent ─┬─ shares network ─▶ vpn-openvpn     ← ./openvpn    UDP 1194, TCP 1195
-                            ├─ files ──────────▶ vpn-wireguard   ← ./wireguard  UDP 51820
-                            └─ files ──────────▶ vpn-amneziawg   ← ./amneziawg  UDP 51830
+ machine docker-host
+ browser ──▶ web ─┬─ unix socket ─────▶ node main    (agent-main   + vpn-main)    ← ./main
+                  ├─ TLS, pinned ─────▶ node office  (agent-office + vpn-office)  ← ./office
+                  └─ TLS, pinned ─────▶ node guest   (agent-guest  + vpn-guest)   ← ./guest
+                  ▲
+                  └── office and guest join by themselves (TD_JOIN_SECRET)
 ```
 
-One compose file, one web UI and one agent; each VPN type gets its own container and folder.
-Each container has its own network stack, NAT and firewall: clients of one type cannot reach
-another type's networks, and each container can be connected differently (e.g. WireGuard on
-the host's network). In the UI everything is on *This machine*; the type decides the
-container.
+One compose file, one web UI, several nodes. Each node has its own network stack, NAT,
+firewall, ports and folder, and runs any VPN type: clients of one node cannot reach another
+node's networks. *Add a server* asks for the node.
 
 ## Remote machines
 
@@ -51,18 +54,19 @@ container.
                     + token, port 9443           (or over a private network)
 ```
 
-Machine B runs only `vpn` and `agent`; its agent listens on TCP 9443 with TLS and a
-self-signed certificate that the web UI pins by fingerprint. Its VPN clients connect to
+Machine B runs a node: only `vpn` and `agent`. Its agent listens on TCP 9443 with TLS and a
+self-signed certificate that the web UI pins by fingerprint; with a join token from *Nodes →
+Add a node* it adds itself to the web UI at start. Its VPN clients connect to
 machine B directly; only management goes through machine A.
 
 ## Things that hold for every setup
 
 - Docker cannot publish ports at runtime: every VPN server's port must be in the compose
   file of the container that runs it (`docker compose up -d` after adding one).
-- Each agent needs its own `TD_AGENT_TOKEN`; the web UI keeps the other hosts' tokens in its
+- Each agent needs its own `TD_AGENT_TOKEN`; the web UI keeps the other nodes' tokens in its
   database.
 - The OpenVPN management interface stays on `127.0.0.1` inside each `vpn` container, which is
   why an agent shares its `vpn` container's network.
-- Backups: *Account → Download a backup* includes every host; each server's page has a
+- Backups: *Account → Download a backup* includes every node; each server's page has a
   backup of that server alone, which also moves it to another container or machine.
-- Details: [docs/guide.md](../docs/guide.md) (several hosts, servers page, backup).
+- Details: [docs/guide.md](../docs/guide.md) (nodes, servers page, backup).

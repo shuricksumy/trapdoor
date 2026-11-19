@@ -38,8 +38,10 @@ type mounted struct {
 type Host struct {
 	token string
 	log   *slog.Logger
-	cfg   config.Agent  // WireGuard settings for new servers
-	ovpn  *config.Agent // settings for new OpenVPN servers (nil: none can be added)
+	// machine, node: shown in the UI (TD_MACHINE, TD_NODE_NAME).
+	machine, node string
+	cfg           config.Agent  // WireGuard settings for new servers
+	ovpn          *config.Agent // settings for new OpenVPN servers (nil: none can be added)
 
 	mu      sync.RWMutex
 	servers []mounted
@@ -184,7 +186,8 @@ func (h *Host) Handler() http.Handler {
 
 func (h *Host) handleInfo(w http.ResponseWriter, r *http.Request) {
 	host, _ := os.Hostname()
-	info := api.AgentInfo{Version: version.Version, Hostname: host, Servers: []api.ServerInfo{}, Containers: h.containers()}
+	info := api.AgentInfo{Version: version.Version, Hostname: host, Servers: []api.ServerInfo{}, Containers: h.containers(),
+		Machine: h.machine, Node: h.node}
 	for _, s := range h.list() {
 		info.Servers = append(info.Servers, s.Info(r.Context()))
 	}
@@ -397,4 +400,11 @@ func (h *Host) containers() map[string]string {
 		}
 	}
 	return out
+}
+
+// SetNames sets the machine and node names the API reports.
+func (h *Host) SetNames(machine, node string) {
+	h.mu.Lock()
+	h.machine, h.node = machine, node
+	h.mu.Unlock()
 }

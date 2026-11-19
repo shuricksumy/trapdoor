@@ -23,9 +23,13 @@ const (
 // AgentInfo is returned by GET /v1/info on the agent: the host and the VPN
 // servers it manages.
 type AgentInfo struct {
-	Version  string       `json:"version"`
-	Hostname string       `json:"hostname"`
-	Servers  []ServerInfo `json:"servers"`
+	Version  string `json:"version"`
+	Hostname string `json:"hostname"`
+	// Machine is the computer this node runs on (TD_MACHINE), Node the
+	// node's name (TD_NODE_NAME); both only for the UI.
+	Machine string       `json:"machine,omitempty"`
+	Node    string       `json:"node,omitempty"`
+	Servers []ServerInfo `json:"servers"`
 	// Hosts are the other hosts the web process manages (web only); their
 	// servers are in Servers with ids "<host>.<id>".
 	Hosts []HostStatus `json:"hosts,omitempty"`
@@ -45,6 +49,25 @@ type ServerSummary struct {
 	SummaryError string `json:"summary_error,omitempty"` // numbers that could not be read
 }
 
+// JoinRequest is what a node sends to the web UI to add itself
+// (POST /api/v1/nodes/join): a join token, how to reach it, and its
+// certificate fingerprint and agent token.
+type JoinRequest struct {
+	Token       string `json:"token"`
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	Fingerprint string `json:"fingerprint"`
+	AgentToken  string `json:"agent_token"`
+}
+
+// JoinToken is a one-time token for a new node (POST /api/v1/nodes/tokens);
+// Token is only in the answer that creates it.
+type JoinToken struct {
+	Token     string    `json:"token,omitempty"`
+	Name      string    `json:"name,omitempty"` // the node it is for ("" = any name)
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 // Autostart is the body of PUT /v1/servers/{id}/autostart.
 type Autostart struct {
 	Autostart bool `json:"autostart"`
@@ -62,9 +85,11 @@ type Host struct {
 	Fingerprint string `json:"fingerprint"`
 }
 
-// HostStatus is a host and whether its agent answers.
+// HostStatus is a node (another agent) and whether it answers.
 type HostStatus struct {
-	Name     string `json:"name"`
+	Name string `json:"name"`
+	// Machine the node says it runs on (TD_MACHINE of its agent).
+	Machine  string `json:"machine,omitempty"`
 	URL      string `json:"url"`
 	Version  string `json:"version,omitempty"`
 	Hostname string `json:"hostname,omitempty"`

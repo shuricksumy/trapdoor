@@ -83,6 +83,9 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
 - [x] Servers page: all servers on all machines, start / stop, autostart on / off
 - [x] One UI for several hosts: `docker-compose.remote.yml` (vpn + agent with TLS), hosts added in
       the UI with the agent's pinned certificate fingerprint; servers `<host>.<id>`
+- [x] Nodes: an agent + vpn container anywhere, joining the web UI by itself (one-time join token
+      from the UI, or `TD_JOIN_SECRET` in the same compose file); UI as machine › node › server;
+      `examples/nodes` (several nodes in one compose file) replaces separate containers
 
 ## v4 — extras
 
