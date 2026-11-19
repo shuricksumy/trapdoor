@@ -459,32 +459,6 @@
   td.actions { text-align: right; white-space: nowrap; }
   td.actions > * { vertical-align: middle; }
 
-  .menu { position: relative; display: inline-block; margin-left: var(--space-1); }
-  .menu summary { list-style: none; }
-  .menu summary::-webkit-details-marker { display: none; }
-  .menu-list {
-    position: fixed; /* placed by placeMenu: outside the scrolling table */
-    z-index: 50;
-    min-width: 160px;
-    display: grid;
-    padding: 4px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-s);
-    box-shadow: var(--shadow);
-  }
-  .menu-list button {
-    padding: 8px var(--space-3);
-    border: 0;
-    border-radius: 3px;
-    background: none;
-    color: var(--ink);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-  .menu-list button:hover { background: var(--sunken); }
-  .menu-list button.danger { color: var(--bad); }
 
   .history { display: inline-flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); color: var(--ink-2); font-size: var(--step--1); }
   .history input { height: auto; }
