@@ -1,0 +1,40 @@
+name: Bug report
+description: Something does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please remove real addresses, hostnames and keys from what you paste.
+        Security problems: please use [private reporting](https://github.com/shuricksumy/trapdoor/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`trapdoor version`, or the image tag (e.g. 0.4.0)"
+    validations:
+      required: true
+  - type: dropdown
+    id: vpn
+    attributes:
+      label: VPN type
+      multiple: true
+      options: [OpenVPN, WireGuard, AmneziaWG, not VPN specific]
+  - type: dropdown
+    id: setup
+    attributes:
+      label: Setup
+      options: [All in one (docker-compose.yml), Nodes in one compose file, Remote node, Without Docker]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "`docker compose logs --tail 100 web agent vpn` (or the services involved)"
+      render: text
