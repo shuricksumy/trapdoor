@@ -5,6 +5,7 @@
   import { dateTime } from '../lib/format.js';
   import { lineDiff } from '../lib/diff.js';
   import Dialog from '../lib/Dialog.svelte';
+  import ServerBackup from '../lib/ServerBackup.svelte';
 
   let cfg = $state(null); // last loaded server config
   let net = $state(null); // client LANs (for route suggestions)
@@ -307,6 +308,8 @@
     {/if}
   </section>
 {/if}
+
+<ServerBackup />
 
 {#if removable}
   <section class="panel remove">

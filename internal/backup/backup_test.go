@@ -118,7 +118,7 @@ func TestAddDirExtract(t *testing.T) {
 	dst, servers := t.TempDir(), t.TempDir()
 	targets := []Target{{"agent/openvpn", dst}, {"agent/openvpn-servers", servers}}
 	n, err := Extract(bytes.NewReader(buf.Bytes()), targets, false)
-	if err != nil || n != 4 {
+	if err != nil || n != 5 {
 		t.Fatalf("extract: %d files, %v", n, err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(dst, "pki/private/ca.key")); string(b) != "KEY" {
@@ -127,8 +127,12 @@ func TestAddDirExtract(t *testing.T) {
 	if fi, _ := os.Stat(filepath.Join(dst, "pki/private/ca.key")); fi.Mode().Perm() != 0o600 {
 		t.Errorf("ca.key mode %v", fi.Mode().Perm())
 	}
-	if l, _ := os.Readlink(filepath.Join(dst, "link.conf")); l != "server.conf" {
-		t.Errorf("link = %q", l)
+	// A link comes back as a copy of its file.
+	if fi, err := os.Lstat(filepath.Join(dst, "link.conf")); err != nil || !fi.Mode().IsRegular() {
+		t.Errorf("link.conf: %v, %v", fi, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dst, "link.conf")); string(b) != "port 1194\n" {
+		t.Errorf("link.conf = %q", b)
 	}
 	if _, err := os.Stat(filepath.Join(dst, "wg0.dump")); err == nil {
 		t.Error("runtime state backed up")
@@ -159,6 +163,8 @@ func TestExtractRefusesEscapes(t *testing.T) {
 		"link out":        {Name: "agent/openvpn/l", Typeflag: tar.TypeSymlink, Linkname: "../../etc"},
 		"link absolute":   {Name: "agent/openvpn/l", Typeflag: tar.TypeSymlink, Linkname: "/etc"},
 		"link to sibling": {Name: "agent/openvpn/l", Typeflag: tar.TypeSymlink, Linkname: "../wireguard"},
+		"link inside":     {Name: "agent/openvpn/l", Typeflag: tar.TypeSymlink, Linkname: "server.conf"},
+		"hard link":       {Name: "agent/openvpn/l", Typeflag: tar.TypeLink, Linkname: "agent/openvpn/server.conf"},
 		"device":          {Name: "agent/openvpn/dev", Typeflag: tar.TypeChar, Mode: 0o644},
 	} {
 		var buf bytes.Buffer

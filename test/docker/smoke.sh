@@ -249,6 +249,24 @@ grep -q '"applied":true' "$WORK/fw2.json" || fail "second server's rules not app
 dc exec -T vpn iptables -C FORWARD -i ovpn-tcp -j TD-ovpn-tcp || fail "no jump to TD-ovpn-tcp"
 sudo kill "$BOB_PID" 2>/dev/null || true
 BOB_PID=
+log "per-server backup: ovpn-tcp saved, removed, restored from the file; bob connects with his old profile"
+api -H "Content-Type: application/json" -d '{"passphrase":"server pass"}' "$WEB/api/v1/servers/ovpn-tcp/backup" -o "$WORK/ovpn-tcp.tdbackup" || fail "server backup"
+[[ $(head -c 8 "$WORK/ovpn-tcp.tdbackup") == TDBACKUP ]] || fail "server backup not encrypted"
+api -X DELETE "$WEB/api/v1/servers/ovpn-tcp" || fail "remove before restore"
+for _ in $(seq 15); do dc exec -T vpn ip link show ovpn-tcp >/dev/null 2>&1 || break; sleep 1; done
+api -F passphrase="server pass" -F file=@"$WORK/ovpn-tcp.tdbackup" "$WEB/api/v1/servers/restore" >"$WORK/restored.json" || fail "restore the server"
+grep -q '"id":"ovpn-tcp"' "$WORK/restored.json" || fail "restore answer: $(cat "$WORK/restored.json")"
+ovpntcp() { api "$WEB/api/v1/status" | grep -q '"id":"ovpn-tcp"[^}]*"openvpn_version":"OpenVPN'; }
+for _ in $(seq 40); do ovpntcp && break; sleep 1; done
+ovpntcp || fail "ovpn-tcp not running after restore: $(dc logs --tail 20 vpn)"
+sudo openvpn --config "$WORK/bob.ovpn" >"$WORK/bob2.log" 2>&1 &
+BOB_PID=$!
+for _ in $(seq 30); do grep -q "Initialization Sequence Completed" "$WORK/bob2.log" 2>/dev/null && break; sleep 1; done
+grep -q "Initialization Sequence Completed" "$WORK/bob2.log" || fail "bob could not connect after restore: $(tail -20 "$WORK/bob2.log")"
+ping -c 2 -W 2 10.80.0.1 >/dev/null || fail "no traffic through the restored server"
+dc exec -T vpn iptables -C FORWARD -i ovpn-tcp -j TD-ovpn-tcp || fail "access rules not back after restore"
+sudo kill "$BOB_PID" 2>/dev/null || true
+BOB_PID=
 api -X DELETE "$WEB/api/v1/servers/ovpn-tcp" || fail "remove the second OpenVPN server"
 for _ in $(seq 15); do dc exec -T vpn ip link show ovpn-tcp >/dev/null 2>&1 || break; sleep 1; done
 ! dc exec -T vpn ip link show ovpn-tcp >/dev/null 2>&1 || fail "ovpn-tcp still up after remove"

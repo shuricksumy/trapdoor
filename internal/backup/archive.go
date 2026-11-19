@@ -15,7 +15,11 @@ import (
 
 // Manifest is manifest.json at the top of a backup.
 type Manifest struct {
-	Format   int       `json:"format"` // 1
+	Format int `json:"format"` // 1
+	// Kind: "machine" (everything, restored with trapdoor restore; empty in
+	// the first backups) or "server" (one VPN server, restored in the UI).
+	Kind     string    `json:"kind,omitempty"`
+	Server   *Server   `json:"server,omitempty"`
 	Version  string    `json:"version"`
 	Created  time.Time `json:"created"`
 	Hostname string    `json:"hostname"`
@@ -24,6 +28,20 @@ type Manifest struct {
 	// Errors: parts that could not be backed up (e.g. a host was down).
 	Errors []string `json:"errors,omitempty"`
 }
+
+// Server is the server in a "server" backup.
+type Server struct {
+	Type string `json:"type"`
+	ID   string `json:"id"` // as on its machine (without the host)
+	Name string `json:"name"`
+	Host string `json:"host,omitempty"` // the machine it was on
+}
+
+// Kinds of backup.
+const (
+	KindMachine = "machine"
+	KindServer  = "server"
+)
 
 // skip reports files that are state of the running system, not settings:
 // rebuilt or rewritten by trapdoor and the VPN container.
@@ -70,13 +88,14 @@ func AddDir(tw *tar.Writer, dir, prefix string, exclude ...string) error {
 		if err != nil {
 			return err
 		}
-		link := ""
 		if info.Mode()&fs.ModeSymlink != 0 {
-			if link, err = os.Readlink(p); err != nil {
-				return err
+			// A link is stored as the file it points to (restore creates
+			// no links); links to directories or nowhere are left out.
+			if info, err = os.Stat(p); err != nil || !info.Mode().IsRegular() {
+				return nil
 			}
 		}
-		h, err := tar.FileInfoHeader(info, link)
+		h, err := tar.FileInfoHeader(info, "")
 		if err != nil {
 			return err
 		}
@@ -88,7 +107,7 @@ func AddDir(tw *tar.Writer, dir, prefix string, exclude ...string) error {
 		if err := tw.WriteHeader(h); err != nil {
 			return err
 		}
-		if !info.Mode().IsRegular() {
+		if !info.Mode().IsRegular() || d.IsDir() {
 			return nil
 		}
 		f, err := os.Open(p)
@@ -134,7 +153,7 @@ type Target struct {
 }
 
 // Extract restores the entries below each target's prefix into its dir.
-// Entries that would leave the dir, and device files, are refused. With
+// Entries that would leave the dir, links and device files are refused. With
 // force, existing files are replaced; without it, an existing file stops
 // the restore. It returns how many files were written.
 func Extract(r io.Reader, targets []Target, force bool) (int, error) {
@@ -178,23 +197,6 @@ func ExtractFrom(tr *tar.Reader, targets []Target, force bool) (int, error) {
 				return n, err
 			}
 			n++
-		case tar.TypeSymlink:
-			// Only links that stay inside the same target directory.
-			if filepath.IsAbs(h.Linkname) || !filepath.IsLocal(filepath.Join(filepath.Dir(rel), filepath.FromSlash(h.Linkname))) {
-				return n, fmt.Errorf("%s: link points outside the backup", h.Name)
-			}
-			if _, err := os.Lstat(dst); err == nil {
-				if !force {
-					return n, fmt.Errorf("%s exists (use --force to replace)", dst)
-				}
-				_ = os.Remove(dst)
-			}
-			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-				return n, err
-			}
-			if err := os.Symlink(h.Linkname, dst); err != nil {
-				return n, err
-			}
 		default:
 			return n, fmt.Errorf("%s: unexpected entry type %c", h.Name, h.Typeflag)
 		}

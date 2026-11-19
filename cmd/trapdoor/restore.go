@@ -94,6 +94,9 @@ func runRestore(args []string) error {
 	if err := json.NewDecoder(io.LimitReader(tr, 1<<20)).Decode(&m); err != nil || m.Format != 1 {
 		return errors.New("unknown backup format")
 	}
+	if m.Kind == backup.KindServer && m.Server != nil {
+		return fmt.Errorf("this is a backup of one server (%s %s): restore it in the web UI, Add a server → From a backup", m.Server.Type, m.Server.ID)
+	}
 	fmt.Fprintf(os.Stderr, "backup of %s, %s (trapdoor %s), parts: %s\n", m.Hostname, m.Created.Local().Format(time.DateTime), m.Version, strings.Join(m.Parts, ", "))
 
 	if part == "web" {

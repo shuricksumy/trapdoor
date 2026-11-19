@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -130,6 +131,10 @@ func (h *Host) portUsedLocked(port int, proto string) string {
 func (h *Host) get(id string) (mounted, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+	return h.getLocked(id)
+}
+
+func (h *Host) getLocked(id string) (mounted, bool) {
 	for _, m := range h.servers {
 		if m.b.ID() == id {
 			return m, true
@@ -158,6 +163,7 @@ func (h *Host) Handler() http.Handler {
 	v1.HandleFunc("GET /v1/backup", h.handleBackup)
 	v1.HandleFunc("POST /v1/servers", h.handleCreate)
 	v1.HandleFunc("DELETE /v1/servers/{server}", h.handleRemove)
+	v1.HandleFunc("POST /v1/servers/restore", h.handleRestoreServer)
 	v1.HandleFunc("/v1/servers/{server}/", func(w http.ResponseWriter, r *http.Request) {
 		m, ok := h.get(r.PathValue("server"))
 		if !ok {
@@ -213,43 +219,48 @@ func (h *Host) handleCreate(w http.ResponseWriter, r *http.Request) {
 	// One lock for the checks and the add, so two creates cannot both pass.
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	s, status, err := h.addWGLocked(r.Context(), cfg, st)
+	if err != nil {
+		httpx.WriteError(w, status, err.Error())
+		return
+	}
+	h.log.Info("WireGuard server created", "server", st.ID, "type", st.Type, "port", st.ListenPort, "subnet", st.Address.Masked())
+	httpx.WriteJSON(w, http.StatusCreated, s.Info(r.Context()))
+}
+
+// addWGLocked checks that a WireGuard server fits next to the others (id,
+// port, subnet), saves it, brings it up and mounts it. h.mu is held.
+func (h *Host) addWGLocked(ctx context.Context, cfg config.Agent, st wgState) (*WGServer, int, error) {
 	for _, m := range h.servers {
 		if m.b.ID() == st.ID {
-			httpx.WriteError(w, http.StatusConflict, "a server with id "+st.ID+" exists")
-			return
+			return nil, http.StatusConflict, errors.New("a server with id " + st.ID + " exists")
 		}
 		if o, ok := m.b.(*Server); ok {
 			if sub := o.subnet(); sub.IsValid() && sub.Overlaps(st.Address.Masked()) {
-				httpx.WriteError(w, http.StatusConflict, "subnet overlaps "+o.name+" ("+sub.String()+")")
-				return
+				return nil, http.StatusConflict, errors.New("subnet overlaps " + o.name + " (" + sub.String() + ")")
 			}
 		}
 		if o, ok := m.b.(*WGServer); ok {
 			if o.subnet().Overlaps(st.Address.Masked()) {
-				httpx.WriteError(w, http.StatusConflict, "subnet overlaps "+o.st.Name+" ("+o.subnet().String()+")")
-				return
+				return nil, http.StatusConflict, errors.New("subnet overlaps " + o.st.Name + " (" + o.subnet().String() + ")")
 			}
 		}
 	}
 	if name := h.portUsedLocked(st.ListenPort, "udp"); name != "" {
-		httpx.WriteError(w, http.StatusConflict, "UDP port "+strconv.Itoa(st.ListenPort)+" is used by "+name)
-		return
+		return nil, http.StatusConflict, errors.New("UDP port " + strconv.Itoa(st.ListenPort) + " is used by " + name)
 	}
 	if err := os.MkdirAll(wgDir(cfg, st.Type), 0o700); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, http.StatusInternalServerError, err
 	}
 	s := newWGServer(cfg, h.log, st)
 	s.mu.Lock()
-	err = s.save(r.Context())
+	err := s.save(ctx)
 	s.mu.Unlock()
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
-		return
+		return nil, http.StatusInternalServerError, err
 	}
 	h.mountLocked(s)
-	h.log.Info("WireGuard server created", "server", st.ID, "type", st.Type, "port", st.ListenPort, "subnet", st.Address.Masked())
-	httpx.WriteJSON(w, http.StatusCreated, s.Info(r.Context()))
+	return s, 0, nil
 }
 
 func (h *Host) handleRemove(w http.ResponseWriter, r *http.Request) {

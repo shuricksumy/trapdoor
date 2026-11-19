@@ -187,6 +187,12 @@ func (s *Server) remove(ctx context.Context) (string, error) {
 		return "", err
 	}
 	dst := filepath.Join(trash, s.id+"-"+time.Now().UTC().Format("20060102-150405"))
+	for i := 2; ; i++ { // removed twice within a second (e.g. restored in between)
+		if _, err := os.Lstat(dst); errors.Is(err, fs.ErrNotExist) {
+			break
+		}
+		dst = filepath.Join(trash, fmt.Sprintf("%s-%s-%d", s.id, time.Now().UTC().Format("20060102-150405"), i))
+	}
 	// First the firewall (direct mode removes the chain; file mode leaves
 	// it to the container, which notices the directory is gone).
 	s.fwMu.Lock()

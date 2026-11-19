@@ -342,6 +342,33 @@ setup.
 
 ## Backup and restore
 
+There are two kinds of backup: one server, and everything on the machine.
+
+### One server
+
+Every server's page (Server for OpenVPN, Overview for WireGuard and AmneziaWG) has
+*Backup*: a file with that server only, its keys and certificates, clients, settings,
+access rules and traffic history (`POST /api/v1/servers/{server}/backup` with
+`{"passphrase": "…"}`; the passphrase works as for the full backup below).
+
+*Add a server → From a backup* brings it back (`POST /api/v1/servers/restore`, a form upload
+with `file`, `passphrase`, `host` and `replace`), on this machine or another host, with the
+same id: so a server can also be moved to another machine.
+
+- The id, the port and (WireGuard) the subnet must be free there; *replace* swaps a server
+  with the same id (an added OpenVPN server's old files go to `.removed/`).
+- An added OpenVPN server whose management port is taken on the new machine gets the next
+  free one (written into its `server.conf`).
+- The first OpenVPN server comes back into `TD_OPENVPN_DIR` where it is not set up yet,
+  or over the current one with *replace* (then OpenVPN restarts). Its backup leaves out the
+  other servers and the agent's TLS certificate.
+- Traffic history is added under the server's new id (`<host>.<id>` on another host);
+  rows that exist already are kept.
+- Clients keep working with their old profiles and configs; for a server on another machine
+  they need its address, so check the public address in its settings.
+
+### Everything
+
 Account → *Download a backup* (or `POST /api/v1/backup` with `{"passphrase": "…"}`) makes one
 file:
 

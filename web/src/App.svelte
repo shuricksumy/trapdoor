@@ -80,8 +80,10 @@
       settings.setupNeeded = false;
       return;
     }
+    const id = servers.current;
     api('/setup')
       .then((st) => {
+        if (servers.current !== id) return; // another server was picked meanwhile
         settings.setupNeeded = st.needed;
         if (st.needed && route.path === '/') navigate('/setup', { replace: true });
       })

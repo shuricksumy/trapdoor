@@ -123,6 +123,9 @@ Images on GitHub Container Registry, `ghcr.io/shuricksumy/trapdoor` (amd64 and a
 
 ## Backups
 
+Every server's page has *Backup* for that server alone (keys, clients, settings, history);
+*Add a server → From a backup* restores it, also on another machine.
+
 Account → Backup downloads one file with everything: the certificate authority and client
 keys, server settings, WireGuard and AmneziaWG servers, access rules, admins, traffic
 history and the other hosts. Give it a passphrase: the file is then encrypted (it holds your

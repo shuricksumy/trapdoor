@@ -3,6 +3,7 @@ package web
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -51,6 +52,7 @@ type AgentClient interface {
 	ServerNetwork(ctx context.Context) (api.ServerNetwork, error)
 	ClientNetwork(ctx context.Context, name string) (api.ClientNetwork, error)
 	SetClientNetwork(ctx context.Context, name string, n api.ClientNetwork) (api.ClientNetwork, error)
+	ServerBackup(ctx context.Context) (io.ReadCloser, error)
 	NamedNetworks(ctx context.Context) (api.NamedNetworks, error)
 	SetNamedNetwork(ctx context.Context, name string, n api.NamedNetwork) (api.NamedNetworks, error)
 	RemoveNamedNetwork(ctx context.Context, name string) (api.NamedNetworks, error)

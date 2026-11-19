@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -184,5 +185,105 @@ func TestBackup(t *testing.T) {
 	}
 	if files := readBackup(t, rec.Body.Bytes(), ""); files["agent/openvpn/server.conf"] == "" {
 		t.Error("plain backup lacks the OpenVPN directory")
+	}
+}
+
+// A server's backup restores it, also on another machine, with its clients
+// and traffic history.
+func TestServerBackupMove(t *testing.T) {
+	ctx := context.Background()
+	local := httptest.NewServer(backupAgent(t, "local-secret", "local"))
+	t.Cleanup(local.Close)
+	remote := httptest.NewTLSServer(backupAgent(t, "remote-secret", "remote"))
+	t.Cleanup(remote.Close)
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "td.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	m, err := NewMultiAgent(ctx, agent.NewClient(local.URL, "local-secret", 5*time.Second), db, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.AddHost(ctx, api.Host{Name: "vps", URL: remote.URL, Token: "remote-secret", Fingerprint: agent.Fingerprint(remote.Certificate().Raw)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.CreateServer(ctx, api.CreateServer{Type: api.TypeWireGuard, ID: "wg0", PublicHost: "vpn.example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Server("wg0").AddPeer(ctx, api.NewPeer{Name: "phone"}); err != nil {
+		t.Fatal(err)
+	}
+	// Some history for wg0.
+	if _, err := db.ExecContext(ctx, `INSERT INTO traffic_hourly (agent, name, hour, bytes_in, bytes_out) VALUES ('wg0', 'phone', 3600, 100, 200)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO sessions (agent, name, client_id, real_address, connected_at, last_seen, bytes_in, bytes_out)
+		VALUES ('wg0', 'phone', 7, '203.0.113.7:1', 3600, 3700, 100, 200)`); err != nil {
+		t.Fatal(err)
+	}
+
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := New(Deps{Agent: m, Hosts: m, Backup: m, Stats: &history.Stats{DB: db}, Auth: auth.New(db, auth.Options{}),
+		APIToken: "tok", Location: time.UTC, Log: log}).Handler()
+	call := func(req *http.Request) *httptest.ResponseRecorder {
+		req.Header.Set("Authorization", "Bearer tok")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	backupReq := httptest.NewRequest(http.MethodPost, "/api/v1/servers/wg0/backup", strings.NewReader(`{"passphrase":"pw"}`))
+	backupReq.Header.Set("Content-Type", "application/json")
+	rec := call(backupReq)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Content-Disposition"), "trapdoor-wg0-") {
+		t.Fatalf("backup: %d %s", rec.Code, rec.Body)
+	}
+	file := rec.Body.Bytes()
+	files := readBackup(t, file, "pw")
+	if !strings.Contains(files["manifest.json"], `"kind": "server"`) || !strings.Contains(files["history.jsonl"], `"phone"`) ||
+		!strings.Contains(files["server/state.json"], `"phone"`) {
+		t.Fatalf("backup content: %v", files["manifest.json"])
+	}
+
+	restore := func(fields map[string]string) *httptest.ResponseRecorder {
+		var body bytes.Buffer
+		mw := multipart.NewWriter(&body)
+		for k, v := range fields {
+			_ = mw.WriteField(k, v)
+		}
+		fw, _ := mw.CreateFormFile("file", "b.tdbackup")
+		_, _ = fw.Write(file)
+		_ = mw.Close()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/servers/restore", &body)
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		return call(req)
+	}
+	if rec := restore(map[string]string{"passphrase": "wrong"}); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "passphrase") {
+		t.Errorf("wrong passphrase: %d %s", rec.Code, rec.Body)
+	}
+	if rec := restore(map[string]string{"passphrase": "pw"}); rec.Code != http.StatusConflict {
+		t.Errorf("restore over the running server: %d %s", rec.Code, rec.Body)
+	}
+	// Move it: restore on vps, then remove the original.
+	rec = restore(map[string]string{"passphrase": "pw", "host": "vps"})
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"id":"vps.wg0"`) {
+		t.Fatalf("restore on vps: %d %s", rec.Code, rec.Body)
+	}
+	before, _ := m.Server("wg0").Peer(ctx, "phone")
+	after, err := m.Server("vps.wg0").Peer(ctx, "phone")
+	if err != nil || after.PublicKey != before.PublicKey {
+		t.Errorf("peer on vps = %+v, %v", after, err)
+	}
+	var n int
+	_ = db.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM traffic_hourly WHERE agent = 'vps.wg0') + (SELECT COUNT(*) FROM sessions WHERE agent = 'vps.wg0')`).Scan(&n)
+	if n != 2 {
+		t.Errorf("history rows for vps.wg0 = %d", n)
+	}
+	// A machine backup is not restored here.
+	mreq := httptest.NewRequest(http.MethodPost, "/api/v1/backup", strings.NewReader(`{}`))
+	mreq.Header.Set("Content-Type", "application/json")
+	file = call(mreq).Body.Bytes()
+	if rec := restore(nil); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "whole machine") {
+		t.Errorf("machine backup: %d %s", rec.Code, rec.Body)
 	}
 }

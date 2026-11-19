@@ -96,6 +96,7 @@ func (s *Server) ID() string { return s.id }
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /info", s.handleInfo)
+	mux.HandleFunc("GET /backup", s.handleBackup)
 	s.registerCertRoutes(mux)
 	s.registerSessionRoutes(mux)
 	s.registerAuthRoutes(mux)
