@@ -79,6 +79,9 @@ type AgentClient interface {
 	UpdatePeer(ctx context.Context, name string, u api.PeerUpdate) (api.Peer, error)
 	RemovePeer(ctx context.Context, name string) error
 	PeerConf(ctx context.Context, name string) ([]byte, error)
+	AddPeers(ctx context.Context, req api.NewPeers) ([]api.Peer, error)
+	WGSettings(ctx context.Context) (api.WGSettings, error)
+	SetWGSettings(ctx context.Context, set api.WGSettings) (api.WGSettings, error)
 }
 
 // Deps are the web server's dependencies.

@@ -44,7 +44,9 @@ type wgState struct {
 	MTU        int            `json:"mtu,omitempty"`
 	AllowedIPs []netip.Prefix `json:"allowed_ips"`
 	Keepalive  int            `json:"keepalive"`
-	Peers      []wgPeer       `json:"peers"`
+	// NoPSKDefault: new clients get no preshared key unless asked for.
+	NoPSKDefault bool     `json:"no_psk_default,omitempty"`
+	Peers        []wgPeer `json:"peers"`
 	// Obfuscation of an AmneziaWG server.
 	Obfuscation *api.Obfuscation `json:"obfuscation,omitempty"`
 	// Firewall is the server's access rules; nil until saved once.
@@ -60,6 +62,12 @@ type wgPeer struct {
 	LAN        []netip.Prefix `json:"lan,omitempty"`
 	Disabled   bool           `json:"disabled,omitempty"`
 	CreatedAt  time.Time      `json:"created_at"`
+	// The client's own settings; empty = the server's client defaults.
+	Notes      string         `json:"notes,omitempty"`
+	DNS        []string       `json:"dns,omitempty"`
+	AllowedIPs []netip.Prefix `json:"allowed_ips,omitempty"`
+	MTU        int            `json:"mtu,omitempty"`
+	Keepalive  *int           `json:"keepalive,omitempty"`
 }
 
 // WGServer is one WireGuard server managed by the agent.
@@ -419,6 +427,9 @@ func (s *WGServer) routes() http.Handler {
 	})
 	mux.HandleFunc("GET /peers", s.handleListPeers)
 	mux.HandleFunc("POST /peers", s.handleAddPeer)
+	mux.HandleFunc("POST /peers/bulk", s.handleAddPeers)
+	mux.HandleFunc("GET /settings", s.handleGetSettings)
+	mux.HandleFunc("PUT /settings", s.handleSetSettings)
 	mux.HandleFunc("GET /peers/{name}", s.handleGetPeer)
 	mux.HandleFunc("PUT /peers/{name}", s.handleUpdatePeer)
 	mux.HandleFunc("DELETE /peers/{name}", s.handleRemovePeer)
@@ -508,7 +519,11 @@ func (s *WGServer) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 func (s *WGServer) peerView(p wgPeer, live map[string]wg.DumpPeer) api.Peer {
 	v := api.Peer{Name: p.Name, PublicKey: p.PublicKey, Address: p.Address.String(), Disabled: p.Disabled,
-		HasPSK: p.PSK != "", CreatedAt: p.CreatedAt, LAN: []string{}}
+		HasPSK: p.PSK != "", CreatedAt: p.CreatedAt, LAN: []string{}, OwnKey: p.PrivateKey == "",
+		PeerSettings: api.PeerSettings{Notes: p.Notes, DNS: p.DNS, MTU: p.MTU, Keepalive: p.Keepalive}}
+	for _, a := range p.AllowedIPs {
+		v.AllowedIPs = append(v.AllowedIPs, a.String())
+	}
 	for _, l := range p.LAN {
 		v.LAN = append(v.LAN, l.String())
 	}
@@ -618,8 +633,21 @@ func (s *WGServer) handleAddPeer(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	set, err := parsePeerSettings(req.PeerSettings)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.PublicKey != "" && !wg.ValidKey(req.PublicKey) {
+		httpx.WriteError(w, http.StatusBadRequest, "public_key: a WireGuard key like `wg pubkey` prints")
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if req.PublicKey != "" && s.findKey(req.PublicKey) >= 0 {
+		httpx.WriteError(w, http.StatusConflict, "another client has this public key")
+		return
+	}
 	if s.find(req.Name) >= 0 {
 		httpx.WriteError(w, http.StatusConflict, "a client named "+req.Name+" exists")
 		return
@@ -640,7 +668,13 @@ func (s *WGServer) handleAddPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := wgPeer{Name: req.Name, Address: addr, LAN: lan, CreatedAt: s.now().UTC()}
-	if p.PrivateKey, p.PublicKey, err = wg.GenerateKey(); err == nil && !req.NoPSK {
+	set.apply(&p)
+	if req.PublicKey != "" {
+		p.PublicKey = req.PublicKey
+	} else {
+		p.PrivateKey, p.PublicKey, err = wg.GenerateKey()
+	}
+	if err == nil && s.wantPSK(req.PSK, req.NoPSK) {
 		p.PSK, err = wg.GeneratePSK()
 	}
 	if err != nil {
@@ -671,6 +705,14 @@ func (s *WGServer) handleUpdatePeer(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	var set peerSettings
+	if req.Settings != nil {
+		var err error
+		if set, err = parsePeerSettings(*req.Settings); err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	i, ok := s.peer(w, r)
@@ -678,12 +720,41 @@ func (s *WGServer) handleUpdatePeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	old := s.st.Peers[i]
+	old.LAN, old.DNS, old.AllowedIPs = slices.Clone(old.LAN), slices.Clone(old.DNS), slices.Clone(old.AllowedIPs)
 	p := &s.st.Peers[i]
 	if req.Disabled != nil {
 		p.Disabled = *req.Disabled
 	}
 	if req.LAN != nil {
 		p.LAN = lan
+	}
+	if req.Address != "" {
+		a, err := netip.ParseAddr(req.Address)
+		if err == nil {
+			err = s.checkAddress(a, i)
+		}
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "address: "+err.Error())
+			return
+		}
+		p.Address = a
+	}
+	if req.Settings != nil {
+		set.apply(p)
+	}
+	if req.PSK != nil {
+		switch {
+		case !*req.PSK:
+			p.PSK = ""
+		case p.PSK == "":
+			psk, err := wg.GeneratePSK()
+			if err != nil {
+				s.st.Peers[i] = old
+				httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			p.PSK = psk
+		}
 	}
 	if err := s.save(r.Context()); err != nil {
 		s.st.Peers[i] = old
@@ -741,12 +812,7 @@ func (s *WGServer) handlePeerConf(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c := wg.Client{PrivateKey: p.PrivateKey, Address: []netip.Prefix{netip.PrefixFrom(p.Address, 32)},
-		DNS: s.st.DNS, MTU: s.mtu(), ServerKey: pub, PresharedKey: p.PSK, Endpoint: s.endpoint(),
-		AllowedIPs: s.st.AllowedIPs, Keepalive: s.st.Keepalive}
-	if o := s.st.Obfuscation; o != nil {
-		c.Extra = wg.ObfuscationSettings(*o, true)
-	}
+	c := s.clientConfig(p, pub)
 	conf := wg.ClientConfig(c)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+p.Name+`.conf"`)

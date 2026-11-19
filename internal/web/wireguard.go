@@ -12,6 +12,9 @@ func (s *Server) registerWireGuardRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/servers/{server}", s.handleRemoveServer)
 	mux.HandleFunc("GET /api/v1/servers/{server}/peers", s.handleListPeers)
 	mux.HandleFunc("POST /api/v1/servers/{server}/peers", s.handleAddPeer)
+	mux.HandleFunc("POST /api/v1/servers/{server}/peers/bulk", s.handleAddPeers)
+	mux.HandleFunc("GET /api/v1/servers/{server}/settings", s.handleWGSettings)
+	mux.HandleFunc("PUT /api/v1/servers/{server}/settings", s.handleSetWGSettings)
 	mux.HandleFunc("GET /api/v1/servers/{server}/peers/{name}", s.handleGetPeer)
 	mux.HandleFunc("PUT /api/v1/servers/{server}/peers/{name}", s.handleUpdatePeer)
 	mux.HandleFunc("DELETE /api/v1/servers/{server}/peers/{name}", s.handleRemovePeer)
@@ -122,4 +125,41 @@ func (s *Server) handlePeerConf(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`.conf"`)
 	_, _ = w.Write(conf)
+}
+
+func (s *Server) handleAddPeers(w http.ResponseWriter, r *http.Request) {
+	var req api.NewPeers
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	peers, err := s.agent(r).AddPeers(r.Context(), req)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	s.audit(r, "peer.add_bulk", req.Prefix)
+	httpx.WriteJSON(w, http.StatusCreated, peers)
+}
+
+func (s *Server) handleWGSettings(w http.ResponseWriter, r *http.Request) {
+	set, err := s.agent(r).WGSettings(r.Context())
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, set)
+}
+
+func (s *Server) handleSetWGSettings(w http.ResponseWriter, r *http.Request) {
+	var req api.WGSettings
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	set, err := s.agent(r).SetWGSettings(r.Context(), req)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	s.audit(r, "server.settings", r.PathValue("server"))
+	httpx.WriteJSON(w, http.StatusOK, set)
 }

@@ -1,5 +1,6 @@
 <script>
   import ServerBackup from '../lib/ServerBackup.svelte';
+  import ClientDefaults from '../lib/ClientDefaults.svelte';
   import { onMount } from 'svelte';
   import { api, poll, reloadServers } from '../lib/api.js';
   import { bytes } from '../lib/format.js';
@@ -128,6 +129,8 @@
     </dl>
   </section>
 {/if}
+
+<ClientDefaults />
 
 <ServerBackup />
 

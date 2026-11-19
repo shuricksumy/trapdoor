@@ -113,8 +113,8 @@ func (s *Server) summarize(ctx context.Context, sum *api.ServerSummary) {
 			}
 		}
 	}
-	if sum.Stopped {
-		return
+	if sum.Stopped || (sum.Type == api.TypeOpenVPN && !sum.PKIReady) {
+		return // nothing runs that could have sessions
 	}
 	if live, err := a.Sessions(ctx); err == nil {
 		sum.Connected = len(live.Sessions)

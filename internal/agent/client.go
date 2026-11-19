@@ -464,6 +464,27 @@ func (c *Client) RemoveServer(ctx context.Context) error {
 	return c.doJSON(ctx, http.MethodDelete, "/v1/servers/"+url.PathEscape(c.server), nil, nil)
 }
 
+// AddPeers adds several WireGuard clients at once.
+func (c *Client) AddPeers(ctx context.Context, req api.NewPeers) ([]api.Peer, error) {
+	var out []api.Peer
+	err := c.doJSON(ctx, http.MethodPost, c.path("/peers/bulk"), req, &out)
+	return out, err
+}
+
+// WGSettings returns a WireGuard server's settings and client defaults.
+func (c *Client) WGSettings(ctx context.Context) (api.WGSettings, error) {
+	var out api.WGSettings
+	err := c.doJSON(ctx, http.MethodGet, c.path("/settings"), nil, &out)
+	return out, err
+}
+
+// SetWGSettings changes them.
+func (c *Client) SetWGSettings(ctx context.Context, set api.WGSettings) (api.WGSettings, error) {
+	var out api.WGSettings
+	err := c.doJSON(ctx, http.MethodPut, c.path("/settings"), set, &out)
+	return out, err
+}
+
 // Peers lists the WireGuard clients of the server.
 func (c *Client) Peers(ctx context.Context) ([]api.Peer, error) {
 	var out []api.Peer

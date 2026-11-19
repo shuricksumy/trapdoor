@@ -57,8 +57,10 @@ server). Below, `…` stands for that prefix.
 Servers on another host have the id `<host>.<id>` (e.g. `vps.wg0`) in every
 `/api/v1/servers/{server}/…` path and in `agent.servers` of `/api/v1/status`, with `"host"`
 set; `agent.hosts` lists the hosts and whether they answer.
-| GET, POST | `…/peers` | WireGuard clients: list / add `{"name","address"?,"lan"?,"no_psk"?}` |
-| GET, PUT, DELETE | `…/peers/{name}` | get / `{"disabled"?,"lan"?}` / delete |
+| GET, POST | `…/peers` | WireGuard clients: list / add (body as the agent's) |
+| POST | `…/peers/bulk` | add several clients |
+| GET, PUT | `…/settings` | WireGuard server settings and client defaults |
+| GET, PUT, DELETE | `…/peers/{name}` | get / `{"disabled"?,"lan"?,"address"?,"psk"?,"settings"?:{notes,dns,allowed_ips,mtu,keepalive}}` / delete |
 | GET | `…/peers/{name}/conf` | download the client's WireGuard configuration |
 
 Calls are passed to the agent (404 for an unknown server); every change is logged as
@@ -114,10 +116,12 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 |---|---|---|---|
 | POST | `/v1/servers` | `{"type":"wireguard"\|"amneziawg","id":"wg0","name","port","public_host","public_port","subnet","dns":[…],"mtu","allowed_ips":[…],"keepalive"}`; AmneziaWG also `"awg_level":"2.0"\|"1.5"\|"3.1"` and optional `"obfuscation":{jc,jmin,jmax,s1…s4,h1…h4,i1…i5}` plus at 3.1 `header_protection_key,random_trailers,content_padding,disable_cookies,rekey_after_time,reject_after_time,rekey_timeout,keepalive_timeout` (only `i1`–`i5`: the rest is generated) | 201 server info (with `obfuscation`); 409 for a used id, port or overlapping subnet |
 | POST | `/v1/servers` | `{"type":"openvpn","id":"ovpn-tcp","name","port":443,"proto":"udp"\|"tcp"}`: an OpenVPN server in `TD_OPENVPN_SERVERS_DIR/<id>/`, then set up with `…/setup` | 201 server info; 409 for a used id or port |
+| POST | `/v1/servers/{id}/peers/bulk` | `{"prefix","count","psk",` + client settings`}` | 201 the new clients (`<prefix>-N`) |
+| GET, PUT | `/v1/servers/{id}/settings` | `{"name","public_host","public_port","dns":[…],"allowed_ips":[…],"mtu","keepalive","psk"}` | a WireGuard server's settings and client defaults |
 | DELETE | `/v1/servers/{id}` | – | 204; WireGuard: takes the interface down and deletes its files; added OpenVPN server: stops it and moves its directory to `.removed/` (the first server: 409) |
 | GET | `…/peers` | – | clients with live state (`connected`, `endpoint`, `last_handshake`, bytes) |
-| POST | `…/peers` | `{"name","address"?,"lan"?:[cidr],"no_psk"?}` | 201 client (keys generated, next free address) |
-| GET, PUT, DELETE | `…/peers/{name}` | PUT: `{"disabled"?,"lan"?}` | client / updated client / 204 |
+| POST | `…/peers` | `{"name","address"?,"lan"?:[cidr],"public_key"?,"psk"?,"notes"?,"dns"?:[…],"allowed_ips"?:[…],"mtu"?,"keepalive"?}` | 201 client (keys generated unless `public_key`, next free address; empty settings = the server's defaults) |
+| GET, PUT, DELETE | `…/peers/{name}` | PUT: `{"disabled"?,"lan"?,"address"?,"psk"?,"settings"?}` (settings replace the client's own, empty = server defaults) | client / updated client / 204 |
 | GET | `…/peers/{name}/conf` | – | the client's configuration file (409 while disabled) |
 | GET | `…/sessions` | – | connected clients, as for OpenVPN (`DELETE …/sessions/{id}` is 409) |
 
