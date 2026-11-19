@@ -1,5 +1,5 @@
 <script>
-  import { api, reloadServers } from '../lib/api.js';
+  import { api, reloadServers, upload } from '../lib/api.js';
   import { navigate, selectServer, servers, toast } from '../lib/state.svelte.js';
 
   import { route } from '../lib/state.svelte.js';
@@ -11,9 +11,28 @@
     wireguard: { label: 'WireGuard', prefix: 'wg', port: 51820, net: 9, app: 'WireGuard' },
     amneziawg: { label: 'AmneziaWG', prefix: 'awg', port: 51830, net: 50, app: 'AmneziaWG' },
   };
-  const initial = kinds[route.query.get('type')] ? route.query.get('type') : 'wireguard';
+  const asked = route.query.get('type');
+  const initial = kinds[asked] || asked === 'restore' ? asked : 'wireguard';
   let type = $state(initial);
   const isOVPN = $derived(type === 'openvpn');
+  // 'restore': a server from its backup file (Server page → Backup).
+  const isRestore = $derived(type === 'restore');
+  let backupFile = $state(null);
+  let backupPass = $state('');
+  let replace = $state(false);
+
+  async function restoreBackup() {
+    const form = new FormData();
+    form.append('passphrase', backupPass);
+    form.append('host', f.machine);
+    form.append('replace', replace ? '1' : '0');
+    form.append('file', backupFile);
+    const sv = await upload('/api/v1/servers/restore', form);
+    await reloadServers();
+    selectServer(sv.id);
+    toast(`Restored ${sv.name}.`);
+    navigate('/');
+  }
 
   // Ids, ports and subnets only have to differ on the same machine.
   const onMachine = (machine) => servers.list.filter((s) => (s.host ?? '') === machine);
@@ -35,7 +54,7 @@
     return { id: freeID(k.prefix, machine), port: k.port + taken, subnet: `10.${k.net + taken}.0.0/24` };
   }
   let f = $state({
-    ...defaults(initial),
+    ...defaults(initial === 'restore' ? 'wireguard' : initial),
     name: '',
     host: '',
     level: '2.0',
@@ -54,6 +73,7 @@
   function pick(t) {
     if (t === type) return;
     type = t;
+    if (t === 'restore') return;
     Object.assign(f, defaults(t, f.machine));
   }
 
@@ -70,6 +90,10 @@
     busy = true;
     error = '';
     try {
+      if (isRestore) {
+        await restoreBackup();
+        return;
+      }
       if (type === 'openvpn') {
         const sv = await api('/servers', {
           method: 'POST',
@@ -118,7 +142,9 @@
 
 <header class="head">
   <h1>Add a server</h1>
-  {#if isOVPN}
+  {#if isRestore}
+    <p class="muted">Bring a server back from its backup file, on this machine or another one: with its keys, clients, settings and traffic history.</p>
+  {:else if isOVPN}
     <p class="muted">A second OpenVPN server next to your other servers, for example on TCP 443 for networks that block other ports. It gets its own certificates and clients; the setup comes next.</p>
   {:else}
     <p class="muted">A new {kinds[type].label} network next to your other servers. Clients scan a QR code in the {kinds[type].app} app to join.</p>
@@ -141,18 +167,38 @@
       <strong>AmneziaWG</strong>
       <span>WireGuard that is hard to detect and block. Needs the AmneziaWG app.</span>
     </button>
+    <button type="button" role="radio" aria-checked={isRestore} class:on={isRestore} onclick={() => pick('restore')}>
+      <strong>From a backup</strong>
+      <span>A server saved with Backup on its page, with its clients and history.</span>
+    </button>
   </div>
 
   {#if servers.hosts.length}
     <label class="field">
       <span>Machine</span>
-      <select bind:value={f.machine} onchange={() => Object.assign(f, defaults(type, f.machine))}>
+      <select bind:value={f.machine} onchange={() => isRestore || Object.assign(f, defaults(type, f.machine))}>
         <option value="">This machine</option>
         {#each servers.hosts as h (h.name)}<option value={h.name} disabled={!!h.error}>{h.name}{h.error ? ' (not reachable)' : ''}</option>{/each}
       </select>
     </label>
   {/if}
 
+  {#if isRestore}
+    <label class="field">
+      <span>Backup file</span>
+      <input type="file" accept=".tdbackup,.gz,application/gzip,application/octet-stream" onchange={(e) => (backupFile = e.currentTarget.files?.[0] ?? null)} required />
+      <span class="hint">A .tdbackup (encrypted) or .tar.gz file of one server.</span>
+    </label>
+    <label class="field">
+      <span>Passphrase</span>
+      <input type="password" bind:value={backupPass} autocomplete="off" />
+      <span class="hint">The one given when the backup was made; empty for a .tar.gz.</span>
+    </label>
+    <label class="check">
+      <input type="checkbox" bind:checked={replace} />
+      <span>Replace a server with the same id on that machine (its current clients and keys are swapped for the backup's)</span>
+    </label>
+  {:else}
   <div class="grid">
     <label class="field">
       <span>Name</span>
@@ -259,10 +305,15 @@
   </details>
 
   {/if}
+  {/if}
 
   <div class="actions">
     <a class="btn" href="/">Cancel</a>
-    <button class="btn primary" type="submit" disabled={busy || !idOk || (!isOVPN && !f.host.trim())}>{busy ? 'Adding…' : 'Add server'}</button>
+    {#if isRestore}
+      <button class="btn primary" type="submit" disabled={busy || !backupFile}>{busy ? 'Restoring…' : 'Restore server'}</button>
+    {:else}
+      <button class="btn primary" type="submit" disabled={busy || !idOk || (!isOVPN && !f.host.trim())}>{busy ? 'Adding…' : 'Add server'}</button>
+    {/if}
   </div>
 </form>
 
@@ -272,7 +323,7 @@
   .form { display: grid; gap: var(--space-4); padding: var(--space-5); max-width: 720px; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: start; }
   .hint.bad { color: var(--bad); }
-  .kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+  .kinds { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); }
   .kinds button {
     display: grid; gap: 2px; text-align: left; padding: var(--space-3) var(--space-4);
     border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit;
@@ -284,6 +335,8 @@
   .obf .choice { display: grid; grid-template-columns: auto 1fr; gap: var(--space-2); align-items: start; margin: 0; padding: 2px 0; }
   .obf .choice input { margin: 4px 0 0; }
   .choice span { color: var(--ink-2); }
+  .check { display: flex; gap: var(--space-2); align-items: flex-start; }
+  .check input { margin-top: 3px; }
   .choice strong { color: var(--ink); }
   .obf details summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
   .obf textarea { width: 100%; }

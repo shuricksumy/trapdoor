@@ -3,6 +3,7 @@ package web
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -51,6 +52,7 @@ type AgentClient interface {
 	ServerNetwork(ctx context.Context) (api.ServerNetwork, error)
 	ClientNetwork(ctx context.Context, name string) (api.ClientNetwork, error)
 	SetClientNetwork(ctx context.Context, name string, n api.ClientNetwork) (api.ClientNetwork, error)
+	ServerBackup(ctx context.Context) (io.ReadCloser, error)
 	NamedNetworks(ctx context.Context) (api.NamedNetworks, error)
 	SetNamedNetwork(ctx context.Context, name string, n api.NamedNetwork) (api.NamedNetworks, error)
 	RemoveNamedNetwork(ctx context.Context, name string) (api.NamedNetworks, error)
@@ -81,6 +83,8 @@ type Deps struct {
 	Agent Agent
 	// Hosts manages other hosts (nil: none can be added).
 	Hosts HostManager
+	// Backup gives the agents' parts of a backup (nil: no backups).
+	Backup BackupSource
 	// Stats is the history database; its Agent field is set per request to
 	// the server in the URL.
 	Stats   *history.Stats
@@ -133,6 +137,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerServerRoutes(api)
 	s.registerWireGuardRoutes(api)
 	s.registerHostRoutes(api)
+	s.registerBackupRoutes(api)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

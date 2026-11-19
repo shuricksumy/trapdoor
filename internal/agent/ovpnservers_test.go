@@ -28,7 +28,7 @@ func ovpnHost(t *testing.T) (*Client, *Host, config.Agent) {
 	}
 	cfg := config.Agent{Token: "secret", OpenVPNDir: dir, PKIDir: filepath.Join(dir, "pki"), CCDDir: filepath.Join(dir, "ccd"),
 		MgmtAddr: "127.0.0.1:2080", OpenVPNServersDir: filepath.Join(dir, "servers"), Firewall: FirewallFile,
-		WireGuard: "file", WireGuardDir: t.TempDir()}
+		WireGuard: "file", WireGuardDir: t.TempDir(), AmneziaWGDir: t.TempDir()}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := NewHost("secret", log, New(cfg, log, nil))
 	extra, err := LoadOpenVPN(cfg, log)

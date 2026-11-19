@@ -402,6 +402,7 @@ func (s *WGServer) routes() http.Handler {
 		httpx.WriteJSON(w, http.StatusOK, s.Info(r.Context()))
 	})
 	mux.HandleFunc("GET /sessions", s.handleSessions)
+	mux.HandleFunc("GET /backup", s.handleBackup)
 	mux.HandleFunc("DELETE /sessions/{id}", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteError(w, http.StatusConflict, "WireGuard has no sessions to end; disable the client instead")
 	})

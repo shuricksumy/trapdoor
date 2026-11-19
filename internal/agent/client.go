@@ -332,6 +332,59 @@ func (c *Client) Info(ctx context.Context) (api.AgentInfo, error) {
 	return out, err
 }
 
+// Backup streams the agent's directories as a tar (see Host.handleBackup).
+// The caller closes it; a cut stream shows up as a tar error.
+func (c *Client) Backup(ctx context.Context) (io.ReadCloser, error) {
+	return c.stream(ctx, http.MethodGet, "/v1/backup", nil, "")
+}
+
+// ServerBackup streams the client's server as a tar (server.json first).
+func (c *Client) ServerBackup(ctx context.Context) (io.ReadCloser, error) {
+	return c.stream(ctx, http.MethodGet, c.path("/backup"), nil, "")
+}
+
+// RestoreServer brings a server back from the tar of its backup; replace
+// removes a server with the same id first.
+func (c *Client) RestoreServer(ctx context.Context, tarball io.Reader, replace bool) (api.ServerInfo, error) {
+	path := "/v1/servers/restore"
+	if replace {
+		path += "?replace=1"
+	}
+	body, err := c.stream(ctx, http.MethodPost, path, tarball, "application/x-tar")
+	if err != nil {
+		return api.ServerInfo{}, err
+	}
+	defer func() { _ = body.Close() }()
+	var out api.ServerInfo
+	err = json.NewDecoder(body).Decode(&out)
+	return out, err
+}
+
+// stream is a request whose body (in or out) can be large: no overall
+// timeout, the context bounds it.
+func (c *Client) stream(ctx context.Context, method, path string, in io.Reader, contentType string) (io.ReadCloser, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.base+path, in)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set(api.HeaderToken, c.token)
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	hc := &http.Client{Transport: c.http.Transport}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("agent %s %s: %w", method, path, err)
+	}
+	if resp.StatusCode/100 != 2 {
+		defer func() { _ = resp.Body.Close() }()
+		var e api.Error
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&e)
+		return nil, &APIError{Status: resp.StatusCode, Message: e.Error}
+	}
+	return resp.Body, nil
+}
+
 func (c *Client) doJSON(ctx context.Context, method, path string, in, out any) error {
 	return c.do(ctx, c.http, method, path, in, out)
 }

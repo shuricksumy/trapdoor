@@ -1,4 +1,5 @@
 <script>
+  import ServerBackup from '../lib/ServerBackup.svelte';
   import { onMount } from 'svelte';
   import { api, poll, reloadServers } from '../lib/api.js';
   import { bytes } from '../lib/format.js';
@@ -127,6 +128,8 @@
     </dl>
   </section>
 {/if}
+
+<ServerBackup />
 
 <section class="panel">
   <div class="panel-head"><h2>Remove server</h2></div>

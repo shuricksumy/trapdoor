@@ -17,6 +17,7 @@ import (
 // DB wraps the database handle.
 type DB struct {
 	*sql.DB
+	path string
 }
 
 // Open opens (creating if needed) the database file at path and applies
@@ -30,7 +31,7 @@ func Open(ctx context.Context, path string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db := &DB{DB: sqlDB}
+	db := &DB{DB: sqlDB, path: path}
 	// A new file switched to WAL by two processes at once (web starting
 	// while "trapdoor user add" runs) answers "database is locked" without
 	// waiting for busy_timeout: try again for a few seconds.
@@ -201,4 +202,22 @@ func (db *DB) RemoveHost(ctx context.Context, name string) (bool, error) {
 	}
 	n, err := res.RowsAffected()
 	return n > 0, err
+}
+
+// Snapshot writes a consistent copy of the database to a new file next to
+// it (the web container's root is read-only) and returns its path; the
+// caller removes it.
+func (db *DB) Snapshot(ctx context.Context) (string, error) {
+	f, err := os.CreateTemp(filepath.Dir(db.path), ".snapshot-*.db")
+	if err != nil {
+		return "", err
+	}
+	tmp := f.Name()
+	_ = f.Close()
+	_ = os.Remove(tmp) // VACUUM INTO wants a new file
+	if _, err := db.ExecContext(ctx, `VACUUM INTO ?`, tmp); err != nil {
+		_ = os.Remove(tmp)
+		return "", err
+	}
+	return tmp, nil
 }
