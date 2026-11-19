@@ -374,6 +374,10 @@ setup.
   its servers keep running there, and their history stays.
 - A host that does not answer is shown on the Hosts page with the error; the other servers
   keep working.
+- An agent that should run no OpenVPN server (e.g. one only for WireGuard) gets
+  `TD_OPENVPN=off`: then it has no "openvpn" server at all. More layouts (separate
+  containers per VPN type, the host's network, private networks between machines):
+  [examples](../examples/).
 
 ## Backup and restore
 

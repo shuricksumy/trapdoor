@@ -73,6 +73,13 @@ wg_iface() { ip route | awk '/^default/ { print $5; exit }'; }
 wg_nat() { # add|del <address/bits>
 	[ -n "$2" ] || return 0
 	ifc=${VPN_NAT_IFACE:-$(wg_iface)}
+	if [ -z "$ifc" ]; then # no default route (e.g. some host networks): say it once
+		if [ ! -f "$WG_STATE_ROOT/no-nat-iface" ]; then
+			mkdir -p "$WG_STATE_ROOT" && touch "$WG_STATE_ROOT/no-nat-iface"
+			echo "vpn: no default route to NAT WireGuard / AmneziaWG clients through; set VPN_NAT_IFACE"
+		fi
+		return 0
+	fi
 	if [ "$1" = add ]; then
 		iptables -t nat -C POSTROUTING -s "$2" -o "$ifc" -j MASQUERADE 2>/dev/null ||
 			iptables -t nat -A POSTROUTING -s "$2" -o "$ifc" -j MASQUERADE

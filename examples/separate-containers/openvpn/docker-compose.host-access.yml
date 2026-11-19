@@ -1,0 +1,9 @@
+# For ../wireguard/docker-compose.host.yml: lets the web UI reach an agent that runs on
+# the host's network, as https://host.docker.internal:9443.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.host-access.yml up -d
+
+services:
+  web:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

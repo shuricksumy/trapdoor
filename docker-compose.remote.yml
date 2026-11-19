@@ -27,8 +27,9 @@ services:
     environment:
       VPN_NAT_SUBNET: ${VPN_NAT_SUBNET:-auto}
     ports:
-      # The agent API for the web UI on the other machine (TLS).
-      - "${AGENT_PORT:-9443}:9443/tcp"
+      # The agent API for the web UI on the other machine (TLS). AGENT_BIND limits it
+      # to one address, e.g. this machine's Tailscale / WireGuard IP.
+      - "${AGENT_BIND:-0.0.0.0}:${AGENT_PORT:-9443}:9443/tcp"
       - "${VPN_PORT:-1194}:1194/${VPN_PROTO:-udp}"
       - "${VPN2_PORT:-1195}:${VPN2_PORT:-1195}/${VPN2_PROTO:-tcp}"
       - "${WG_PORT:-51820}:${WG_PORT:-51820}/udp"

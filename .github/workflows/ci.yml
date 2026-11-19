@@ -97,3 +97,21 @@ jobs:
       - uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
         with:
           version: latest
+
+  compose:
+    # Every compose file (and the examples' overrides) must stay valid.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: docker compose config
+        env:
+          TD_AGENT_TOKEN: ci
+        run: |
+          set -e
+          check() { echo "== $*"; docker compose "$@" config -q; }
+          check -f docker-compose.yml
+          check -f docker-compose.yml -f docker-compose.traefik.yml
+          check -f docker-compose.remote.yml
+          docker network create trapdoor >/dev/null # external in the wireguard example
+          ( cd examples/separate-containers/openvpn && check -f docker-compose.yml && check -f docker-compose.yml -f docker-compose.host-access.yml )
+          ( cd examples/separate-containers/wireguard && check -f docker-compose.yml && check -f docker-compose.yml -f docker-compose.host.yml )

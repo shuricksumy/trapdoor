@@ -1,0 +1,68 @@
+# Separate containers, part 2: WireGuard and AmneziaWG in their own vpn container,
+# with their own agent. No web UI: the one in ../openvpn manages it (Hosts → Add a host,
+# https://trapdoor-wireguard:9443, or AGENT_PORT). Start ../openvpn first (it creates the network).
+#
+#   cp .env.example .env              # its own TD_AGENT_TOKEN (openssl rand -hex 32)
+#   docker compose up -d
+#   docker compose exec agent trapdoor agent-cert     # the fingerprint for the web UI
+#
+# The agent port is not published: only containers on the network "trapdoor" reach it.
+# Host network instead: add docker-compose.host.yml (see README.md in the folder above).
+
+x-image: &image
+  image: ${TD_IMAGE:-ghcr.io/shuricksumy/trapdoor:latest}
+  restart: unless-stopped
+
+services:
+  vpn:
+    <<: *image
+    user: root
+    entrypoint: ["vpn-entrypoint.sh"]
+    cap_add: [NET_ADMIN]
+    devices: [/dev/net/tun]
+    sysctls:
+      - net.ipv4.ip_forward=1
+    environment:
+      # The interface clients' traffic leaves through (NAT); empty = the default route's.
+      VPN_NAT_IFACE: ${VPN_NAT_IFACE:-}
+    ports:
+      - "${WG_PORT:-51820}:${WG_PORT:-51820}/udp"
+      - "${AWG_PORT:-51830}:${AWG_PORT:-51830}/udp"
+    networks:
+      default: {}
+      trapdoor:
+        aliases: [trapdoor-wireguard] # the address in the web UI
+    volumes:
+      - ${WIREGUARD_DIR:-./wireguard}:/etc/wireguard
+      - ${AMNEZIAWG_DIR:-./amneziawg}:/etc/amnezia/amneziawg
+      - agent-home:/etc/openvpn # the agent's TLS certificate (no OpenVPN here)
+
+  agent:
+    <<: *image
+    user: root
+    command: ["agent"]
+    network_mode: service:vpn
+    depends_on: [vpn]
+    environment:
+      TD_AGENT_TOKEN: ${TD_AGENT_TOKEN:?set TD_AGENT_TOKEN in .env}
+      TD_AGENT_LISTEN: ":${AGENT_PORT:-9443}" # on the host network this is the host's port
+      TD_AGENT_TLS: auto
+      TD_OPENVPN: "off" # this agent runs no OpenVPN server
+      TD_FIREWALL: file
+      TD_WIREGUARD: file
+    volumes:
+      - ${WIREGUARD_DIR:-./wireguard}:/etc/wireguard
+      - ${AMNEZIAWG_DIR:-./amneziawg}:/etc/amnezia/amneziawg
+      - agent-home:/etc/openvpn
+    healthcheck:
+      test: ["CMD-SHELL", "trapdoor health https://127.0.0.1:${AGENT_PORT:-9443}"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+
+networks:
+  trapdoor:
+    external: true
+
+volumes:
+  agent-home: {}
