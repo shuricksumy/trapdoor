@@ -5,6 +5,7 @@
   import { bytes, relative } from '../lib/format.js';
   import { toast, currentServer } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
+  import SendProfile from '../lib/SendProfile.svelte';
 
   const app = currentServer()?.type === 'amneziawg' ? 'AmneziaWG' : 'WireGuard';
 
@@ -12,9 +13,12 @@
   let loadError = $state('');
   let loaded = $state(false);
 
+  // Clients' email addresses (to send them their config).
+  let emails = $state({});
   async function load() {
     try {
       peers = await api('/peers');
+      api('/emails').then((m) => (emails = m)).catch(() => {});
       loadError = '';
     } catch (e) {
       loadError = e.message;
@@ -163,6 +167,23 @@
     }
   });
 
+  // Email the config (with its QR code as a GIF).
+  let mailing = $state({ open: false, name: '', qr: '' });
+  async function emailConfig(name) {
+    let qr = '';
+    try {
+      const text = conf.name === name && conf.text ? conf.text : await api(`/peers/${encodeURIComponent(name)}/conf`);
+      const code = qrcode(0, 'L');
+      code.addData(text);
+      code.make();
+      qr = code.createDataURL(4, 8).split(',')[1] ?? '';
+    } catch {
+      /* without the QR code then */
+    }
+    conf.open = false;
+    mailing = { open: true, name, qr };
+  }
+
   // Disable / enable / delete
   async function setDisabled(p, disabled) {
     try {
@@ -220,6 +241,7 @@
                 <div class="nm">
                   <span class="name">{p.name}</span>
                   {#if p.notes}<span class="faint small">{p.notes}</span>{/if}
+                  {#if emails[p.name]}<span class="faint small">{emails[p.name]}</span>{/if}
                   {#if p.lan?.length}<span class="faint small mono">LAN {p.lan.join(', ')}</span>{/if}
                 </div>
               </td>
@@ -235,6 +257,7 @@
               </td>
               <td class="actions">
                 {#if !p.disabled}<button class="btn small" onclick={() => showConfig(p.name)}>Show config</button>{/if}
+                {#if !p.disabled && !p.own_key}<button class="btn small ghost" onclick={() => emailConfig(p.name)}>Email</button>{/if}
                 <button class="btn small ghost" onclick={() => openEdit(p)}>Edit</button>
                 <button class="btn small ghost" onclick={() => setDisabled(p, !p.disabled)}>{p.disabled ? 'Enable' : 'Disable'}</button>
                 <button class="btn small ghost danger" onclick={() => (confirm = { open: true, name: p.name })}>Delete</button>
@@ -370,10 +393,13 @@
   {#snippet actions()}
     {#if conf.text}
       <a class="btn" href={apiURL(`/peers/${encodeURIComponent(conf.name)}/conf`)} download="{conf.name}.conf">Download</a>
+      {#if !conf.ownKey}<button class="btn" onclick={() => emailConfig(conf.name)}>Email…</button>{/if}
     {/if}
     <button class="btn primary" onclick={() => (conf.open = false)}>Done</button>
   {/snippet}
 </Dialog>
+
+<SendProfile bind:open={mailing.open} name={mailing.name} qr={mailing.qr} email={emails[mailing.name] ?? ''} onsent={(to) => (emails = { ...emails, [mailing.name]: to })} />
 
 <Dialog bind:open={confirm.open} title="Delete this client?">
   <p><strong>{confirm.name}</strong> can no longer connect, and its address is freed. The device needs a new client and a new config to connect again. This cannot be undone.</p>

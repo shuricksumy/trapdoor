@@ -133,6 +133,8 @@ type Web struct {
 	// next to the database; "-" turns them off). BackupPassphrase encrypts
 	// them (TD_BACKUP_PASSPHRASE).
 	BackupDir, BackupPassphrase string
+	// PublicURL is the web UI's address for links in emails (TD_PUBLIC_URL).
+	PublicURL string
 }
 
 // ErrNoToken is returned when the shared agent token is not set.
@@ -287,6 +289,7 @@ func LoadWeb() (Web, error) {
 		c.BackupDir = ""
 	}
 	c.BackupPassphrase = os.Getenv("TD_BACKUP_PASSPHRASE")
+	c.PublicURL = strings.TrimRight(os.Getenv("TD_PUBLIC_URL"), "/")
 	if c.JoinSecret != "" && len(c.JoinSecret) < 24 {
 		return c, fmt.Errorf("TD_JOIN_SECRET must be at least 24 characters (openssl rand -hex 32)")
 	}

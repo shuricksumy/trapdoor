@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/shuricksumy/trapdoor/internal/agent"
@@ -14,6 +15,7 @@ import (
 	"github.com/shuricksumy/trapdoor/internal/auth"
 	"github.com/shuricksumy/trapdoor/internal/history"
 	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/mail"
 	"github.com/shuricksumy/trapdoor/internal/version"
 	"github.com/shuricksumy/trapdoor/internal/webui"
 )
@@ -98,6 +100,10 @@ type Deps struct {
 	// BackupDir holds scheduled backups (empty: none); BackupPassphrase
 	// encrypts them (TD_BACKUP_DIR, TD_BACKUP_PASSPHRASE).
 	BackupDir, BackupPassphrase string
+	// PublicURL is this web UI's address, for links in emails (TD_PUBLIC_URL).
+	PublicURL string
+	// SendMail sends an email (nil = mail.Send; replaced in tests).
+	SendMail func(context.Context, mail.Config, mail.Message) error
 	// Stats is the history database; its Agent field is set per request to
 	// the server in the URL.
 	Stats   *history.Stats
@@ -120,6 +126,8 @@ type Deps struct {
 type Server struct {
 	Deps
 	backups backupRunner
+	nodes   nodeWatch
+	mailWG  sync.WaitGroup // emails being sent (tests wait for them)
 }
 
 // New returns a web server.
@@ -153,6 +161,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerHostRoutes(api)
 	s.registerBackupRoutes(api)
 	s.registerScheduleRoutes(api)
+	s.registerEmailRoutes(api)
 	s.registerServerControlRoutes(api)
 
 	mux := http.NewServeMux()

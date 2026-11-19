@@ -231,6 +231,8 @@ func (s *Server) runBackup(ctx context.Context, sc BackupSchedule, manual bool) 
 		s.Log.Info("backup done", "files", len(st.Files), "dir", s.BackupDir, "seconds", int(st.Duration))
 	} else {
 		s.Log.Error("backup failed", "err", st.Error, "files", len(st.Files))
+		s.notify(ctx, func(n Notify) bool { return n.BackupFailed }, "backup failed",
+			fmt.Sprintf("The backup at %s failed:\n%s\n\nFiles written: %d, in %s.", start.In(s.Location).Format("2006-01-02 15:04"), st.Error, len(st.Files), s.BackupDir))
 	}
 	if !st.OK {
 		return st, errors.New(st.Error)

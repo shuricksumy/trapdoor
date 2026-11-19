@@ -3,6 +3,7 @@
   import { session, navigate, toast } from '../lib/state.svelte.js';
   import ThemeSwitch from '../lib/ThemeSwitch.svelte';
   import ScheduledBackups from '../lib/ScheduledBackups.svelte';
+  import EmailSettings from '../lib/EmailSettings.svelte';
 
   let current = $state('');
   let next = $state('');
@@ -129,6 +130,7 @@
 
 <div class="scheduled">
   <ScheduledBackups />
+  <EmailSettings />
 </div>
 
 <style>
@@ -136,6 +138,6 @@
   .head p { margin-top: var(--space-1); }
   .grid { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 320px); gap: var(--space-5); align-items: start; }
   .form { display: grid; gap: var(--space-4); }
-  .scheduled { margin-top: var(--space-5); max-width: 760px; }
+  .scheduled { margin-top: var(--space-5); max-width: 760px; display: grid; gap: var(--space-5); }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 </style>

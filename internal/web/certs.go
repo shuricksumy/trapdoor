@@ -319,6 +319,7 @@ func (s *Server) handleRemoveCert(w http.ResponseWriter, r *http.Request) {
 		s.agentError(w, err)
 		return
 	}
+	_ = s.Stats.DB.SetClientEmail(r.Context(), r.PathValue("server"), name, "")
 	s.audit(r, "cert.remove", name)
 	w.WriteHeader(http.StatusNoContent)
 }

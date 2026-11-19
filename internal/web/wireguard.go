@@ -107,6 +107,7 @@ func (s *Server) handleRemovePeer(w http.ResponseWriter, r *http.Request) {
 		s.agentError(w, err)
 		return
 	}
+	_ = s.Stats.DB.SetClientEmail(r.Context(), r.PathValue("server"), name, "")
 	s.audit(r, "peer.remove", name)
 	w.WriteHeader(http.StatusNoContent)
 }

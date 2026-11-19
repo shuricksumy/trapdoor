@@ -8,11 +8,14 @@
   import NetworkDialog from '../lib/NetworkDialog.svelte';
   import NamedNetworks from '../lib/NamedNetworks.svelte';
   import { placeMenu } from '../lib/menu.js';
+  import SendProfile from '../lib/SendProfile.svelte';
 
   let twoFactor = $state({ open: false, name: '' });
   let network = $state({ open: false, name: '' });
   let namedOpen = $state(false);
   let staticIPs = $state({});
+  let emails = $state({}); // client → email address
+  let mailing = $state({ open: false, name: '' });
 
   let certs = $state([]);
   let online = $state(new Set());
@@ -32,6 +35,7 @@
     } finally {
       loaded = true;
     }
+    api('/emails').then((m) => (emails = m)).catch(() => {});
     try {
       staticIPs = (await api('/network')).static_ips ?? {};
     } catch {
@@ -271,6 +275,7 @@
                 </span>
                 {#if !c.current}<span class="faint small">replaced</span>{/if}
                 {#if c.current && staticIPs[c.name]}<span class="mono faint small ip">{staticIPs[c.name]}</span>{/if}
+                {#if c.current && emails[c.name]}<span class="faint small ip">{emails[c.name]}</span>{/if}
               </td>
               <td class="c-status"><span class="pill {c.st.tone}">{c.st.label}</span></td>
               <td class="c-valid">
@@ -291,6 +296,9 @@
                     <div class="menu-list">
                       {#if online.has(c.name)}
                         <button onclick={() => act('disconnect', c.name)}>Disconnect</button>
+                      {/if}
+                      {#if c.st.key === 'valid' || c.st.key === 'expiring'}
+                        <button onclick={(e) => { e.currentTarget.closest('details').open = false; mailing = { open: true, name: c.name }; }}>Email the profile</button>
                       {/if}
                       {#if c.status !== 'revoked'}
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; network = { open: true, name: c.name }; }}>Network</button>
@@ -395,6 +403,8 @@
     </button>
   {/snippet}
 </Dialog>
+
+<SendProfile bind:open={mailing.open} name={mailing.name} email={emails[mailing.name] ?? ''} onsent={(to) => (emails = { ...emails, [mailing.name]: to })} />
 
 <style>
   .head-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
