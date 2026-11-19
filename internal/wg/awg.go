@@ -234,7 +234,7 @@ func PaddingMax(o api.Obfuscation) int {
 		return 0
 	}
 	_, hi, err := parseRange(o.ContentPadding, maxPad)
-	if err != nil {
+	if err != nil || hi > maxPad {
 		return 0
 	}
 	return int(hi)
