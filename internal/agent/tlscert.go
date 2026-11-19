@@ -89,8 +89,10 @@ func newAgentCert(certPath, keyPath string) error {
 	return os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644)
 }
 
-// pinnedTLS trusts exactly the certificate with the given fingerprint.
-func pinnedTLS(fingerprint string) *tls.Config {
+// pinnedSelfSignedTLS trusts exactly the agent's self-signed certificate with
+// the given fingerprint: the pin replaces the CA check, which a self-signed
+// certificate cannot pass.
+func pinnedSelfSignedTLS(fingerprint string) *tls.Config {
 	return &tls.Config{
 		MinVersion:         tls.VersionTLS13,
 		InsecureSkipVerify: true, // #nosec G402 -- replaced by the pin check below

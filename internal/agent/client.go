@@ -59,7 +59,7 @@ func NewInsecureHealthClient(url string, timeout time.Duration) *Client {
 // (https://host:port) whose TLS certificate has the given fingerprint.
 func NewPinnedClient(url, token, fingerprint string, timeout time.Duration) *Client {
 	c := NewClient(url, token, timeout)
-	c.http.Transport = &http.Transport{TLSClientConfig: pinnedTLS(fingerprint), ForceAttemptHTTP2: true}
+	c.http.Transport = &http.Transport{TLSClientConfig: pinnedSelfSignedTLS(fingerprint), ForceAttemptHTTP2: true}
 	c.slow.Transport = c.http.Transport
 	return c
 }
