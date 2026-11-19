@@ -48,6 +48,7 @@ cat >"$WORK/.env" <<ENV
 TD_IMAGE=$IMAGE
 TD_AGENT_TOKEN=$(openssl rand -hex 16)
 TD_WEB_API_TOKEN=$TOKEN
+TD_BACKUP_PASSPHRASE=smoke scheduled pass
 TD_COOKIE_SECURE=false
 TD_TZ=Europe/Dublin
 OPENVPN_DIR=$WORK/openvpn
@@ -347,6 +348,18 @@ api -X DELETE "$WEB/api/v1/servers/remote.wg0" || fail "remove the remote server
 api -X DELETE "$WEB/api/v1/hosts/remote" || fail "remove the host"
 ! api "$WEB/api/v1/status" | grep -q '"remote\.' || fail "remote servers still listed"
 log "second node: server and client created there; removed"
+
+log "scheduled backups: schedule, back up now, encrypted files in /data/backups"
+api -X PUT -H "Content-Type: application/json" -d '{"every":"daily","hour":3,"keep":2,"servers":true}' "$WEB/api/v1/backups/schedule" >/dev/null || fail "save the backup schedule"
+api -X POST "$WEB/api/v1/backups/run" >"$WORK/run.json" || fail "back up now: $(cat "$WORK/run.json")"
+grep -q '"ok":true' "$WORK/run.json" || fail "backup run failed: $(cat "$WORK/run.json")"
+api "$WEB/api/v1/backups" >"$WORK/backups.json"
+grep -q '"encrypted":true' "$WORK/backups.json" && grep -q '"name":"trapdoor-all-' "$WORK/backups.json" && grep -q '"name":"trapdoor-server-openvpn-' "$WORK/backups.json" ||
+	fail "backup files: $(cat "$WORK/backups.json")"
+F=$(python3 -c 'import json,sys; print([f["name"] for f in json.load(open(sys.argv[1]))["files"] if f["name"].startswith("trapdoor-all-")][0])' "$WORK/backups.json")
+[[ $(dc exec -T web head -c 8 "/data/backups/$F") == TDBACKUP ]] || fail "scheduled backup not encrypted in the volume"
+api "$WEB/api/v1/backups/files/$F" -o "$WORK/scheduled.tdbackup" && [[ $(head -c 8 "$WORK/scheduled.tdbackup") == TDBACKUP ]] || fail "download a scheduled backup"
+log "scheduled backups: files written, encrypted, listed and downloadable"
 
 log "backup: download through the web API (encrypted), restore into a fresh setup"
 cainfo() { api "$WEB/api/v1/status" | python3 -c 'import json,sys; s=[x for x in json.load(sys.stdin)["agent"]["servers"] if x["id"]=="openvpn"][0]; print(s["ca_name"], s["ca_not_after"])'; }

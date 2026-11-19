@@ -94,6 +94,8 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
       encrypted; `trapdoor restore agent|web`
   - [x] Per server: backup on the server's page, restore (or move to another host) with
         *Add a server → From a backup*, traffic history included
+  - [x] Scheduled: daily / weekly into `TD_BACKUP_DIR`, everything and optionally each server,
+        encrypted with `TD_BACKUP_PASSPHRASE`, newest N kept, status on the Account and Servers pages
 - [ ] Audit log
 - [ ] easyrsa `vars` in the native PKI: certificate name fields (`EASYRSA_DN` org mode:
       country, province, city, org, email, OU), key type and size, digest, CA / certificate /

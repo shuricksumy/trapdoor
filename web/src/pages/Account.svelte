@@ -2,6 +2,7 @@
   import { api, download } from '../lib/api.js';
   import { session, navigate, toast } from '../lib/state.svelte.js';
   import ThemeSwitch from '../lib/ThemeSwitch.svelte';
+  import ScheduledBackups from '../lib/ScheduledBackups.svelte';
 
   let current = $state('');
   let next = $state('');
@@ -107,7 +108,7 @@
     <form class="panel-body form" onsubmit={makeBackup}>
       <p class="muted small">
         One file with everything: certificates and keys, server settings, clients, WireGuard and AmneziaWG servers, access
-        rules, admins, traffic history and the other hosts. Restore it with <code>trapdoor restore</code> (see the guide).
+        rules, admins, traffic history and the other nodes. Restore it with <code>trapdoor restore</code> (see the guide).
       </p>
       {#if berror}<div class="banner bad" role="alert">{berror}</div>{/if}
       <label class="field">
@@ -126,10 +127,15 @@
   </section>
 </div>
 
+<div class="scheduled">
+  <ScheduledBackups />
+</div>
+
 <style>
   .head { margin-bottom: var(--space-5); }
   .head p { margin-top: var(--space-1); }
   .grid { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 320px); gap: var(--space-5); align-items: start; }
   .form { display: grid; gap: var(--space-4); }
+  .scheduled { margin-top: var(--space-5); max-width: 760px; }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 </style>

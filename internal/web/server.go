@@ -95,6 +95,9 @@ type Deps struct {
 	// JoinSecret lets nodes started with it join without a one-time token
 	// (TD_JOIN_SECRET; empty = only tokens).
 	JoinSecret string
+	// BackupDir holds scheduled backups (empty: none); BackupPassphrase
+	// encrypts them (TD_BACKUP_DIR, TD_BACKUP_PASSPHRASE).
+	BackupDir, BackupPassphrase string
 	// Stats is the history database; its Agent field is set per request to
 	// the server in the URL.
 	Stats   *history.Stats
@@ -116,6 +119,7 @@ type Deps struct {
 // Server is the web HTTP server.
 type Server struct {
 	Deps
+	backups backupRunner
 }
 
 // New returns a web server.
@@ -148,6 +152,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerWireGuardRoutes(api)
 	s.registerHostRoutes(api)
 	s.registerBackupRoutes(api)
+	s.registerScheduleRoutes(api)
 	s.registerServerControlRoutes(api)
 
 	mux := http.NewServeMux()

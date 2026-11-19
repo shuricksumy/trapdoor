@@ -22,6 +22,13 @@
   }
   $effect(() => poll(load, 10_000));
 
+  // Scheduled backups at a glance (details on the Account page).
+  let backups = $state(null);
+  $effect(() => {
+    api('/backups').then((b) => (backups = b)).catch(() => {});
+  });
+  const when = (t) => new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+
   const typeLabel = (s) =>
     s.type === 'openvpn' ? 'OpenVPN' : s.type === 'amneziawg' ? `AmneziaWG ${s.obfuscation?.level ?? ''}` : 'WireGuard';
 
@@ -97,6 +104,17 @@
 </header>
 
 {#if loadError}<div class="banner bad" role="alert">Could not load the servers: {loadError}</div>{/if}
+{#if backups}
+  {#if backups.last && !backups.last.ok}
+    <div class="banner bad backup-line" role="alert">The last backup ({when(backups.last.time)}) failed: {backups.last.error}. <a href="/account">Backups</a></div>
+  {:else if backups.schedule.every === 'off'}
+    <p class="muted small backup-line">No scheduled backups. <a href="/account">Turn them on</a></p>
+  {:else}
+    <p class="muted small backup-line">
+      Backups {backups.schedule.every === 'daily' ? 'every day' : 'every week'}{backups.last ? `, last ${when(backups.last.time)}` : ''}{backups.encrypted ? '' : ' (not encrypted)'} · <a href="/account">Backups</a>
+    </p>
+  {/if}
+{/if}
 
 {#each groups as g (g.key)}
   <section class="panel group">
@@ -205,6 +223,7 @@
   .head p { margin-top: var(--space-1); }
   .head-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
   .group { margin-bottom: var(--space-5); }
+  .backup-line { margin: calc(-1 * var(--space-3)) 0 var(--space-4); }
   .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
   .bad { color: var(--bad); }
   .tag { font-size: var(--step--1); font-weight: 500; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }

@@ -48,6 +48,10 @@ server). Below, `…` stands for that prefix.
 | POST | `/api/v1/servers/{server}/backup` | `{"passphrase"}` → one server's backup (its files and traffic history) |
 | POST | `/api/v1/servers/restore` | form upload: `file`, `passphrase`, `host` (empty: this machine), `replace` (`1`) → 201 the restored server; 409 when its id or port is taken |
 | POST | `/api/v1/backup` | `{"passphrase"}` → a backup file (`.tdbackup` encrypted, or `.tar.gz` without a passphrase); see the guide |
+| GET | `/api/v1/backups` | scheduled backups: `{"schedule","last","next","dir","encrypted","files":[{"name","size","time"}],"running"}`; 501 with `TD_BACKUP_DIR=-` |
+| PUT | `/api/v1/backups/schedule` | `{"every":"off\|daily\|weekly","weekday":0-6,"hour":0-23,"keep":1-365,"servers":true}` |
+| POST | `/api/v1/backups/run` | back up now (answer: the run's `{"time","ok","error","files"}`); 409 while one runs |
+| GET, DELETE | `/api/v1/backups/files/{name}` | download / delete a file of the backup folder (only `trapdoor-all-…` / `trapdoor-server-…` names) |
 | GET | `/api/v1/servers` | every server (with `container`, `host`) with `clients`, `connected`, `today_in`, `today_out` (bytes since midnight in `TD_TZ`), `stopped`, `autostart` |
 | POST | `/api/v1/servers/{server}/start`, `…/stop` | start / stop a server (answer: its info, `note` when there is something to do, e.g. start OpenVPN with systemd) |
 | PUT | `/api/v1/servers/{server}/autostart` | `{"autostart": true\|false}` |

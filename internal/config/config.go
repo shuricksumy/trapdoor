@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -128,6 +129,10 @@ type Web struct {
 	// JoinSecret lets nodes join with it instead of a one-time token, e.g.
 	// the nodes of the same compose file (empty = tokens only). TD_JOIN_SECRET
 	JoinSecret string
+	// BackupDir: scheduled backups go here (TD_BACKUP_DIR, default "backups"
+	// next to the database; "-" turns them off). BackupPassphrase encrypts
+	// them (TD_BACKUP_PASSPHRASE).
+	BackupDir, BackupPassphrase string
 }
 
 // ErrNoToken is returned when the shared agent token is not set.
@@ -277,6 +282,11 @@ func LoadWeb() (Web, error) {
 		SessionIdle:    idle,
 		JoinSecret:     os.Getenv("TD_JOIN_SECRET"),
 	}
+	c.BackupDir = env("TD_BACKUP_DIR", filepath.Join(filepath.Dir(c.DBPath), "backups"))
+	if c.BackupDir == "-" {
+		c.BackupDir = ""
+	}
+	c.BackupPassphrase = os.Getenv("TD_BACKUP_PASSPHRASE")
 	if c.JoinSecret != "" && len(c.JoinSecret) < 24 {
 		return c, fmt.Errorf("TD_JOIN_SECRET must be at least 24 characters (openssl rand -hex 32)")
 	}
