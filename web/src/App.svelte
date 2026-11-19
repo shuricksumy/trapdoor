@@ -169,7 +169,7 @@
                   {@const list = servers.list.filter((sv) => (sv.host ?? '') === g.key)}
                   {#if list.length}
                     <optgroup label="{g.machine} › node {g.name}">
-                      {#each list as sv (sv.id)}<option value={sv.id}>{sv.name}</option>{/each}
+                      {#each list as sv (sv.id)}<option value={sv.id}>{sv.name} · {g.name}</option>{/each}
                     </optgroup>
                   {/if}
                 {/each}
