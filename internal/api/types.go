@@ -212,6 +212,10 @@ type Peer struct {
 	Disabled  bool      `json:"disabled"`      // kept, but not in the server config
 	HasPSK    bool      `json:"preshared_key"` // a preshared key is set
 	CreatedAt time.Time `json:"created_at"`
+	// OwnKey: the client brought its own key pair; trapdoor has no private
+	// key for it, so its config has a placeholder instead.
+	OwnKey bool `json:"own_key"`
+	PeerSettings
 	// Live state from the interface.
 	Connected     bool      `json:"connected"`
 	Endpoint      string    `json:"endpoint,omitempty"`
@@ -220,21 +224,66 @@ type Peer struct {
 	BytesSent     int64     `json:"bytes_sent"`     // to the client
 }
 
+// PeerSettings are a client's own config settings; empty values use the
+// server's client defaults (WGSettings).
+type PeerSettings struct {
+	Notes      string   `json:"notes"`
+	DNS        []string `json:"dns,omitempty"`
+	AllowedIPs []string `json:"allowed_ips,omitempty"` // what the client sends through the tunnel
+	MTU        int      `json:"mtu,omitempty"`
+	Keepalive  *int     `json:"keepalive,omitempty"` // seconds; 0 = off
+}
+
 // NewPeer is the body of POST /v1/servers/{id}/peers.
 type NewPeer struct {
 	Name string `json:"name"`
 	// Address is optional; the next free address of the subnet by default.
 	Address string   `json:"address,omitempty"`
 	LAN     []string `json:"lan,omitempty"`
-	// NoPSK skips the preshared key (it adds a layer against future
-	// quantum attacks and is on by default).
+	// PublicKey: the client's own key (its private key stays on the
+	// device); empty = trapdoor makes a key pair.
+	PublicKey string `json:"public_key,omitempty"`
+	// PSK: a preshared key (a layer against future quantum attacks); nil =
+	// the server's default (on unless turned off there).
+	PSK *bool `json:"psk,omitempty"`
+	// NoPSK is the older way to say PSK=false.
 	NoPSK bool `json:"no_psk,omitempty"`
+	PeerSettings
+}
+
+// NewPeers is the body of POST /v1/servers/{id}/peers/bulk: Count clients
+// named <Prefix>-1, -2, … (the next free numbers) on the next free addresses.
+type NewPeers struct {
+	Prefix string `json:"prefix"`
+	Count  int    `json:"count"`
+	PSK    *bool  `json:"psk,omitempty"`
+	PeerSettings
+}
+
+// WGSettings are a WireGuard / AmneziaWG server's settings that can change
+// after it is created (GET / PUT /v1/servers/{id}/settings); the client
+// defaults go into every client's config.
+type WGSettings struct {
+	Name       string   `json:"name"`
+	PublicHost string   `json:"public_host"`
+	PublicPort int      `json:"public_port"`
+	DNS        []string `json:"dns"`
+	AllowedIPs []string `json:"allowed_ips"`
+	MTU        int      `json:"mtu"`       // 0 = automatic (1420 minus AmneziaWG's padding)
+	Keepalive  int      `json:"keepalive"` // seconds; 0 = off
+	PSK        bool     `json:"psk"`       // new clients get a preshared key
 }
 
 // PeerUpdate is the body of PUT /v1/servers/{id}/peers/{name}.
 type PeerUpdate struct {
 	Disabled *bool    `json:"disabled,omitempty"`
 	LAN      []string `json:"lan,omitempty"` // replaces the list when not nil
+	// Address moves the client to another free address ("" = unchanged).
+	Address string `json:"address,omitempty"`
+	// PSK true adds a preshared key (or keeps it), false removes it.
+	PSK *bool `json:"psk,omitempty"`
+	// Settings replaces the client's own settings when not nil.
+	Settings *PeerSettings `json:"settings,omitempty"`
 }
 
 // Status is returned by GET /api/v1/status on the web process.

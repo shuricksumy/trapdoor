@@ -277,6 +277,15 @@ interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/2
 - Adding, disabling and removing clients is applied with `wg syncconf`: nobody else is
   disconnected. Disabling keeps the client but takes it off the interface; removing
   deletes its keys.
+- **Adding clients**: one, or several at once (`<prefix>-1`, `-2`, … on the next free
+  addresses). Per client: notes, the VPN address (a free one is suggested), keys made here
+  or the device's own public key (then trapdoor never has its private key and the config
+  has a placeholder for it), a preshared key on or off, networks behind it, and its own
+  DNS, allowed IPs, MTU and keepalive. All of it can be changed later (Clients → Edit).
+- **Settings and client defaults** (Overview): name, the public address and port clients
+  connect to, and the defaults for every client's config: DNS, allowed IPs, MTU,
+  keepalive, preshared key for new clients. A client's own settings win. Devices need the
+  new config (QR code) after a change.
 - WireGuard has no logins or sessions. A client counts as connected while its last
   handshake is less than 3 minutes old; traffic history works as for OpenVPN.
 

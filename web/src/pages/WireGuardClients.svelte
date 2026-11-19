@@ -33,32 +33,107 @@
     return { tone: 'off', label: 'Never connected' };
   }
 
-  // Add client
-  let createOpen = $state(false);
-  let form = $state({ name: '', lan: '' });
+  // Add (one or several) and edit: one form. Empty settings use the
+  // server's client defaults (shown as placeholders).
+  let defaults = $state(null);
+  let formOpen = $state(false);
+  let mode = $state('add'); // add | bulk | edit
+  let editing = $state('');
+  let form = $state({});
   let busy = $state(false);
   let formError = $state('');
-  const nameOk = $derived(/^[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}$/.test(form.name));
+  const list = (v) => v.split(/[\s,]+/).filter(Boolean);
+  const nameOk = $derived(/^[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}$/.test(mode === 'bulk' ? `${form.prefix}-1` : form.name ?? ''));
 
-  function openCreate() {
-    form = { name: '', lan: '' };
-    formError = '';
-    createOpen = true;
+  // Free addresses of the subnet for the address field's suggestions.
+  const freeAddrs = $derived.by(() => {
+    const sub = currentServer()?.subnet;
+    if (!sub) return [];
+    const [base, bits] = sub.split('/');
+    const n = base.split('.').reduce((a, o) => a * 256 + Number(o), 0);
+    const size = 2 ** (32 - Number(bits));
+    const used = new Set(peers.map((p) => p.address));
+    const out = [];
+    for (let i = 2; i < size - 1 && out.length < 30; i++) {
+      const v = n + i;
+      const ip = [v >>> 24, (v >>> 16) & 255, (v >>> 8) & 255, v & 255].join('.');
+      if (!used.has(ip)) out.push(ip);
+    }
+    return out;
+  });
+
+  async function loadDefaults() {
+    try {
+      defaults = await api('/settings');
+    } catch {
+      defaults = null;
+    }
   }
 
-  async function create(e) {
+  function blank() {
+    return { name: '', prefix: 'guest', count: 5, notes: '', address: '', ownKey: false, publicKey: '', psk: defaults?.psk ?? true,
+      lan: '', dns: '', allowed: '', mtu: '', keepalive: '' };
+  }
+
+  async function openCreate() {
+    await loadDefaults();
+    mode = 'add';
+    form = blank();
+    formError = '';
+    formOpen = true;
+  }
+
+  async function openEdit(p) {
+    await loadDefaults();
+    mode = 'edit';
+    editing = p.name;
+    form = { ...blank(), notes: p.notes ?? '', address: p.address, psk: p.preshared_key, lan: (p.lan ?? []).join(', '),
+      dns: (p.dns ?? []).join(', '), allowed: (p.allowed_ips ?? []).join(', '), mtu: p.mtu || '',
+      keepalive: p.keepalive ?? '' };
+    formError = '';
+    formOpen = true;
+  }
+
+  function settingsBody() {
+    const b = { notes: form.notes.trim() };
+    if (form.dns.trim()) b.dns = list(form.dns);
+    if (form.allowed.trim()) b.allowed_ips = list(form.allowed);
+    if (form.mtu) b.mtu = Number(form.mtu);
+    if (form.keepalive !== '' && form.keepalive !== null) b.keepalive = Number(form.keepalive);
+    return b;
+  }
+
+  async function submit(e) {
     e.preventDefault();
     busy = true;
     formError = '';
     try {
-      const body = { name: form.name };
-      const lan = form.lan.split(/[\s,]+/).filter(Boolean);
+      if (mode === 'edit') {
+        const body = { settings: settingsBody(), psk: form.psk, lan: list(form.lan) };
+        if (form.address.trim()) body.address = form.address.trim();
+        await api(`/peers/${encodeURIComponent(editing)}`, { method: 'PUT', body });
+        formOpen = false;
+        toast(`Saved ${editing}. Its device needs the new config if its settings changed.`);
+        await load();
+        return;
+      }
+      if (mode === 'bulk') {
+        const added = await api('/peers/bulk', { method: 'POST', body: { prefix: form.prefix.trim(), count: Number(form.count), psk: form.psk, ...settingsBody() } });
+        formOpen = false;
+        toast(`Added ${added.length} clients: ${added.map((p) => p.name).join(', ')}.`);
+        await load();
+        return;
+      }
+      const body = { name: form.name, psk: form.psk, ...settingsBody() };
+      if (form.address.trim()) body.address = form.address.trim();
+      if (form.ownKey) body.public_key = form.publicKey.trim();
+      const lan = list(form.lan);
       if (lan.length) body.lan = lan;
       const p = await api('/peers', { method: 'POST', body });
-      createOpen = false;
-      toast(`Added ${p.name}. Scan the QR code or download the config to set up the device.`);
+      formOpen = false;
+      toast(`Added ${p.name}. ${p.own_key ? 'Put its private key into the config on the device.' : 'Scan the QR code or download the config to set up the device.'}`);
       await load();
-      showConfig(p.name);
+      showConfig(p.name, p.own_key);
     } catch (err) {
       formError = err.message;
     } finally {
@@ -67,9 +142,9 @@
   }
 
   // Config and QR code
-  let conf = $state({ open: false, name: '', text: '', error: '' });
-  async function showConfig(name) {
-    conf = { open: true, name, text: '', error: '' };
+  let conf = $state({ open: false, name: '', text: '', error: '', ownKey: false });
+  async function showConfig(name, ownKey = peers.find((p) => p.name === name)?.own_key ?? false) {
+    conf = { open: true, name, text: '', error: '', ownKey };
     try {
       conf.text = await api(`/peers/${encodeURIComponent(name)}/conf`);
     } catch (e) {
@@ -144,6 +219,7 @@
               <td class="c-name">
                 <div class="nm">
                   <span class="name">{p.name}</span>
+                  {#if p.notes}<span class="faint small">{p.notes}</span>{/if}
                   {#if p.lan?.length}<span class="faint small mono">LAN {p.lan.join(', ')}</span>{/if}
                 </div>
               </td>
@@ -159,6 +235,7 @@
               </td>
               <td class="actions">
                 {#if !p.disabled}<button class="btn small" onclick={() => showConfig(p.name)}>Show config</button>{/if}
+                <button class="btn small ghost" onclick={() => openEdit(p)}>Edit</button>
                 <button class="btn small ghost" onclick={() => setDisabled(p, !p.disabled)}>{p.disabled ? 'Enable' : 'Disable'}</button>
                 <button class="btn small ghost danger" onclick={() => (confirm = { open: true, name: p.name })}>Delete</button>
               </td>
@@ -170,23 +247,104 @@
   {/if}
 </section>
 
-<Dialog bind:open={createOpen} title="Add client">
-  <form id="create" class="form" onsubmit={create}>
+<Dialog bind:open={formOpen} title={mode === 'edit' ? `Edit ${editing}` : 'Add clients'}>
+  <form id="peerform" class="form" onsubmit={submit}>
     {#if formError}<div class="banner bad" role="alert">{formError}</div>{/if}
+    {#if mode !== 'edit'}
+      <div class="seg" role="radiogroup" aria-label="How many">
+        <button type="button" role="radio" aria-checked={mode === 'add'} class:on={mode === 'add'} onclick={() => (mode = 'add')}>One client</button>
+        <button type="button" role="radio" aria-checked={mode === 'bulk'} class:on={mode === 'bulk'} onclick={() => (mode = 'bulk')}>Several at once</button>
+      </div>
+    {/if}
+
+    {#if mode === 'bulk'}
+      <div class="grid2">
+        <label class="field">
+          <span>Name prefix</span>
+          <input bind:value={form.prefix} autocomplete="off" autocapitalize="none" spellcheck="false" required />
+          <span class="hint" class:bad={form.prefix && !nameOk}>Named {form.prefix || 'guest'}-1, -2, … on the next free addresses.</span>
+        </label>
+        <label class="field">
+          <span>How many</span>
+          <input type="number" bind:value={form.count} min="1" max="250" required />
+        </label>
+      </div>
+    {:else if mode === 'add'}
+      <label class="field">
+        <span>Name</span>
+        <input bind:value={form.name} placeholder="e.g. alice-phone" autocomplete="off" autocapitalize="none" spellcheck="false" required />
+        <span class="hint" class:bad={form.name && !nameOk}>Letters, digits, dot, dash, underscore or @. Starts with a letter or digit.</span>
+      </label>
+    {/if}
+
     <label class="field">
-      <span>Name</span>
-      <input bind:value={form.name} placeholder="e.g. alice-phone" autocomplete="off" autocapitalize="none" spellcheck="false" required />
-      <span class="hint" class:bad={form.name && !nameOk}>Letters, digits, dot, dash, underscore or @. Starts with a letter or digit.</span>
+      <span>Notes (optional)</span>
+      <input bind:value={form.notes} placeholder="e.g. Alice's work phone" maxlength="500" autocomplete="off" />
     </label>
-    <label class="field">
-      <span>Networks behind this client (optional)</span>
-      <input bind:value={form.lan} placeholder="e.g. 192.168.50.0/24" autocomplete="off" spellcheck="false" />
-      <span class="hint">For a router or site-to-site link. Separate several networks with commas.</span>
+
+    {#if mode !== 'bulk'}
+      <label class="field">
+        <span>VPN address</span>
+        <input bind:value={form.address} list="free-addrs" class="mono" placeholder={mode === 'edit' ? '' : `next free (${freeAddrs[0] ?? '–'})`} autocomplete="off" spellcheck="false" />
+        <datalist id="free-addrs">{#each freeAddrs as a (a)}<option value={a}></option>{/each}</datalist>
+        <span class="hint">{mode === 'edit' ? 'Change it to move the client; its device needs the new config.' : 'Empty: the next free one. Type or pick a free address.'}</span>
+      </label>
+    {/if}
+
+    {#if mode === 'add'}
+      <fieldset class="box">
+        <legend>Keys</legend>
+        <label class="choice"><input type="radio" bind:group={form.ownKey} value={false} /><span>Make a key pair here: the config and QR code are ready to use</span></label>
+        <label class="choice"><input type="radio" bind:group={form.ownKey} value={true} /><span>Use the device's own public key: its private key never leaves the device</span></label>
+        {#if form.ownKey}
+          <input bind:value={form.publicKey} class="mono" placeholder="public key (wg pubkey)" autocomplete="off" spellcheck="false" required />
+        {/if}
+      </fieldset>
+    {/if}
+
+    <label class="check">
+      <input type="checkbox" bind:checked={form.psk} />
+      <span>Preshared key <span class="hint">an extra layer of encryption (against future quantum computers)</span></span>
     </label>
+
+    {#if mode !== 'bulk'}
+      <label class="field">
+        <span>Networks behind this client (optional)</span>
+        <input bind:value={form.lan} placeholder="e.g. 192.168.50.0/24" autocomplete="off" spellcheck="false" />
+        <span class="hint">For a router or site-to-site link. Separate several with commas.</span>
+      </label>
+    {/if}
+
+    <details class="adv" open={mode === 'edit' && !!(form.dns || form.allowed || form.mtu || form.keepalive !== '')}>
+      <summary>Config settings for this client</summary>
+      <p class="hint">Empty: the server's defaults (change those on the Overview page).</p>
+      <div class="grid2">
+        <label class="field">
+          <span>DNS</span>
+          <input bind:value={form.dns} placeholder={defaults?.dns?.join(', ') || 'none'} autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span>Allowed IPs</span>
+          <input bind:value={form.allowed} placeholder={defaults?.allowed_ips?.join(', ') ?? ''} autocomplete="off" spellcheck="false" />
+          <span class="hint">What the device sends through the VPN.</span>
+        </label>
+        <label class="field">
+          <span>MTU</span>
+          <input type="number" bind:value={form.mtu} min="1280" max="9000" placeholder={defaults?.mtu ? String(defaults.mtu) : 'automatic'} />
+        </label>
+        <label class="field">
+          <span>Keepalive (seconds)</span>
+          <input type="number" bind:value={form.keepalive} min="0" max="600" placeholder={String(defaults?.keepalive ?? 25)} />
+          <span class="hint">0 turns it off.</span>
+        </label>
+      </div>
+    </details>
   </form>
   {#snippet actions()}
-    <button class="btn" onclick={() => (createOpen = false)}>Cancel</button>
-    <button class="btn primary" form="create" type="submit" disabled={busy || !nameOk}>{busy ? 'Adding…' : 'Add client'}</button>
+    <button class="btn" onclick={() => (formOpen = false)}>Cancel</button>
+    <button class="btn primary" form="peerform" type="submit" disabled={busy || (mode !== 'edit' && !nameOk) || (mode === 'add' && form.ownKey && !form.publicKey.trim())}>
+      {busy ? 'Saving…' : mode === 'edit' ? 'Save' : mode === 'bulk' ? `Add ${form.count || ''} clients` : 'Add client'}
+    </button>
   {/snippet}
 </Dialog>
 
@@ -200,7 +358,11 @@
       {#if qrSvg}<div class="qr" role="img" aria-label="QR code with the {app} config">{@html qrSvg}</div>{/if}
       <div class="conf-side">
         <p class="small muted">Open the {app} app, choose “Add a tunnel” and scan the code. On a computer, download the file and import it.</p>
-        <p class="small muted">The config holds the client's private key. Share it only with the person who uses this device.</p>
+        {#if conf.ownKey}
+          <p class="small warn-text">This client uses its own key: replace the PrivateKey line with the device's private key before importing (the QR code has the placeholder).</p>
+        {:else}
+          <p class="small muted">The config holds the client's private key. Share it only with the person who uses this device.</p>
+        {/if}
       </div>
     </div>
     <pre class="conf">{conf.text}</pre>
@@ -234,6 +396,17 @@
   td.actions > * { vertical-align: middle; }
 
   .form { display: grid; gap: var(--space-4); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); align-items: start; }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--sunken); border-radius: 8px; justify-self: start; }
+  .seg button { border: 0; background: none; padding: 6px 12px; border-radius: 6px; font: inherit; color: var(--ink-2); cursor: pointer; }
+  .seg button.on { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+  .box { border: 1px solid var(--line); border-radius: 10px; padding: var(--space-3); margin: 0; display: grid; gap: var(--space-2); }
+  .box legend { padding: 0 var(--space-1); font-weight: 600; }
+  .choice, .check { display: flex; gap: var(--space-2); align-items: flex-start; }
+  .choice input, .check input { margin-top: 3px; }
+  .adv summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
+  .adv[open] summary { margin-bottom: var(--space-2); }
+  .warn-text { color: var(--warn); }
   .hint.bad { color: var(--bad); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
@@ -274,5 +447,6 @@
     .c-addr { grid-area: addr; font-size: var(--step--1); }
     td.actions { grid-area: act; text-align: left; }
     .conf-wrap { grid-template-columns: 1fr; justify-items: start; }
+    .grid2 { grid-template-columns: 1fr; }
   }
 </style>
