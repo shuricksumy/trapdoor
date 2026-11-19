@@ -291,6 +291,11 @@
                   {#if c.st.key === 'valid' || c.st.key === 'expiring'}
                     <a class="btn small" href={apiURL(`/certs/${encodeURIComponent(c.name)}/ovpn`)} download="{c.name}.ovpn">Download profile</a>
                   {/if}
+                  {#if c.status !== 'revoked'}
+                    <button class="btn small ghost warn-btn" onclick={() => ask('revoke', c.name)}>Revoke</button>
+                  {:else}
+                    <button class="btn small ghost" onclick={() => act('unrevoke', c.name)}>Restore</button>
+                  {/if}
                   <details class="menu" ontoggle={placeMenu}>
                     <summary class="btn small ghost" aria-label="More actions for {c.name}">More</summary>
                     <div class="menu-list">
@@ -304,9 +309,6 @@
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; network = { open: true, name: c.name }; }}>Network</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; twoFactor = { open: true, name: c.name }; }}>Two-factor login</button>
                         <button onclick={() => ask('renew', c.name)}>Renew</button>
-                        <button class="danger" onclick={() => ask('revoke', c.name)}>Revoke</button>
-                      {:else}
-                        <button onclick={() => act('unrevoke', c.name)}>Restore</button>
                       {/if}
                       <button class="danger" onclick={() => ask('delete', c.name)}>Delete</button>
                     </div>

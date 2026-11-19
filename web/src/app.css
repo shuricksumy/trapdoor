@@ -246,3 +246,6 @@ td.num, th.num { text-align: right; }
 .menu-list button:hover,
 .menu-list a:hover { background: var(--sunken); }
 .menu-list button.danger { color: var(--bad); }
+
+/* An on/off action in a table row (Disable, Revoke) */
+.btn.warn-btn { color: var(--warn); }

@@ -258,6 +258,7 @@
               </td>
               <td class="actions">
                 {#if !p.disabled}<button class="btn small" onclick={() => showConfig(p.name)}>Show config</button>{/if}
+                <button class="btn small ghost" class:warn-btn={!p.disabled} onclick={() => setDisabled(p, !p.disabled)}>{p.disabled ? 'Enable' : 'Disable'}</button>
                 <details class="menu" ontoggle={placeMenu}>
                   <summary class="btn small ghost" aria-label="More actions for {p.name}">More</summary>
                   <div class="menu-list">
@@ -266,7 +267,6 @@
                       {#if !p.own_key}<button onclick={(e) => { e.currentTarget.closest('details').open = false; emailConfig(p.name); }}>Email the config</button>{/if}
                     {/if}
                     <button onclick={(e) => { e.currentTarget.closest('details').open = false; openEdit(p); }}>Edit</button>
-                    <button onclick={(e) => { e.currentTarget.closest('details').open = false; setDisabled(p, !p.disabled); }}>{p.disabled ? 'Enable' : 'Disable'}</button>
                     <button class="danger" onclick={(e) => { e.currentTarget.closest('details').open = false; confirm = { open: true, name: p.name }; }}>Delete</button>
                   </div>
                 </details>
