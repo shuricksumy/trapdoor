@@ -13,7 +13,7 @@
   import Access from './pages/Access.svelte';
   import WireGuardOverview from './pages/WireGuardOverview.svelte';
   import WireGuardClients from './pages/WireGuardClients.svelte';
-  import NewWireGuard from './pages/NewWireGuard.svelte';
+  import NewServer from './pages/NewServer.svelte';
 
   const pages = [
     { path: '/', label: 'Overview', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', component: Dashboard },
@@ -42,7 +42,7 @@
       : route.path === '/account'
         ? { component: Account }
         : route.path === '/servers/new'
-          ? { component: NewWireGuard }
+          ? { component: NewServer }
           : route.path === '/setup' && !isWG
             ? { component: Setup }
             : (navPages.find((p) => p.path === route.path) ?? navPages[0]),

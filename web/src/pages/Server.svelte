@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { api } from '../lib/api.js';
-  import { toast, route, setQuery } from '../lib/state.svelte.js';
+  import { api, reloadServers } from '../lib/api.js';
+  import { toast, route, setQuery, navigate, servers, selectServer, currentServer } from '../lib/state.svelte.js';
   import { dateTime } from '../lib/format.js';
   import { lineDiff } from '../lib/diff.js';
   import Dialog from '../lib/Dialog.svelte';
@@ -17,6 +17,27 @@
   let preview = $state(null); // { raw, problems, diff, source }
   let busy = $state(false);
   let saveError = $state('');
+
+  // Servers added in trapdoor can be removed; the first one cannot.
+  const removable = $derived(!!servers.current && servers.current !== 'openvpn');
+  let remove = $state({ open: false, busy: false });
+  async function doRemove() {
+    const id = servers.current;
+    remove.busy = true;
+    try {
+      await api('/servers/' + encodeURIComponent(id), { method: 'DELETE' });
+      await reloadServers();
+      const next = servers.list.find((s) => s.id !== id);
+      if (next) selectServer(next.id);
+      toast('Server removed.');
+      remove.open = false;
+      navigate('/');
+    } catch (e) {
+      toast(e.message, 'bad');
+    } finally {
+      remove.busy = false;
+    }
+  }
 
   async function load() {
     try {
@@ -287,6 +308,24 @@
   </section>
 {/if}
 
+{#if removable}
+  <section class="panel remove">
+    <div class="panel-head"><h2>Remove server</h2></div>
+    <div class="panel-body remove-row">
+      <p class="muted">Stops this OpenVPN server. Its clients can no longer connect. Its certificates and settings are kept in a folder named <code>.removed</code> next to it; traffic history stays.</p>
+      <button class="btn danger" onclick={() => (remove = { open: true, busy: false })}>Remove server</button>
+    </div>
+  </section>
+{/if}
+
+<Dialog bind:open={remove.open} title="Remove this server?">
+  <p><strong>{currentServer()?.name}</strong> stops, and devices using it can no longer connect.</p>
+  {#snippet actions()}
+    <button class="btn" onclick={() => (remove.open = false)}>Cancel</button>
+    <button class="btn danger solid" disabled={remove.busy} onclick={doRemove}>{remove.busy ? 'Removing…' : 'Remove server'}</button>
+  {/snippet}
+</Dialog>
+
 <Dialog bind:open={() => preview !== null, (v) => !v && (preview = null)} title="Review changes to server.conf">
   {#if preview}
     {#if preview.problems.length}
@@ -344,6 +383,9 @@
 </Dialog>
 
 <style>
+  .remove { margin-top: var(--space-5); }
+  .remove-row { display: flex; gap: var(--space-4); align-items: center; justify-content: space-between; }
+  @media (max-width: 600px) { .remove-row { flex-direction: column; align-items: stretch; } }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-5); }
   .head p { margin-top: var(--space-1); }
   .banner { margin-bottom: var(--space-3); }

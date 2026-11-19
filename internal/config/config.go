@@ -32,6 +32,10 @@ type Agent struct {
 	MgmtAddr string
 	// MgmtPassword for "management ... pw-file" setups.  TD_OPENVPN_MGMT_PASSWORD
 	MgmtPassword string
+	// OpenVPNServersDir holds the OpenVPN servers added in trapdoor, one
+	// directory each (<id>/server.conf, pki/, ccd/). TD_OPENVPN_SERVERS_DIR
+	// (default <openvpn dir>/servers)
+	OpenVPNServersDir string
 	// CCDDir holds per-client files (2FA lines).        TD_CCD_DIR (default <openvpn dir>/ccd)
 	CCDDir string
 	// TOTPIssuer is the name shown in authenticator apps. TD_TOTP_ISSUER
@@ -116,19 +120,20 @@ func LoadAgent() (Agent, error) {
 		gid = n
 	}
 	c := Agent{
-		SocketGID:     gid,
-		Listen:        env("TD_AGENT_LISTEN", "127.0.0.1:9090"),
-		Token:         os.Getenv("TD_AGENT_TOKEN"),
-		OpenVPNDir:    openvpnDir,
-		PKIDir:        env("TD_PKI_DIR", openvpnDir+"/easy-rsa/pki"),
-		MgmtAddr:      env("TD_OPENVPN_MGMT", "127.0.0.1:2080"),
-		OpenVPNBin:    env("TD_OPENVPN_BIN", "openvpn"),
-		CCDDir:        env("TD_CCD_DIR", openvpnDir+"/ccd"),
-		RestartSignal: env("TD_OPENVPN_RESTART", "SIGHUP"),
-		TOTPIssuer:    env("TD_TOTP_ISSUER", "trapdoor"),
-		MgmtPassword:  os.Getenv("TD_OPENVPN_MGMT_PASSWORD"),
-		CAPassphrase:  os.Getenv("TD_CA_PASSPHRASE"),
-		CRLCopies:     list(env("TD_CRL_COPIES", openvpnDir+"/crl.pem")),
+		SocketGID:         gid,
+		Listen:            env("TD_AGENT_LISTEN", "127.0.0.1:9090"),
+		Token:             os.Getenv("TD_AGENT_TOKEN"),
+		OpenVPNDir:        openvpnDir,
+		PKIDir:            env("TD_PKI_DIR", openvpnDir+"/easy-rsa/pki"),
+		MgmtAddr:          env("TD_OPENVPN_MGMT", "127.0.0.1:2080"),
+		OpenVPNBin:        env("TD_OPENVPN_BIN", "openvpn"),
+		CCDDir:            env("TD_CCD_DIR", openvpnDir+"/ccd"),
+		OpenVPNServersDir: env("TD_OPENVPN_SERVERS_DIR", openvpnDir+"/servers"),
+		RestartSignal:     env("TD_OPENVPN_RESTART", "SIGHUP"),
+		TOTPIssuer:        env("TD_TOTP_ISSUER", "trapdoor"),
+		MgmtPassword:      os.Getenv("TD_OPENVPN_MGMT_PASSWORD"),
+		CAPassphrase:      os.Getenv("TD_CA_PASSPHRASE"),
+		CRLCopies:         list(env("TD_CRL_COPIES", openvpnDir+"/crl.pem")),
 	}
 	for _, v := range []struct {
 		name string

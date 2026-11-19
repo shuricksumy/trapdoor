@@ -70,7 +70,7 @@ func (s *Server) firewallState(p firewall.Policy) (api.Firewall, firewall.Result
 	if err != nil {
 		return api.Firewall{}, firewall.Result{}, err
 	}
-	res := firewall.Render(p, firewall.Clients{IPs: ips, ClientToClient: srv.ClientToClient})
+	res := firewall.RenderChain(s.fwChain, p, firewall.Clients{IPs: ips, ClientToClient: srv.ClientToClient})
 	st := api.Firewall{Policy: p, Mode: s.firewallMode(), Warnings: res.Warnings, Missing: res.Missing, Rules: res.Rules}
 	if st.Warnings == nil {
 		st.Warnings = []string{}
@@ -119,7 +119,7 @@ func (s *Server) applyFirewall(ctx context.Context) (api.Firewall, error) {
 // firewallTarget is the TD-FWD chain for the tun devices. Called with fwMu held.
 func (s *Server) firewallTarget() *fwTarget {
 	if s.fw == nil {
-		s.fw = &fwTarget{mode: s.firewallMode(), chain: firewall.Chain, iface: "tun+",
+		s.fw = &fwTarget{mode: s.firewallMode(), chain: s.fwChain, iface: s.fwIface,
 			rulesPath: s.fwPath("rules"), statusPath: s.fwPath("status"), iptablesDir: s.cfg.IPTablesDir}
 	}
 	s.fw.wait = s.firewallWait()

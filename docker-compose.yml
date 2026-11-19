@@ -27,6 +27,8 @@ services:
       VPN_NAT_SUBNET: ${VPN_NAT_SUBNET:-auto}
     ports:
       - "${VPN_PORT:-1194}:1194/${VPN_PROTO:-udp}"
+      # A second OpenVPN server added in trapdoor: the same port inside and outside
+      - "${VPN2_PORT:-1195}:${VPN2_PORT:-1195}/${VPN2_PROTO:-tcp}"
       # WireGuard: the same port inside and outside; create the server with it
       - "${WG_PORT:-51820}:${WG_PORT:-51820}/udp"
       # AmneziaWG: the same, for the first AmneziaWG server

@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"path/filepath"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/shuricksumy/trapdoor/internal/ccdnet"
 	"github.com/shuricksumy/trapdoor/internal/clientauth"
 	"github.com/shuricksumy/trapdoor/internal/config"
+	"github.com/shuricksumy/trapdoor/internal/firewall"
 	"github.com/shuricksumy/trapdoor/internal/httpx"
 	"github.com/shuricksumy/trapdoor/internal/mgmt"
 	"github.com/shuricksumy/trapdoor/internal/ovpn"
@@ -42,6 +44,17 @@ type Server struct {
 	topoOnce sync.Once
 	topo     ccdnet.Topology // see defaultTopology
 
+	// dev is the tun device: "tun" (OpenVPN picks tun0, tun1, …) for the
+	// first server, the server id for the ones added in trapdoor, so each
+	// has its own access rules chain.
+	dev     string
+	fwChain string // TD-FWD, or TD-<id>
+	fwIface string // tun+, or the id
+	// extra is the state of a server added in trapdoor (nil for the first).
+	extra *ovpnState
+	// others returns the subnets of the other servers (set by the Host).
+	others func(self string) []netip.Prefix
+
 	fwMu sync.Mutex
 	fw   *fwTarget // use firewallTarget()
 
@@ -62,8 +75,13 @@ const DefaultServerID = "openvpn"
 // New returns the OpenVPN server described by cfg, with id DefaultServerID.
 // p may be nil when no PKI exists yet; certificate endpoints then answer 503.
 func New(cfg config.Agent, log *slog.Logger, p pki.PKI) *Server {
+	return newServer(DefaultServerID, "OpenVPN", cfg, log, p)
+}
+
+func newServer(id, name string, cfg config.Agent, log *slog.Logger, p pki.PKI) *Server {
 	files := &ccd.Store{Dir: cfg.CCDDir}
-	return &Server{id: DefaultServerID, name: "OpenVPN", cfg: cfg, log: log.With("server", DefaultServerID), pkiv: p,
+	return &Server{id: id, name: name, cfg: cfg, log: log.With("server", id), pkiv: p,
+		dev: "tun", fwChain: firewall.Chain, fwIface: "tun+",
 		gen:  &ovpn.Generator{Dir: cfg.OpenVPNDir, OpenVPNBin: cfg.OpenVPNBin},
 		mgmt: &mgmt.Client{Addr: cfg.MgmtAddr, Password: cfg.MgmtPassword},
 		ccd:  files,
@@ -97,6 +115,11 @@ func (s *Server) Info(ctx context.Context) api.ServerInfo {
 		OpenVPNDir: s.cfg.OpenVPNDir,
 		PKIDir:     s.cfg.PKIDir,
 		PKIReady:   s.PKI() != nil,
+	}
+	if s.extra != nil {
+		info.ListenPort, info.Proto = s.extra.Port, s.extra.Proto
+	} else if sc, err := s.settings(); err == nil {
+		info.ListenPort, info.Proto = sc.Port, sc.Proto
 	}
 	if p := s.PKI(); p != nil {
 		if ca, err := p.CAInfo(ctx); err == nil {

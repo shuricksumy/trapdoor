@@ -49,6 +49,7 @@ type ServerInfo struct {
 	// clients use, and whether the interface is up.
 	PublicKey  string `json:"public_key,omitempty"`
 	ListenPort int    `json:"listen_port,omitempty"`
+	Proto      string `json:"proto,omitempty"` // OpenVPN: udp or tcp
 	Subnet     string `json:"subnet,omitempty"`
 	Endpoint   string `json:"endpoint,omitempty"`
 	Running    bool   `json:"running,omitempty"`
@@ -98,13 +99,16 @@ type Obfuscation struct {
 
 // CreateServer is the body of POST /v1/servers: a new WireGuard server.
 type CreateServer struct {
-	Type string `json:"type"` // TypeWireGuard or TypeAmneziaWG
+	Type string `json:"type"` // TypeOpenVPN, TypeWireGuard or TypeAmneziaWG
 	// ID is also the network interface name (e.g. wg0): lower-case letters,
 	// digits and dashes, at most 15 characters.
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	// Port is the UDP port the server listens on (default 51820).
-	Port int `json:"port,omitempty"`
+	// Port the server listens on (WireGuard: UDP, default 51820; OpenVPN:
+	// required, Proto udp or tcp). An OpenVPN server is set up afterwards
+	// with the setup wizard on this port.
+	Port  int    `json:"port,omitempty"`
+	Proto string `json:"proto,omitempty"`
 	// PublicHost and PublicPort are what clients connect to
 	// (PublicPort defaults to Port).
 	PublicHost string `json:"public_host"`

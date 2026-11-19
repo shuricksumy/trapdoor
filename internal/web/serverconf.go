@@ -79,7 +79,7 @@ func (s *Server) handleRestartServer(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength != 0 && !decodeJSON(w, r, &req) {
 		return
 	}
-	s.audit(r, "server.restart", "openvpn")
+	s.audit(r, "server.restart", r.PathValue("server"))
 	res, err := s.agent(r).RestartServer(r.Context(), req)
 	if err != nil {
 		s.agentError(w, err)

@@ -13,6 +13,7 @@ WORK=$(mktemp -d)
 WEB=http://127.0.0.1:18080
 TOKEN=smoke-web-token
 CLIENT_PID=
+BOB_PID=
 
 log() { echo "==> $*"; }
 dc() { docker compose -f "$WORK/docker-compose.yml" -p tdsmoke "$@"; }
@@ -26,6 +27,7 @@ fail() {
 }
 cleanup() {
 	[[ -n $CLIENT_PID ]] && sudo kill "$CLIENT_PID" 2>/dev/null || true
+	[[ -n $BOB_PID ]] && sudo kill "$BOB_PID" 2>/dev/null || true
 	sudo wg-quick down /etc/wireguard/tdsmoke.conf >/dev/null 2>&1 || true
 	sudo rm -f /etc/wireguard/tdsmoke.conf
 	dc down -v --remove-orphans >/dev/null 2>&1 || true
@@ -47,6 +49,8 @@ WG_PORT=15182
 AMNEZIAWG_DIR=$WORK/amneziawg
 AWG_PORT=15183
 VPN_PORT=11194
+VPN2_PORT=11195
+VPN2_PROTO=tcp
 WEB_BIND=127.0.0.1:18080
 ENV
 
@@ -205,6 +209,43 @@ api -X DELETE "$WEB/api/v1/servers/awg0" || fail "remove AmneziaWG server"
 for _ in $(seq 10); do dc exec -T openvpn ip link show awg0 >/dev/null 2>&1 || break; sleep 1; done
 ! dc exec -T openvpn ip link show awg0 >/dev/null 2>&1 || fail "awg0 still up after remove"
 log "AmneziaWG client connected through the obfuscated tunnel; remove works"
+
+log "second OpenVPN server: added through the web API, TCP, run by the openvpn container"
+J=(-H "Content-Type: application/json")
+api "${J[@]}" -d '{"type":"openvpn","id":"ovpn-tcp","name":"TCP","port":11195,"proto":"tcp"}' \
+	"$WEB/api/v1/servers" >"$WORK/ovpn2.json" || fail "add OpenVPN server"
+api "$WEB/api/v1/servers/ovpn-tcp/setup" | grep -q '"needed":true' || fail "setup status of the second server"
+api "${J[@]}" -m 60 -d '{"public_host":"127.0.0.1","subnet":"10.80.0.0/24"}' \
+	"$WEB/api/v1/servers/ovpn-tcp/setup" >"$WORK/setup2.json" || fail "setup of the second server"
+grep -q '"running":true' "$WORK/setup2.json" || fail "second OpenVPN not running: $(cat "$WORK/setup2.json")"
+dc logs openvpn | grep -q "ovpn-tcp: NAT 10.80.0.0/255.255.255.0" || fail "no NAT for the second server"
+dc exec -T openvpn ip link show ovpn-tcp >/dev/null || fail "no ovpn-tcp device"
+api "${J[@]}" -d '{"name":"bob"}' "$WEB/api/v1/servers/ovpn-tcp/certs" >/dev/null || fail "issue bob"
+api "$WEB/api/v1/servers/ovpn-tcp/certs/bob/ovpn" >"$WORK/bob.ovpn" || fail "download bob's profile"
+grep -q "^remote 127.0.0.1 11195" "$WORK/bob.ovpn" && grep -q "^proto tcp" "$WORK/bob.ovpn" || fail "bob's profile: $(head -20 "$WORK/bob.ovpn")"
+sudo openvpn --config "$WORK/bob.ovpn" >"$WORK/bob.log" 2>&1 &
+BOB_PID=$!
+for _ in $(seq 30); do grep -q "Initialization Sequence Completed" "$WORK/bob.log" 2>/dev/null && break; sleep 1; done
+grep -q "Initialization Sequence Completed" "$WORK/bob.log" || fail "bob could not connect over TCP: $(tail -20 "$WORK/bob.log")"
+ping -c 2 -W 2 10.80.0.1 >/dev/null || fail "no traffic through the second server"
+for _ in $(seq 15); do api "$WEB/api/v1/servers/ovpn-tcp/sessions" | grep -q '"name":"bob"' && break; sleep 1; done
+api "$WEB/api/v1/servers/ovpn-tcp/sessions" | grep -q '"name":"bob"' || fail "bob not in the second server's sessions"
+! api "$WEB/api/v1/servers/openvpn/certs" | grep -q '"name":"bob"' || fail "bob in the first server's clients"
+api -X PUT "${J[@]}" -m 30 -d '{"enabled":true,"default":"deny","rules":[{"to":"10.80.0.1","proto":"icmp","action":"allow"}]}' \
+	"$WEB/api/v1/servers/ovpn-tcp/firewall" >"$WORK/fw2.json" || fail "save access rules of the second server"
+grep -q '"applied":true' "$WORK/fw2.json" || fail "second server's rules not applied: $(cat "$WORK/fw2.json")"
+dc exec -T openvpn iptables -C FORWARD -i ovpn-tcp -j TD-ovpn-tcp || fail "no jump to TD-ovpn-tcp"
+sudo kill "$BOB_PID" 2>/dev/null || true
+BOB_PID=
+api -X DELETE "$WEB/api/v1/servers/ovpn-tcp" || fail "remove the second OpenVPN server"
+for _ in $(seq 15); do dc exec -T openvpn ip link show ovpn-tcp >/dev/null 2>&1 || break; sleep 1; done
+! dc exec -T openvpn ip link show ovpn-tcp >/dev/null 2>&1 || fail "ovpn-tcp still up after remove"
+for _ in $(seq 10); do dc exec -T openvpn iptables -S TD-ovpn-tcp >/dev/null 2>&1 || break; sleep 1; done
+! dc exec -T openvpn iptables -S TD-ovpn-tcp >/dev/null 2>&1 || fail "TD-ovpn-tcp left after remove"
+dc logs openvpn | grep -q "ovpn-tcp: removed, stopped" || fail "no remove log"
+sudo sh -c "ls -d '$WORK'/openvpn/servers/.removed/ovpn-tcp-*" >/dev/null || fail "removed server's files not kept"
+api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "the first server stopped too"
+log "second OpenVPN server: client over TCP, own clients and access rules; remove works"
 
 log "web container is locked down"
 [[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' tdsmoke-web-1) == true ]] || fail "web rootfs not read-only"

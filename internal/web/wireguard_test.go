@@ -33,7 +33,7 @@ func TestWireGuardThroughWeb(t *testing.T) {
 		{http.MethodGet, "/api/v1/servers/wg0/peers/alice/conf", "", http.StatusConflict, "disabled"},
 		{http.MethodGet, "/api/v1/servers/wg0/peers/a%20b", "", http.StatusBadRequest, "invalid"},
 		{http.MethodDelete, "/api/v1/servers/wg0/peers/alice", "", http.StatusNoContent, ""},
-		{http.MethodDelete, "/api/v1/servers/openvpn", "", http.StatusConflict, "only WireGuard"},
+		{http.MethodDelete, "/api/v1/servers/openvpn", "", http.StatusConflict, "first OpenVPN server cannot be removed"},
 		{http.MethodDelete, "/api/v1/servers/wg0", "", http.StatusNoContent, ""},
 		{http.MethodGet, "/api/v1/servers/wg0/peers", "", http.StatusNotFound, "no server"},
 	}
