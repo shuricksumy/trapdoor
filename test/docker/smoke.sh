@@ -17,8 +17,12 @@ BOB_PID=
 
 log() { echo "==> $*"; }
 dc() { docker compose -f "$WORK/docker-compose.yml" -p tdsmoke "$@"; }
+# A log contains a text. Not "logs | grep -q": with pipefail, grep stopping at
+# the first match makes "docker compose logs" fail on the closed pipe.
+vpnlog() { dc logs vpn 2>&1 | grep -F -- "$1" >/dev/null; }
 # A second machine: docker-compose.remote.yml (vpn + agent with TLS, no web).
 dr() { docker compose -f "$WORK/remote/docker-compose.remote.yml" --env-file "$WORK/remote/.env" -p tdremote "$@"; }
+remotelog() { dr logs agent 2>&1 | grep -F -- "$1" >/dev/null; }
 api() { curl -fsS -H "Authorization: Bearer $TOKEN" "$@"; }
 fail() {
 	echo "FAIL: $*" >&2
@@ -76,7 +80,7 @@ api -H "Content-Type: application/json" -m 90 \
 	-d '{"public_host":"127.0.0.1","public_port":11194,"subnet":"10.77.0.0/24","dns":["10.77.0.1"]}' \
 	"$WEB/api/v1/servers/openvpn/setup" >"$WORK/setup.json" || fail "setup failed"
 grep -q '"running":true' "$WORK/setup.json" || fail "OpenVPN not running after setup: $(cat "$WORK/setup.json")"
-dc logs vpn | grep -q "NAT 10.77.0.0/255.255.255.0" || fail "NAT not derived from server.conf"
+vpnlog "NAT 10.77.0.0/255.255.255.0" || fail "NAT not derived from server.conf"
 sudo grep -q "^remote 127.0.0.1 11194$" "$WORK/openvpn/client-template.txt" || fail "client template"
 code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 	-d '{"public_host":"127.0.0.1"}' "$WEB/api/v1/servers/openvpn/setup")
@@ -121,7 +125,7 @@ PY
 wj -X PUT -d @"$WORK/sc-new.json" "$WEB/api/v1/servers/openvpn/server/config" >/dev/null || fail "save server config"
 wj -X POST -d '{"rollback":true}' "$WEB/api/v1/servers/openvpn/server/restart" >"$WORK/restart.json"
 grep -q '"ok":true' "$WORK/restart.json" || fail "restart: $(cat "$WORK/restart.json")"
-dc logs vpn | grep -q "starting again (restart requested)" || fail "supervisor did not restart OpenVPN"
+vpnlog "starting again (restart requested)" || fail "supervisor did not restart OpenVPN"
 api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "agent lost OpenVPN after restart (network namespace)"
 
 log "a config that passes the checks but cannot start is rolled back"
@@ -145,7 +149,7 @@ api -X PUT -H "Content-Type: application/json" -m 30 \
 grep -q '"applied":true' "$WORK/fw.json" || fail "rules not applied: $(cat "$WORK/fw.json")"
 dc exec -T vpn iptables -S TD-FWD | grep -q -- "-d 10.77.0.1/32 -p icmp -j ACCEPT" || fail "rule not in the container"
 dc exec -T vpn iptables -C FORWARD -i tun+ -j TD-FWD || fail "no FORWARD jump"
-dc logs vpn | grep -q "access rules applied" || fail "no apply log"
+vpnlog "access rules applied" || fail "no apply log"
 ! dc exec -T agent iptables -N TD-PROBE >/dev/null 2>&1 || fail "agent container can change the firewall"
 
 log "WireGuard: created through the web API, run by the vpn container (TD_WIREGUARD=file)"
@@ -155,7 +159,7 @@ api -H "Content-Type: application/json" \
 wgrunning() { api "$WEB/api/v1/status" | grep -q '"id":"wg0"[^}]*"running":true'; }
 for _ in $(seq 20); do wgrunning && break; sleep 1; done
 wgrunning || fail "wg0 not running: $(api "$WEB/api/v1/status")"
-dc logs vpn | grep -q "wireguard wg0: up (10.78.0.1/24)" || fail "no wg0 up log"
+vpnlog "wireguard wg0: up (10.78.0.1/24)" || fail "no wg0 up log"
 sudo head -1 "$WORK/wireguard/wg0.dump" | grep -q '^(hidden)' || fail "private key in the dump file"
 api -H "Content-Type: application/json" -d '{"name":"wgsmoke"}' "$WEB/api/v1/servers/wg0/peers" >/dev/null || fail "add WireGuard client"
 sudo mkdir -p /etc/wireguard
@@ -178,7 +182,7 @@ api -X PUT -H "Content-Type: application/json" -m 30 -d '{"enabled":true,"defaul
 for _ in $(seq 5); do wgping && break; sleep 1; done
 wgping || fail "allowed ping blocked"
 api -X PUT -H "Content-Type: application/json" -d '{"disabled":true}' "$WEB/api/v1/servers/wg0/peers/wgsmoke" >/dev/null
-for _ in $(seq 10); do dc logs vpn | grep -q "wireguard wg0: peers updated" && break; sleep 1; done
+for _ in $(seq 10); do vpnlog "wireguard wg0: peers updated" && break; sleep 1; done
 sleep 1
 ! wgping || fail "disabled WireGuard client still gets through"
 sudo wg-quick down /etc/wireguard/tdsmoke.conf >/dev/null 2>&1 || true
@@ -230,7 +234,7 @@ api "$WEB/api/v1/servers/ovpn-tcp/setup" | grep -q '"needed":true' || fail "setu
 api "${J[@]}" -m 60 -d '{"public_host":"127.0.0.1","subnet":"10.80.0.0/24"}' \
 	"$WEB/api/v1/servers/ovpn-tcp/setup" >"$WORK/setup2.json" || fail "setup of the second server"
 grep -q '"running":true' "$WORK/setup2.json" || fail "second OpenVPN not running: $(cat "$WORK/setup2.json")"
-dc logs vpn | grep -q "ovpn-tcp: NAT 10.80.0.0/255.255.255.0" || fail "no NAT for the second server"
+vpnlog "ovpn-tcp: NAT 10.80.0.0/255.255.255.0" || fail "no NAT for the second server"
 dc exec -T vpn ip link show ovpn-tcp >/dev/null || fail "no ovpn-tcp device"
 api "${J[@]}" -d '{"name":"bob"}' "$WEB/api/v1/servers/ovpn-tcp/certs" >/dev/null || fail "issue bob"
 api "$WEB/api/v1/servers/ovpn-tcp/certs/bob/ovpn" >"$WORK/bob.ovpn" || fail "download bob's profile"
@@ -272,8 +276,8 @@ for _ in $(seq 15); do dc exec -T vpn ip link show ovpn-tcp >/dev/null 2>&1 || b
 ! dc exec -T vpn ip link show ovpn-tcp >/dev/null 2>&1 || fail "ovpn-tcp still up after remove"
 for _ in $(seq 10); do dc exec -T vpn iptables -S TD-ovpn-tcp >/dev/null 2>&1 || break; sleep 1; done
 ! dc exec -T vpn iptables -S TD-ovpn-tcp >/dev/null 2>&1 || fail "TD-ovpn-tcp left after remove"
-for _ in $(seq 10); do dc logs vpn | grep -q "ovpn-tcp: removed, stopped" && break; sleep 1; done # docker logs lag a little
-dc logs vpn | grep -q "ovpn-tcp: removed, stopped" || fail "no remove log"
+for _ in $(seq 10); do vpnlog "ovpn-tcp: removed, stopped" && break; sleep 1; done # docker logs lag a little
+vpnlog "ovpn-tcp: removed, stopped" || fail "no remove log"
 sudo sh -c "ls -d '$WORK'/openvpn/servers/.removed/ovpn-tcp-*" >/dev/null || fail "removed server's files not kept"
 api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "the first server stopped too"
 log "second OpenVPN server: client over TCP, own clients and access rules; remove works"
@@ -298,7 +302,7 @@ dr up -d
 for _ in $(seq 30); do dr exec -T agent trapdoor health https://127.0.0.1:9443 >/dev/null 2>&1 && break; sleep 1; done
 dr exec -T agent trapdoor health https://127.0.0.1:9443 || fail "remote agent not healthy: $(dr logs --tail 20 agent)"
 FP=$(dr exec -T agent trapdoor agent-cert)
-dr logs agent | grep -q "fingerprint=$FP" || fail "agent log does not show the fingerprint $FP"
+remotelog "fingerprint=$FP" || fail "agent log does not show the fingerprint $FP"
 # The web container reaches the other machine's agent on its network.
 docker network connect tdremote_default tdsmoke-web-1
 RIP=$(docker inspect -f '{{.NetworkSettings.Networks.tdremote_default.IPAddress}}' tdremote-vpn-1)

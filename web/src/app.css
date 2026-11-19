@@ -29,6 +29,7 @@
 }
 
 :root[data-theme='light'] {
+  color-scheme: light; /* scrollbars and form controls follow trapdoor's theme, not the OS */
   --bg: #eef2f1;        /* panel grey with a hint of green */
   --surface: #ffffff;
   --sunken: #e3e9e7;
@@ -51,6 +52,7 @@
 }
 
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --bg: #12181b;
   --surface: #1a2226;
   --sunken: #0e1416;
