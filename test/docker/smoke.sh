@@ -272,6 +272,7 @@ for _ in $(seq 15); do dc exec -T vpn ip link show ovpn-tcp >/dev/null 2>&1 || b
 ! dc exec -T vpn ip link show ovpn-tcp >/dev/null 2>&1 || fail "ovpn-tcp still up after remove"
 for _ in $(seq 10); do dc exec -T vpn iptables -S TD-ovpn-tcp >/dev/null 2>&1 || break; sleep 1; done
 ! dc exec -T vpn iptables -S TD-ovpn-tcp >/dev/null 2>&1 || fail "TD-ovpn-tcp left after remove"
+for _ in $(seq 10); do dc logs vpn | grep -q "ovpn-tcp: removed, stopped" && break; sleep 1; done # docker logs lag a little
 dc logs vpn | grep -q "ovpn-tcp: removed, stopped" || fail "no remove log"
 sudo sh -c "ls -d '$WORK'/openvpn/servers/.removed/ovpn-tcp-*" >/dev/null || fail "removed server's files not kept"
 api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "the first server stopped too"
