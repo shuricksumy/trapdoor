@@ -87,8 +87,10 @@ all.
 | `VPN2_PORT` / `VPN2_PROTO` | `1195` / `tcp` | a second OpenVPN server |
 | `WG_PORT`, `AWG_PORT` | `51820`, `51830` | its first WireGuard and AmneziaWG servers |
 
-A remote machine without OpenVPN: set `TD_OPENVPN: "off"` for its agent (see
-[separate containers](../separate-containers/wireguard/docker-compose.yml)).
+A remote machine without OpenVPN: set `TD_OPENVPN: "off"` for its agent; it then lists no
+"openvpn" server. A remote machine can also use a container per VPN type: start from
+[separate containers](../separate-containers/) and give its agent `TD_AGENT_LISTEN: ":9443"`
+and `TD_AGENT_TLS: auto` instead of the unix socket (and no web service).
 
 ## Day to day
 

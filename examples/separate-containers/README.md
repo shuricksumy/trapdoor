@@ -1,90 +1,96 @@
 # Separate containers
 
-One machine, two stacks: OpenVPN in one `vpn` container, WireGuard and AmneziaWG in
-another. One web UI manages both: the second stack is added under **Hosts**, so all servers
-show on the Servers page as usual (the second stack's as `wireguard.<id>`).
+One compose file, one web UI, one agent, and a `vpn` container per VPN type. Each type has
+its own folder, mounted only into its own container:
 
 ```
- ┌──────────────────────────────────── machine ─────────────────────────────────────┐
- │  openvpn/ stack                            wireguard/ stack                       │
- │                                                                                   │
- │  web ──unix socket──▶ agent                agent  (TD_OPENVPN=off, TLS :9443)     │
- │   │                    │ shares network     │ shares network                      │
- │   │                    ▼                    ▼                                     │
- │   │                   vpn                  vpn                                    │
- │   │                    ├─ OpenVPN UDP 1194  ├─ WireGuard UDP 51820                │
- │   │                    └─ OpenVPN TCP 1195  └─ AmneziaWG UDP 51830                │
- │   │                                         ▲                                     │
- │   └──── TLS (pinned) on the Docker network "trapdoor" ───┘                        │
- └───────────────────────────────────────────────────────────────────────────────────┘
+separate-containers/
+├── docker-compose.yml        web, agent, vpn-openvpn, vpn-wireguard, vpn-amneziawg
+├── docker-compose.host.yml   variant: vpn-wireguard on the host's network
+├── .env.example
+├── openvpn/      ──▶ vpn-openvpn     (and the agent)   PKI, server.conf, ccd, servers/<id>/
+├── wireguard/    ──▶ vpn-wireguard   (and the agent)   <id>.json, <id>.conf
+└── amneziawg/    ──▶ vpn-amneziawg   (and the agent)   <id>.json, <id>.conf
 ```
+
+```
+ browser ──HTTPS──▶ web
+                     │ unix socket
+                     ▼
+                   agent ── shares the network of ──▶ vpn-openvpn     OpenVPN   UDP 1194, TCP 1195
+                     │                                (tun0, ovpn-tcp, …)
+                     ├── ./wireguard ──── files ─────▶ vpn-wireguard   WireGuard UDP 51820
+                     │                                (wg0, …)
+                     └── ./amneziawg ──── files ─────▶ vpn-amneziawg   AmneziaWG UDP 51830
+                                                      (awg0, …, userspace)
+```
+
+## How it works
+
+- The **agent** writes all three folders. It shares `vpn-openvpn`'s network only because
+  OpenVPN's management interface stays on `127.0.0.1`; WireGuard and AmneziaWG need no
+  network path at all: the agent writes `<id>.conf`, the access rules and stop markers, and
+  reads back the `<id>.dump` the vpn container writes every few seconds.
+- Each **vpn container** runs what it finds in the folders it has: `vpn-openvpn` only sees
+  `/etc/openvpn`, `vpn-wireguard` only `/etc/wireguard`, `vpn-amneziawg` only
+  `/etc/amnezia/amneziawg`.
+- In the web UI it is all **This machine**: *Add a server → WireGuard* lands in
+  `vpn-wireguard` because that is where `./wireguard` is mounted; the type decides the
+  container.
 
 ## Why
 
-- **Isolation**: each `vpn` container has its own network stack, routing table, NAT and
-  firewall. OpenVPN clients cannot reach the WireGuard networks (and the other way round)
-  even without access rules: the OpenVPN container has no route to them at all.
-- **Different networking per VPN type**: e.g. WireGuard on the host's network (below)
-  while OpenVPN stays on a Docker bridge.
-- **Restarts**: restarting one `vpn` container does not drop the other's clients.
+- **Isolation**: each container has its own network stack, routing table, NAT and firewall.
+  Clients of one VPN type cannot reach another type's networks, even without access rules:
+  the other container has no route there.
+- **Different networking per type**: e.g. WireGuard on the host's network (below) while
+  OpenVPN and AmneziaWG stay on Docker bridges.
+- **Restarts**: restarting one container drops only that type's clients.
 
-The cost: a second agent with its own token, and its port in one more compose file.
+The cost: a few more containers; still one web UI, one agent, one token.
 
 ## Setup
 
 ```bash
-# 1. The web UI and OpenVPN (creates the Docker network "trapdoor")
-cd openvpn
 cp .env.example .env          # set TD_AGENT_TOKEN (openssl rand -hex 32)
 docker compose up -d
 docker compose exec -it web trapdoor user add admin
-
-# 2. WireGuard and AmneziaWG, with their own agent
-cd ../wireguard
-cp .env.example .env          # its own TD_AGENT_TOKEN
-docker compose up -d
-docker compose exec agent trapdoor agent-cert      # prints sha256:…
 ```
 
-3. In the web UI: **Hosts → Add a host**: name `wireguard`, address
-   `https://trapdoor-wireguard:9443`, the second stack's `TD_AGENT_TOKEN` and the fingerprint.
-4. **Add a server → WireGuard / AmneziaWG**, machine `wireguard`, with the port the
-   `wireguard` stack publishes (`WG_PORT`, `AWG_PORT`).
-
-The OpenVPN stack has `TD_WIREGUARD=off` (WireGuard cannot be created there by mistake);
-the WireGuard stack has `TD_OPENVPN=off` (no empty OpenVPN server in the list). Its agent
-port is not published: only containers on the network `trapdoor` (the web UI) reach it.
+Open the UI, run the OpenVPN setup, then *Add a server* for WireGuard and AmneziaWG with the
+ports this file publishes (`WG_PORT`, `AWG_PORT`). More servers of a type need more ports on
+that type's container.
 
 ## Variant: WireGuard on the host's network
 
 ```bash
-sudo sysctl -w net.ipv4.ip_forward=1                    # Docker cannot set it here
-cd wireguard && docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
-cd ../openvpn && docker compose -f docker-compose.yml -f docker-compose.host-access.yml up -d
+sudo sysctl -w net.ipv4.ip_forward=1        # Docker cannot set it in the host namespace
+docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
 ```
 
-Add the host as `https://host.docker.internal:9443` (`AGENT_PORT`).
+- `wg0`, `wg1`, … and their iptables rules are on the host itself: no Docker port
+  publishing or Docker NAT in the path, and a new server's port is open at once (no compose
+  change; open it in the host's firewall).
+- NAT leaves through the host's default route; set `VPN_NAT_IFACE` (e.g. `eth0`) when that
+  is wrong. Without a default route the container logs it once and does no NAT.
+- Stopping `vpn-wireguard` takes its interfaces, NAT and rules off the host again.
+- The agent needs no port: it still talks to `vpn-wireguard` through `./wireguard`.
 
-- No Docker port publishing or Docker NAT in the path: `wg0` / `awg0` and their iptables
-  rules are on the host, and a new server's port is open at once (no compose change).
-- Choose an `AGENT_PORT` that is free on the host, and allow it only from the web UI
-  (e.g. `ufw deny 9443/tcp` from outside: the web UI comes from the Docker bridge).
-- NAT goes out through the host's default route; set `VPN_NAT_IFACE` (e.g. `eth0`) when
-  there is none or it is the wrong one. Without it the container logs one line and does
-  no NAT (clients then reach the VPN network only).
-- Docker Desktop (Mac / Windows): `host.docker.internal` is the computer, not Docker's
-  Linux VM where host-network containers run; use `https://172.17.0.1:9443` there.
+The same override can be written for `vpn-amneziawg` (not tested here). OpenVPN is
+different: the agent shares `vpn-openvpn`'s network, so moving that one to the host network
+moves the agent and the management interface there too.
 
-## Clients that should reach only some networks
+## Keeping a VPN's clients inside
 
 Docker publishes ports only from networks with a route out, so a `vpn` container on an
 `internal: true` network cannot take clients from the internet. To keep a VPN's clients
-inside, use its **Access** page instead: *Block everything else* plus rules for the networks
-they may use (e.g. the Docker network of your services). That works in either stack.
+inside, use its **Access** page: *Block everything else* plus rules for the networks they
+may use.
 
 ## Tested
 
-This setup was checked with Docker: both stacks from these files, the second added as a
-host, OpenVPN, WireGuard and AmneziaWG servers created through the web UI, real clients
-connected to each, the OpenVPN client unable to reach the WireGuard network, and the
-host-network variant with a client.
+Checked with Docker from these files: OpenVPN, WireGuard and AmneziaWG servers created
+through the web UI, each running in its own container; real clients connected to each; no
+client reached another type's network; stop / start in the UI took the interface down / up
+in the right container; and the host-network variant with a client, its interface removed
+from the host when the container stopped.

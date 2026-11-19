@@ -206,8 +206,8 @@ an unprivileged user, with the same `TD_AGENT_TOKEN`; see
 
 ## Documentation
 
-- [Deployment examples](examples/): all in one, separate containers per VPN type (also on
-  the host's network), remote machines
+- [Deployment examples](examples/): all in one, a container and folder per VPN type in one
+  compose file (also WireGuard on the host's network), remote machines
 
 - [How trapdoor works](docs/guide.md): setup, profiles, two-factor login, server
   settings, client networks and named networks, access rules, traffic history, more OpenVPN
