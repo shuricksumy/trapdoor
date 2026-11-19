@@ -92,4 +92,11 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
   - [x] Per server: backup on the server's page, restore (or move to another host) with
         *Add a server → From a backup*, traffic history included
 - [ ] Audit log
-- [ ] Optional easyrsa backend for the PKI interface
+- [ ] easyrsa `vars` in the native PKI: certificate name fields (`EASYRSA_DN` org mode:
+      country, province, city, org, email, OU), key type and size, digest, CA / certificate /
+      CRL lifetimes, read from `<pki>/vars` (or `TD_EASYRSA_VARS`), so new certificates match
+      what easyrsa and openvpn-ui made; shown on the Server page
+- [ ] ~~Optional easyrsa backend for the PKI interface~~ deferred: the native PKI already writes
+      easyrsa's layout (checked against easyrsa 3.2 in CI) and easyrsa can be used next to it;
+      a backend would only add hardware-held CA keys (HSM / PKCS#11) at the cost of a shell and
+      openssl in the agent image. Revisit if that is needed
