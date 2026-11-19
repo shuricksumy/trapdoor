@@ -30,3 +30,6 @@ web/.svelte-kit/
 
 # Claude Code local files
 /.claude/
+
+# Conflict copies made by file sync (e.g. iCloud Drive: "name 2.go")
+* [0-9].*
