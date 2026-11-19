@@ -36,6 +36,9 @@ type Agent struct {
 	// directory each (<id>/server.conf, pki/, ccd/). TD_OPENVPN_SERVERS_DIR
 	// (default <openvpn dir>/servers)
 	OpenVPNServersDir string
+	// OpenVPN: "off" runs no OpenVPN server on this agent (e.g. one that
+	// only runs WireGuard); "on" (default).               TD_OPENVPN
+	OpenVPN string
 	// CCDDir holds per-client files (2FA lines).        TD_CCD_DIR (default <openvpn dir>/ccd)
 	CCDDir string
 	// TOTPIssuer is the name shown in authenticator apps. TD_TOTP_ISSUER
@@ -168,6 +171,10 @@ func LoadAgent() (Agent, error) {
 		return c, fmt.Errorf("TD_FIREWALL must be direct, file or off")
 	}
 	c.IPTablesDir = os.Getenv("TD_IPTABLES_DIR")
+	c.OpenVPN = env("TD_OPENVPN", "on")
+	if c.OpenVPN != "on" && c.OpenVPN != "off" {
+		return c, fmt.Errorf("TD_OPENVPN must be on or off")
+	}
 	c.WireGuard = env("TD_WIREGUARD", "direct")
 	if c.WireGuard != "direct" && c.WireGuard != "file" && c.WireGuard != "off" {
 		return c, fmt.Errorf("TD_WIREGUARD must be direct, file or off")

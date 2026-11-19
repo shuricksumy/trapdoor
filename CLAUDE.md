@@ -41,6 +41,7 @@ Run locally: `TD_AGENT_TOKEN=dev TD_OPENVPN_DIR=/tmp/td TD_CRL_COPIES=- TD_FIREW
 - `internal/ovpn`: builds `.ovpn` profiles (tls-crypt-v2 client keys in `keys-v2/`).
 - `internal/web`, `internal/auth`, `internal/store`, `internal/history`: web side. `web/hosts.go`: `MultiAgent` spans the own agent and other hosts' (added in the UI, kept in the `hosts` table, `agent.NewPinnedClient`); their servers are `<host>.<id>`. Traffic is stored per client per hour; poll gaps are spread over the missing hours and marked estimated.
 - `web/src`: `pages/*.svelte`, `lib/state.svelte.js` (route, session, settings, theme), `lib/api.js`.
+- `examples/`: deployment layouts (all in one, separate containers per VPN type, remote machines), each with a README; CI's `compose` job validates their compose files.
 - `docs/`: `guide.md` (how features work), `api.md`, `development.md`, `releases/`, `screenshots/`.
 
 ## Rules

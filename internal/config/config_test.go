@@ -63,3 +63,18 @@ func TestLoadWebTZAndPoll(t *testing.T) {
 		t.Error("poll interval below 5s accepted")
 	}
 }
+
+func TestLoadAgentOpenVPNOff(t *testing.T) {
+	t.Setenv("TD_AGENT_TOKEN", "x")
+	if c, err := LoadAgent(); err != nil || c.OpenVPN != "on" {
+		t.Fatalf("default = %q, %v", c.OpenVPN, err)
+	}
+	t.Setenv("TD_OPENVPN", "off")
+	if c, err := LoadAgent(); err != nil || c.OpenVPN != "off" {
+		t.Fatalf("off = %q, %v", c.OpenVPN, err)
+	}
+	t.Setenv("TD_OPENVPN", "maybe")
+	if _, err := LoadAgent(); err == nil {
+		t.Error("TD_OPENVPN=maybe accepted")
+	}
+}

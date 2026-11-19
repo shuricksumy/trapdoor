@@ -111,6 +111,27 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 	}
 	log = log.With("proc", "agent")
 
+	log.Info("listening", "addr", cfg.Listen, "version", version.Version)
+	host := agent.NewHost(cfg.Token, log)
+	if cfg.OpenVPN == "off" {
+		log.Info("OpenVPN is off on this agent (TD_OPENVPN=off)")
+	} else if err := addOpenVPN(ctx, cfg, log, host); err != nil {
+		return err
+	}
+	if cfg.WireGuard != "off" {
+		wgs, err := agent.LoadWireGuard(ctx, cfg, log)
+		if err != nil {
+			return fmt.Errorf("WireGuard servers: %w", err)
+		}
+		host.EnableWireGuard(cfg, wgs)
+		log.Info("WireGuard", "mode", cfg.WireGuard, "dir", cfg.WireGuardDir, "servers", len(wgs))
+	}
+	return httpx.Serve(ctx, l, host.Handler())
+}
+
+// addOpenVPN mounts the first OpenVPN server (TD_* settings) and the ones
+// added in trapdoor.
+func addOpenVPN(ctx context.Context, cfg config.Agent, log *slog.Logger, host *agent.Host) error {
 	var p pki.PKI
 	store, err := pki.Open(cfg.PKIDir, pki.Options{CAPassphrase: cfg.CAPassphrase, CRLCopies: cfg.CRLCopies})
 	switch {
@@ -122,11 +143,8 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 	default:
 		return err
 	}
-
-	log.Info("listening", "addr", cfg.Listen, "version", version.Version)
 	srv := agent.New(cfg, log, p)
 	go srv.ApplyFirewallAtStart(ctx)
-	host := agent.NewHost(cfg.Token, log, srv)
 	extra, err := agent.LoadOpenVPN(cfg, log)
 	if err != nil {
 		return fmt.Errorf("OpenVPN servers: %w", err)
@@ -134,19 +152,11 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 	for _, s := range extra {
 		go s.ApplyFirewallAtStart(ctx)
 	}
-	host.EnableOpenVPN(cfg, extra)
+	host.EnableOpenVPN(cfg, append([]*agent.Server{srv}, extra...))
 	if len(extra) > 0 {
 		log.Info("OpenVPN servers", "dir", cfg.OpenVPNServersDir, "added", len(extra))
 	}
-	if cfg.WireGuard != "off" {
-		wgs, err := agent.LoadWireGuard(ctx, cfg, log)
-		if err != nil {
-			return fmt.Errorf("WireGuard servers: %w", err)
-		}
-		host.EnableWireGuard(cfg, wgs)
-		log.Info("WireGuard", "mode", cfg.WireGuard, "dir", cfg.WireGuardDir, "servers", len(wgs))
-	}
-	return httpx.Serve(ctx, l, host.Handler())
+	return nil
 }
 
 func runWeb(ctx context.Context, log *slog.Logger) error {
