@@ -111,3 +111,18 @@ func TestLoadWebJoinSecret(t *testing.T) {
 		t.Fatalf("secret: %v", err)
 	}
 }
+
+func TestLoadWebFrameAncestors(t *testing.T) {
+	t.Setenv("TD_AGENT_TOKEN", "x")
+	t.Setenv("TD_FRAME_ANCESTORS", "https://admin.example.com, https://*.example.org:8443, 'self'")
+	c, err := LoadWeb()
+	if err != nil || len(c.FrameAncestors) != 3 {
+		t.Fatalf("%v, %v", c.FrameAncestors, err)
+	}
+	for _, bad := range []string{"*", "https://a.example.com; script-src *", "javascript:alert(1)", "admin.example.com"} {
+		t.Setenv("TD_FRAME_ANCESTORS", bad)
+		if _, err := LoadWeb(); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}

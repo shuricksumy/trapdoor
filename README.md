@@ -213,6 +213,9 @@ Set in `.env` next to `docker-compose.yml`:
 | `WEB_BIND` | `127.0.0.1:8080` | Where the web UI listens on the host |
 | `TD_COOKIE_SECURE` | `true` | `false` only for testing over plain HTTP |
 | `TD_TRUSTED_PROXIES` | — | Reverse proxy addresses (CIDRs) allowed to pass the client IP |
+| `TD_FRAME_ANCESTORS` | — | Sites that may show the web UI in an iframe, e.g. `https://admin.example.com` (a dashboard); empty = none |
+| `TD_BACKUP_PASSPHRASE` | — | Encrypts scheduled backups (Account → Scheduled backups) |
+| `TD_SCRIPTS` | `off` | `on` for an agent: own start / stop scripts editable in the web UI |
 | `TD_WEB_API_TOKEN` | — | Optional token for scripts: `Authorization: Bearer …` ([API](docs/api.md)) |
 | `TD_EXPIRY_WARN_DAYS` | `30` | Warn this many days before a client certificate expires |
 | `TD_SESSION_IDLE` | `12h` | Admin logout after this much inactivity |

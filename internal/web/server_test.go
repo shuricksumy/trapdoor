@@ -213,3 +213,14 @@ func TestStatsEndpoints(t *testing.T) {
 		t.Errorf("history sessions = %+v", list)
 	}
 }
+
+func TestFrameHeaders(t *testing.T) {
+	for _, anc := range [][]string{nil, {"https://admin.example.com"}} {
+		h := New(Deps{Log: slog.New(slog.NewTextHandler(io.Discard, nil)), FrameAncestors: anc}).Handler()
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+		if got, want := rec.Header().Get("X-Frame-Options"), map[bool]string{true: "", false: "DENY"}[len(anc) > 0]; got != want {
+			t.Errorf("ancestors %v: X-Frame-Options %q, want %q", anc, got, want)
+		}
+	}
+}

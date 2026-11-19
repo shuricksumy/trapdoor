@@ -99,6 +99,9 @@ type Deps struct {
 	// JoinSecret lets nodes started with it join without a one-time token
 	// (TD_JOIN_SECRET; empty = only tokens).
 	JoinSecret string
+	// FrameAncestors may show the web UI in an iframe, e.g. a dashboard
+	// (TD_FRAME_ANCESTORS); empty = nobody.
+	FrameAncestors []string
 	// BackupDir holds scheduled backups (empty: none); BackupPassphrase
 	// encrypts them (TD_BACKUP_DIR, TD_BACKUP_PASSPHRASE).
 	BackupDir, BackupPassphrase string
@@ -173,7 +176,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerAuthRoutes(mux, api)
 	mux.HandleFunc("POST /api/v1/nodes/join", s.handleJoin) // a node, with its join token
 	mux.Handle("/api/", s.requireAuth(api))
-	ui := webui.Handler()
+	ui := webui.Handler(s.FrameAncestors...)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -182,7 +185,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		ui.ServeHTTP(w, r)
 	})
-	return httpx.LogRequests(s.Log, securityHeaders(mux))
+	return httpx.LogRequests(s.Log, securityHeaders(mux, len(s.FrameAncestors) > 0))
 }
 
 // agent returns the client for the server named in the request's URL.

@@ -185,6 +185,7 @@ services:
       TD_TRUSTED_PROXIES: ${TD_TRUSTED_PROXIES:-}
       TD_WEB_API_TOKEN: ${TD_WEB_API_TOKEN:-}
       TD_PUBLIC_URL: ${TD_PUBLIC_URL:-} # link in notification emails
+      TD_FRAME_ANCESTORS: ${TD_FRAME_ANCESTORS:-} # sites that may show the UI in an iframe
       TD_BACKUP_PASSPHRASE: ${TD_BACKUP_PASSPHRASE:-} # encrypts scheduled backups (Account → Scheduled backups)
     ports:
       - "${WEB_BIND:-127.0.0.1:8080}:8080"

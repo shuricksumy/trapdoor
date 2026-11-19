@@ -22,8 +22,9 @@ var dist embed.FS
 var inlineScript = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
 
 // Handler serves the UI: hashed assets with long caching, every other path
-// gets index.html (client-side routing), all with a strict CSP.
-func Handler() http.Handler {
+// gets index.html (client-side routing), all with a strict CSP. frameAncestors
+// are the origins that may show it in an iframe (none by default).
+func Handler(frameAncestors ...string) http.Handler {
 	root, _ := fs.Sub(dist, "dist")
 	index, err := fs.ReadFile(root, "index.html")
 	if err != nil {
@@ -33,7 +34,7 @@ func Handler() http.Handler {
 			_, _ = w.Write([]byte("The web UI is not built into this binary. Run `make ui build`, or use the API under /api/v1.\n"))
 		})
 	}
-	csp := policy(index)
+	csp := policy(index, frameAncestors)
 	files := http.FileServerFS(root)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +65,11 @@ func Handler() http.Handler {
 
 // policy allows only same-origin resources, plus the inline theme script in
 // index.html by its hash (it must run before first paint).
-func policy(index []byte) string {
+func policy(index []byte, frameAncestors []string) string {
+	frames := "'none'"
+	if len(frameAncestors) > 0 {
+		frames = strings.Join(frameAncestors, " ")
+	}
 	scripts := []string{"'self'"}
 	for _, m := range inlineScript.FindAllSubmatch(index, -1) {
 		sum := sha256.Sum256(m[1])
@@ -80,6 +85,6 @@ func policy(index []byte) string {
 		"object-src 'none'",
 		"base-uri 'none'",
 		"form-action 'self'",
-		"frame-ancestors 'none'",
+		"frame-ancestors " + frames,
 	}, "; ")
 }

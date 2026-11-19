@@ -647,6 +647,11 @@ password comes from stdin or `TD_ADMIN_PASSWORD`.
 - Failed logins throttled: 10 per IP and 30 per username per 15 minutes; unknown usernames take
   as long as wrong passwords
 - Requests that change something are refused when they come from another site (CSRF)
+- The web UI refuses to be shown in an iframe (`X-Frame-Options: DENY`, CSP
+  `frame-ancestors 'none'`). To show it in a dashboard, name that dashboard's origin in
+  `TD_FRAME_ANCESTORS` (comma-separated, e.g. `https://admin.example.com`): only those sites
+  may frame it, and `X-Frame-Options` is left out. With both on one domain
+  (`admin.example.com`, `vpn.example.com`) the login works inside the frame.
 - Behind a reverse proxy set `TD_TRUSTED_PROXIES` so the real client IP is used
 - Every change is logged as `audit action=... target=... by=<user>`
 - Strict Content-Security-Policy, no CDN: the UI and its fonts are served by trapdoor itself
