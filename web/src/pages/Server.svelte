@@ -6,6 +6,7 @@
   import { lineDiff } from '../lib/diff.js';
   import Dialog from '../lib/Dialog.svelte';
   import ServerBackup from '../lib/ServerBackup.svelte';
+  import { where } from '../lib/location.js';
 
   let cfg = $state(null); // last loaded server config
   let net = $state(null); // client LANs (for route suggestions)
@@ -322,7 +323,7 @@
 {/if}
 
 <Dialog bind:open={remove.open} title="Remove this server?">
-  <p><strong>{currentServer()?.name}</strong> stops, and devices using it can no longer connect.</p>
+  <p><strong>OpenVPN {currentServer()?.name}</strong> ({currentServer()?.id}) on <strong>{where(currentServer())}</strong> stops, and devices using it can no longer connect.</p>
   {#snippet actions()}
     <button class="btn" onclick={() => (remove.open = false)}>Cancel</button>
     <button class="btn danger solid" disabled={remove.busy} onclick={doRemove}>{remove.busy ? 'Removing…' : 'Remove server'}</button>

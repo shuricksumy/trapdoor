@@ -184,7 +184,7 @@ func (h *Host) Handler() http.Handler {
 
 func (h *Host) handleInfo(w http.ResponseWriter, r *http.Request) {
 	host, _ := os.Hostname()
-	info := api.AgentInfo{Version: version.Version, Hostname: host, Servers: []api.ServerInfo{}}
+	info := api.AgentInfo{Version: version.Version, Hostname: host, Servers: []api.ServerInfo{}, Containers: h.containers()}
 	for _, s := range h.list() {
 		info.Servers = append(info.Servers, s.Info(r.Context()))
 	}
@@ -374,4 +374,27 @@ func (h *Host) requireToken(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// containers says where new servers of each type would run (the types this
+// agent can run; a name is empty outside containers).
+func (h *Host) containers() map[string]string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	out := map[string]string{}
+	for _, m := range h.servers {
+		if s, ok := m.b.(*Server); ok && s.extra == nil {
+			out[api.TypeOpenVPN] = s.cfg.ContainerOpenVPN
+		}
+	}
+	if h.ovpn != nil {
+		out[api.TypeOpenVPN] = h.ovpn.ContainerOpenVPN
+	}
+	if h.cfg.WireGuard != "" && h.cfg.WireGuard != "off" {
+		out[api.TypeWireGuard] = h.cfg.ContainerWireGuard
+		if h.cfg.AmneziaWGDir != "" {
+			out[api.TypeAmneziaWG] = h.cfg.ContainerAmneziaWG
+		}
+	}
+	return out
 }

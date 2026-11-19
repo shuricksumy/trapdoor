@@ -43,7 +43,8 @@ export const session = $state({ user: null, checked: false });
 
 // VPN servers (from /api/v1/status) and the one the pages show.
 // hosts: the other machines with an agent (their servers have a "host").
-export const servers = $state({ list: [], current: '', hosts: [] });
+// containers: where this machine runs each type (type → container name).
+export const servers = $state({ list: [], current: '', hosts: [], containers: null });
 
 export function selectServer(id) {
   servers.current = id;
@@ -60,9 +61,10 @@ export function currentServer() {
 }
 
 /** Keep the selected server if it still exists, else the remembered one, else the first one. */
-export function setServers(list, hosts = []) {
+export function setServers(list, hosts = [], containers = null) {
   servers.list = list;
   servers.hosts = hosts;
+  servers.containers = containers;
   if (list.some((s) => s.id === servers.current)) return;
   let saved = '';
   try {

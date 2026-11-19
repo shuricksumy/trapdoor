@@ -55,6 +55,10 @@ services:
       TD_OPENVPN_RESTART: SIGTERM # the vpn service starts OpenVPN again
       TD_FIREWALL: file # access rules are applied by the vpn service
       TD_WIREGUARD: file # WireGuard and AmneziaWG interfaces are run by the vpn service
+      # Shown in the UI: the container that runs each type of server
+      TD_CONTAINER_OPENVPN: vpn
+      TD_CONTAINER_WIREGUARD: vpn
+      TD_CONTAINER_AMNEZIAWG: vpn
       TD_OPENVPN_MGMT_PASSWORD: ${TD_OPENVPN_MGMT_PASSWORD:-}
       TD_SETUP_PORT: "1194"
       TD_SETUP_PROTO: ${VPN_PROTO:-udp}

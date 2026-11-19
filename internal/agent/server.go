@@ -119,6 +119,7 @@ func (s *Server) Info(ctx context.Context) api.ServerInfo {
 		PKIDir:     s.cfg.PKIDir,
 		PKIReady:   s.PKI() != nil,
 		Stopped:    s.stopped(),
+		Container:  s.cfg.ContainerOpenVPN,
 		Autostart:  s.autostart(),
 	}
 	if s.extra != nil {

@@ -36,6 +36,10 @@ type Agent struct {
 	// directory each (<id>/server.conf, pki/, ccd/). TD_OPENVPN_SERVERS_DIR
 	// (default <openvpn dir>/servers)
 	OpenVPNServersDir string
+	// Container names shown in the UI: where this agent's OpenVPN, WireGuard
+	// and AmneziaWG servers run (e.g. "vpn", "vpn-wireguard"); empty = not
+	// in a container.   TD_CONTAINER_OPENVPN, TD_CONTAINER_WIREGUARD, TD_CONTAINER_AMNEZIAWG
+	ContainerOpenVPN, ContainerWireGuard, ContainerAmneziaWG string
 	// OpenVPN: "off" runs no OpenVPN server on this agent (e.g. one that
 	// only runs WireGuard); "on" (default).               TD_OPENVPN
 	OpenVPN string
@@ -171,6 +175,9 @@ func LoadAgent() (Agent, error) {
 		return c, fmt.Errorf("TD_FIREWALL must be direct, file or off")
 	}
 	c.IPTablesDir = os.Getenv("TD_IPTABLES_DIR")
+	c.ContainerOpenVPN = os.Getenv("TD_CONTAINER_OPENVPN")
+	c.ContainerWireGuard = os.Getenv("TD_CONTAINER_WIREGUARD")
+	c.ContainerAmneziaWG = os.Getenv("TD_CONTAINER_AMNEZIAWG")
 	c.OpenVPN = env("TD_OPENVPN", "on")
 	if c.OpenVPN != "on" && c.OpenVPN != "off" {
 		return c, fmt.Errorf("TD_OPENVPN must be on or off")

@@ -1,5 +1,6 @@
 <script>
   import { api, reloadServers, upload } from '../lib/api.js';
+  import { canRun, containerFor, machineName, typeNames } from '../lib/location.js';
   import { navigate, selectServer, servers, toast } from '../lib/state.svelte.js';
 
   import { route } from '../lib/state.svelte.js';
@@ -15,6 +16,13 @@
   const initial = kinds[asked] || asked === 'restore' ? asked : 'wireguard';
   let type = $state(initial);
   const isOVPN = $derived(type === 'openvpn');
+  // Restore: the containers of the chosen machine, by type.
+  const containerList = $derived(
+    ['openvpn', 'wireguard', 'amneziawg']
+      .filter((t) => containerFor(t, f.machine))
+      .map((t) => `${typeNames[t]}: ${containerFor(t, f.machine)}`)
+      .join(', '),
+  );
   // 'restore': a server from its backup file (Server page → Backup).
   const isRestore = $derived(type === 'restore');
   let backupFile = $state(null);
@@ -155,15 +163,15 @@
   {#if error}<div class="banner bad" role="alert">{error}</div>{/if}
 
   <div class="kinds" role="radiogroup" aria-label="Type">
-    <button type="button" role="radio" aria-checked={type === 'openvpn'} class:on={type === 'openvpn'} onclick={() => pick('openvpn')}>
+    <button type="button" role="radio" aria-checked={type === 'openvpn'} class:on={type === 'openvpn'} disabled={!canRun('openvpn', f.machine)} title={canRun('openvpn', f.machine) ? '' : `OpenVPN is turned off on ${machineName(f.machine)}`} onclick={() => pick('openvpn')}>
       <strong>OpenVPN</strong>
       <span>Works almost everywhere, also over TCP. Uses the OpenVPN apps.</span>
     </button>
-    <button type="button" role="radio" aria-checked={type === 'wireguard'} class:on={type === 'wireguard'} onclick={() => pick('wireguard')}>
+    <button type="button" role="radio" aria-checked={type === 'wireguard'} class:on={type === 'wireguard'} disabled={!canRun('wireguard', f.machine)} title={canRun('wireguard', f.machine) ? '' : `WireGuard is turned off on ${machineName(f.machine)}`} onclick={() => pick('wireguard')}>
       <strong>WireGuard</strong>
       <span>Fast and simple. Works with the official WireGuard apps.</span>
     </button>
-    <button type="button" role="radio" aria-checked={type === 'amneziawg'} class:on={type === 'amneziawg'} onclick={() => pick('amneziawg')}>
+    <button type="button" role="radio" aria-checked={type === 'amneziawg'} class:on={type === 'amneziawg'} disabled={!canRun('amneziawg', f.machine)} title={canRun('amneziawg', f.machine) ? '' : `AmneziaWG is turned off on ${machineName(f.machine)}`} onclick={() => pick('amneziawg')}>
       <strong>AmneziaWG</strong>
       <span>WireGuard that is hard to detect and block. Needs the AmneziaWG app.</span>
     </button>
@@ -307,12 +315,22 @@
   {/if}
   {/if}
 
+  <!-- What exactly happens, and where. -->
+  <div class="summary" role="status">
+    {#if isRestore}
+      Restores the server in the backup on <strong>{machineName(f.machine)}</strong>{#if containerList}, in the container for its type ({containerList}){/if}.
+    {:else}
+      Adds <strong>{typeNames[type]} {f.id || '…'}</strong> on <strong>{machineName(f.machine)}</strong>{#if containerFor(type, f.machine)}, in container <strong class="mono">{containerFor(type, f.machine)}</strong>{/if}, {isOVPN ? (f.proto || 'udp').toUpperCase() : 'UDP'} port {f.port || '…'}.
+      {#if !canRun(type, f.machine)}<span class="bad">{typeNames[type]} is turned off on that machine.</span>{/if}
+    {/if}
+  </div>
+
   <div class="actions">
     <a class="btn" href="/">Cancel</a>
     {#if isRestore}
       <button class="btn primary" type="submit" disabled={busy || !backupFile}>{busy ? 'Restoring…' : 'Restore server'}</button>
     {:else}
-      <button class="btn primary" type="submit" disabled={busy || !idOk || (!isOVPN && !f.host.trim())}>{busy ? 'Adding…' : 'Add server'}</button>
+      <button class="btn primary" type="submit" disabled={busy || !idOk || !canRun(type, f.machine) || (!isOVPN && !f.host.trim())}>{busy ? 'Adding…' : 'Add server'}</button>
     {/if}
   </div>
 </form>
@@ -329,6 +347,10 @@
     border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit;
   }
   .kinds button span { color: var(--ink-2); font-size: 13px; }
+  .kinds button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .summary { padding: var(--space-3) var(--space-4); border-radius: 10px; background: var(--sunken); color: var(--ink-2); }
+  .summary strong { color: var(--ink); }
+  .summary .bad { display: block; color: var(--bad); }
   .kinds button.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .obf { border: 1px solid var(--line); border-radius: 10px; padding: var(--space-3) var(--space-4); display: grid; gap: var(--space-2); margin: 0; }
   .obf legend { padding: 0 var(--space-1); font-weight: 600; }

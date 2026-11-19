@@ -74,6 +74,7 @@ type wgPeer struct {
 type WGServer struct {
 	dir  string
 	mode string // direct | file
+	box  string // the container it runs in (TD_CONTAINER_*), for the UI
 	log  *slog.Logger
 	run  wgRunner
 	now  func() time.Time
@@ -118,7 +119,10 @@ func newWGServer(cfg config.Agent, log *slog.Logger, st wgState) *WGServer {
 	}
 	dir := wgDir(cfg, st.Type)
 	s := &WGServer{dir: dir, mode: cfg.WireGuard, log: log.With("server", st.ID), st: st,
-		now: time.Now, sess: map[string]*wgSession{}, last: map[string][2]int64{}}
+		now: time.Now, sess: map[string]*wgSession{}, last: map[string][2]int64{}, box: cfg.ContainerWireGuard}
+	if st.Type == api.TypeAmneziaWG {
+		s.box = cfg.ContainerAmneziaWG
+	}
 	fwMode := cfg.Firewall
 	if fwMode == "" {
 		fwMode = FirewallDirect
@@ -329,7 +333,7 @@ func (s *WGServer) Info(ctx context.Context) api.ServerInfo {
 	pub, _ := wg.PublicKey(s.st.PrivateKey)
 	info := api.ServerInfo{ID: s.st.ID, Type: s.st.Type, Name: s.st.Name, PublicKey: pub,
 		ListenPort: s.st.ListenPort, Subnet: s.subnet().String(), Endpoint: s.endpoint(), Error: s.applyErr,
-		Obfuscation: s.st.Obfuscation, Stopped: s.stopped(), Autostart: s.autostart()}
+		Obfuscation: s.st.Obfuscation, Stopped: s.stopped(), Autostart: s.autostart(), Container: s.container()}
 	if info.Stopped {
 		info.Error = ""
 	} else if _, err := s.run.Dump(ctx, s.st.ID); err == nil {
@@ -818,3 +822,6 @@ func (s *WGServer) handlePeerConf(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+p.Name+`.conf"`)
 	_, _ = w.Write([]byte(conf))
 }
+
+// container is where the server runs (TD_CONTAINER_WIREGUARD / _AMNEZIAWG).
+func (s *WGServer) container() string { return s.box }
