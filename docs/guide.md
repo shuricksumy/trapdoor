@@ -154,8 +154,14 @@ and `phone`. Manage them under Clients → Named networks, or with
 - Changing or removing a network updates every client that has it; each client's own
   routes stay. A change that would make any client's file invalid (e.g. a network inside the
   VPN subnet behind a client) is refused as a whole.
-- A client's Network dialog shows its own routes and lists the named networks it is part
-  of; those are changed on the network, not on the client.
+- A client's Network dialog shows its named networks as chips next to its own routes:
+  remove one, or pick *Add a named network…* (reach it) / *…behind this client*; that
+  changes the named network right away, for this client.
+- The **Network** page (menu) shows it all at once: the server's network and routes, the
+  named networks, and for every client its VPN address, whether all its traffic goes
+  through the VPN, what it reaches (own routes, named networks, routes for everyone) and
+  what is behind it, with the warnings in one place. For WireGuard / AmneziaWG it lists
+  every client's address, networks behind it, allowed IPs and DNS.
 - Behind a client, the server needs a `route` line for the networks, as for a LAN set on
   the client: trapdoor warns with the line to add.
 

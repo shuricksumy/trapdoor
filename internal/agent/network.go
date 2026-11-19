@@ -17,6 +17,7 @@ import (
 
 func (s *Server) registerNetworkRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /network", s.handleServerNetwork)
+	mux.HandleFunc("GET /network/clients", s.handleClientsNetwork)
 	mux.HandleFunc("GET /certs/{name}/network", s.handleGetClientNetwork)
 	mux.HandleFunc("PUT /certs/{name}/network", s.handleSetClientNetwork)
 }
@@ -233,4 +234,50 @@ func prefixes(ps []netip.Prefix) []string {
 		out = append(out, p.String())
 	}
 	return out
+}
+
+// handleClientsNetwork lists every client's network settings at once (the
+// Network page): current, not revoked clients, with or without a ccd file.
+func (s *Server) handleClientsNetwork(w http.ResponseWriter, r *http.Request) {
+	p := s.PKI()
+	if p == nil {
+		httpx.WriteJSON(w, http.StatusOK, []api.ClientRoutes{})
+		return
+	}
+	certs, err := p.List(r.Context())
+	if err != nil {
+		s.pkiError(w, err)
+		return
+	}
+	nets, err := s.loadNamed()
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	srv, srvErr := s.serverConf()
+	ips, _ := s.staticIPs()
+	out := []api.ClientRoutes{}
+	for _, c := range certs {
+		if c.Kind == pki.KindServer || !c.Current || c.Status == pki.StatusRevoked {
+			continue
+		}
+		data, err := s.ccd.Read(c.Name)
+		if err != nil {
+			continue
+		}
+		n, err := ccdnet.Parse(data)
+		if err != nil {
+			out = append(out, api.ClientRoutes{Name: c.Name, ClientNetwork: api.ClientNetwork{Routes: []string{}, LAN: []string{},
+				Warnings: []string{"ccd/" + c.Name + ": " + err.Error()}}})
+			continue
+		}
+		cn := toClientNetwork(ownNet(n, nets, c.Name))
+		_, _, cn.Named = namedFor(nets, c.Name)
+		if srvErr == nil {
+			cn.Warnings, _ = ccdnet.Validate(c.Name, n, srv, ips)
+		}
+		out = append(out, api.ClientRoutes{Name: c.Name, ClientNetwork: cn})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	httpx.WriteJSON(w, http.StatusOK, out)
 }

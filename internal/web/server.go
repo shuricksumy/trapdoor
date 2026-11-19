@@ -57,6 +57,7 @@ type AgentClient interface {
 	StopServer(ctx context.Context) (api.ServerInfo, error)
 	SetAutostart(ctx context.Context, on bool) (api.ServerInfo, error)
 	NamedNetworks(ctx context.Context) (api.NamedNetworks, error)
+	ClientsNetwork(ctx context.Context) ([]api.ClientRoutes, error)
 	SetNamedNetwork(ctx context.Context, name string, n api.NamedNetwork) (api.NamedNetworks, error)
 	RemoveNamedNetwork(ctx context.Context, name string) (api.NamedNetworks, error)
 	ServerConfig(ctx context.Context) (api.ServerConfig, error)

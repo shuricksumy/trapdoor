@@ -399,6 +399,13 @@ type ClientNetwork struct {
 	Named []NamedUse `json:"named,omitempty"`
 }
 
+// ClientRoutes is one client in GET /v1/servers/{id}/network/clients: its
+// own settings, the named networks it is part of, and what is wrong.
+type ClientRoutes struct {
+	Name string `json:"name"`
+	ClientNetwork
+}
+
 // NamedUse is a client's part in a named network.
 type NamedUse struct {
 	Name string `json:"name"`
