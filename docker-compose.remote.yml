@@ -1,0 +1,70 @@
+# trapdoor on another machine: the VPN servers and the agent, no web UI.
+# The web UI on your main machine manages it (Hosts → Add a host).
+#
+#   cp .env.example .env        # set TD_AGENT_TOKEN (openssl rand -hex 32)
+#   docker compose -f docker-compose.remote.yml up -d
+#   docker compose -f docker-compose.remote.yml exec agent trapdoor agent-cert
+#
+# Then add the host in the web UI with https://<this machine>:${AGENT_PORT},
+# the token and the fingerprint printed above. The agent API is reachable
+# from the network (TLS, token): allow AGENT_PORT only from the machine that
+# runs the web UI, e.g. ufw allow from 203.0.113.10 to any port 9443 proto tcp.
+
+x-image: &image
+  image: ${TD_IMAGE:-ghcr.io/shuricksumy/trapdoor:latest}
+  restart: unless-stopped
+
+services:
+  # Runs the VPN servers; the only container with network privileges.
+  vpn:
+    <<: *image
+    user: root
+    entrypoint: ["vpn-entrypoint.sh"]
+    cap_add: [NET_ADMIN]
+    devices: [/dev/net/tun]
+    sysctls:
+      - net.ipv4.ip_forward=1
+    environment:
+      VPN_NAT_SUBNET: ${VPN_NAT_SUBNET:-auto}
+    ports:
+      # The agent API for the web UI on the other machine (TLS).
+      - "${AGENT_PORT:-9443}:9443/tcp"
+      - "${VPN_PORT:-1194}:1194/${VPN_PROTO:-udp}"
+      - "${VPN2_PORT:-1195}:${VPN2_PORT:-1195}/${VPN2_PROTO:-tcp}"
+      - "${WG_PORT:-51820}:${WG_PORT:-51820}/udp"
+      - "${AWG_PORT:-51830}:${AWG_PORT:-51830}/udp"
+    volumes:
+      - ${OPENVPN_DIR:-./openvpn}:/etc/openvpn
+      - ${WIREGUARD_DIR:-./wireguard}:/etc/wireguard
+      - ${AMNEZIAWG_DIR:-./amneziawg}:/etc/amnezia/amneziawg
+
+  # Manages PKI and the VPN servers. Shares the vpn container's network, so
+  # OpenVPN's management interface stays on 127.0.0.1.
+  agent:
+    <<: *image
+    user: root # owns the files in /etc/openvpn
+    command: ["agent"]
+    network_mode: service:vpn
+    depends_on: [vpn]
+    environment:
+      TD_AGENT_TOKEN: ${TD_AGENT_TOKEN:?set TD_AGENT_TOKEN in .env}
+      TD_AGENT_LISTEN: ":9443"
+      TD_AGENT_TLS: auto # self-signed certificate in OPENVPN_DIR, pinned by the web UI
+      TD_OPENVPN_MGMT: ${TD_OPENVPN_MGMT:-127.0.0.1:2080}
+      TD_OPENVPN_RESTART: SIGTERM # the vpn service starts OpenVPN again
+      TD_FIREWALL: file # access rules are applied by the vpn service
+      TD_WIREGUARD: file # WireGuard and AmneziaWG interfaces are run by the vpn service
+      TD_OPENVPN_MGMT_PASSWORD: ${TD_OPENVPN_MGMT_PASSWORD:-}
+      TD_SETUP_PORT: "1194"
+      TD_SETUP_PROTO: ${VPN_PROTO:-udp}
+      TD_SETUP_PUBLIC_PORT: ${VPN_PORT:-1194}
+      TD_TOTP_ISSUER: ${TD_TOTP_ISSUER:-trapdoor}
+    volumes:
+      - ${OPENVPN_DIR:-./openvpn}:/etc/openvpn
+      - ${WIREGUARD_DIR:-./wireguard}:/etc/wireguard
+      - ${AMNEZIAWG_DIR:-./amneziawg}:/etc/amnezia/amneziawg
+    healthcheck:
+      test: ["CMD", "trapdoor", "health", "https://127.0.0.1:9443"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s

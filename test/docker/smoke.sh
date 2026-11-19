@@ -17,6 +17,8 @@ BOB_PID=
 
 log() { echo "==> $*"; }
 dc() { docker compose -f "$WORK/docker-compose.yml" -p tdsmoke "$@"; }
+# A second machine: docker-compose.remote.yml (vpn + agent with TLS, no web).
+dr() { docker compose -f "$WORK/remote/docker-compose.remote.yml" --env-file "$WORK/remote/.env" -p tdremote "$@"; }
 api() { curl -fsS -H "Authorization: Bearer $TOKEN" "$@"; }
 fail() {
 	echo "FAIL: $*" >&2
@@ -30,6 +32,7 @@ cleanup() {
 	[[ -n $BOB_PID ]] && sudo kill "$BOB_PID" 2>/dev/null || true
 	sudo wg-quick down /etc/wireguard/tdsmoke.conf >/dev/null 2>&1 || true
 	sudo rm -f /etc/wireguard/tdsmoke.conf
+	dr down -v >/dev/null 2>&1 || true
 	dc down -v --remove-orphans >/dev/null 2>&1 || true
 	sudo rm -rf "$WORK"
 }
@@ -255,6 +258,50 @@ dc logs vpn | grep -q "ovpn-tcp: removed, stopped" || fail "no remove log"
 sudo sh -c "ls -d '$WORK'/openvpn/servers/.removed/ovpn-tcp-*" >/dev/null || fail "removed server's files not kept"
 api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "the first server stopped too"
 log "second OpenVPN server: client over TCP, own clients and access rules; remove works"
+
+log "second host: vpn + agent from docker-compose.remote.yml, managed from this web UI over TLS"
+mkdir -p "$WORK/remote"
+cp "$REPO/docker-compose.remote.yml" "$WORK/remote/"
+REMOTE_TOKEN=$(openssl rand -hex 16)
+cat >"$WORK/remote/.env" <<ENV
+TD_IMAGE=$IMAGE
+TD_AGENT_TOKEN=$REMOTE_TOKEN
+OPENVPN_DIR=$WORK/remote/openvpn
+WIREGUARD_DIR=$WORK/remote/wireguard
+AMNEZIAWG_DIR=$WORK/remote/amneziawg
+AGENT_PORT=19443
+VPN_PORT=12194
+VPN2_PORT=12195
+WG_PORT=15282
+AWG_PORT=15283
+ENV
+dr up -d
+for _ in $(seq 30); do dr exec -T agent trapdoor health https://127.0.0.1:9443 >/dev/null 2>&1 && break; sleep 1; done
+dr exec -T agent trapdoor health https://127.0.0.1:9443 || fail "remote agent not healthy: $(dr logs --tail 20 agent)"
+FP=$(dr exec -T agent trapdoor agent-cert)
+dr logs agent | grep -q "fingerprint=$FP" || fail "agent log does not show the fingerprint $FP"
+# The web container reaches the other machine's agent on its network.
+docker network connect tdremote_default tdsmoke-web-1
+RIP=$(docker inspect -f '{{.NetworkSettings.Networks.tdremote_default.IPAddress}}' tdremote-vpn-1)
+code=$(curl -s -o "$WORK/host-bad.json" -w "%{http_code}" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+	-d '{"name":"remote","url":"https://'"$RIP"':9443","token":"'"$REMOTE_TOKEN"'","fingerprint":"sha256:'"$(printf '0%.0s' $(seq 64))"'"}' "$WEB/api/v1/hosts")
+[[ $code == 400 ]] && grep -q "does not match" "$WORK/host-bad.json" || fail "wrong fingerprint accepted ($code): $(cat "$WORK/host-bad.json")"
+api -H "Content-Type: application/json" -d '{"name":"remote","url":"https://'"$RIP"':9443","token":"'"$REMOTE_TOKEN"'","fingerprint":"'"$FP"'"}' \
+	"$WEB/api/v1/hosts" >"$WORK/host.json" || fail "add host"
+api -H "Content-Type: application/json" \
+	-d '{"host":"remote","type":"wireguard","id":"wg0","port":15282,"public_host":"127.0.0.1","subnet":"10.81.0.0/24"}' \
+	"$WEB/api/v1/servers" | grep -q '"id":"remote.wg0"' || fail "create a WireGuard server on the remote host"
+remoterunning() { api "$WEB/api/v1/status" | grep -q '"id":"remote.wg0"[^}]*"running":true'; }
+for _ in $(seq 20); do remoterunning && break; sleep 1; done
+remoterunning || fail "remote.wg0 not running: $(api "$WEB/api/v1/status"; dr logs --tail 20 vpn)"
+dr exec -T vpn ip link show wg0 >/dev/null || fail "no wg0 on the remote host"
+! dc exec -T vpn ip link show wg0 >/dev/null 2>&1 || fail "wg0 on the main host"
+api -H "Content-Type: application/json" -d '{"name":"remotephone"}' "$WEB/api/v1/servers/remote.wg0/peers" >/dev/null || fail "add a client on the remote host"
+api "$WEB/api/v1/servers/remote.wg0/peers/remotephone/conf" | grep -q "^Endpoint = 127.0.0.1:15282" || fail "remote client config"
+api -X DELETE "$WEB/api/v1/servers/remote.wg0" || fail "remove the remote server"
+api -X DELETE "$WEB/api/v1/hosts/remote" || fail "remove the host"
+! api "$WEB/api/v1/status" | grep -q '"remote\.' || fail "remote servers still listed"
+log "second host: added with its pinned certificate, server and client created there; removed"
 
 log "web container is locked down"
 [[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' tdsmoke-web-1) == true ]] || fail "web rootfs not read-only"

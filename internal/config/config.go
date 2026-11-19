@@ -72,6 +72,13 @@ type Agent struct {
 	AmneziaWGDir string
 	// WGToolsDir holds wg / wg-quick / awg / awg-quick if not in PATH. TD_WG_TOOLS_DIR
 	WGToolsDir string
+	// TLS: "auto" serves the API with TLS on a TCP address, for a web
+	// process on another host (self-signed certificate, pinned there by its
+	// fingerprint); "off" (default) for a unix socket or localhost. TD_AGENT_TLS
+	TLS string
+	// TLSCert, TLSKey: the certificate files, created when missing.
+	// TD_AGENT_TLS_CERT, TD_AGENT_TLS_KEY (default <openvpn dir>/trapdoor-agent.crt / .key)
+	TLSCert, TLSKey string
 }
 
 // Web is the configuration of the web/API process.
@@ -159,6 +166,15 @@ func LoadAgent() (Agent, error) {
 	c.WireGuardDir = env("TD_WIREGUARD_DIR", "/etc/wireguard")
 	c.AmneziaWGDir = env("TD_AMNEZIAWG_DIR", "/etc/amnezia/amneziawg")
 	c.WGToolsDir = os.Getenv("TD_WG_TOOLS_DIR")
+	c.TLS = env("TD_AGENT_TLS", "off")
+	if c.TLS != "off" && c.TLS != "auto" {
+		return c, fmt.Errorf("TD_AGENT_TLS must be off or auto")
+	}
+	if c.TLS == "auto" && strings.HasPrefix(c.Listen, "unix:") {
+		return c, fmt.Errorf("TD_AGENT_TLS=auto needs a TCP TD_AGENT_LISTEN (e.g. :9443)")
+	}
+	c.TLSCert = env("TD_AGENT_TLS_CERT", openvpnDir+"/trapdoor-agent.crt")
+	c.TLSKey = env("TD_AGENT_TLS_KEY", openvpnDir+"/trapdoor-agent.key")
 	c.SetupProto = os.Getenv("TD_SETUP_PROTO")
 	if c.SetupProto != "" && c.SetupProto != "udp" && c.SetupProto != "tcp" {
 		return c, fmt.Errorf("TD_SETUP_PROTO must be udp or tcp")

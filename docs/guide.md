@@ -311,6 +311,35 @@ AmneziaWG in *Add a server*.
   The compose file publishes `AWG_PORT` (default 51830), the same inside and outside:
   create the first AmneziaWG server with that port.
 
+## Several hosts
+
+One web UI can manage VPN servers on several machines. The machine with the web UI runs the
+usual `docker-compose.yml`; every other machine runs `docker-compose.remote.yml`: the `vpn`
+container and the agent, no web UI.
+
+1. On the other machine: `.env` with its own `TD_AGENT_TOKEN`, then
+   `docker compose -f docker-compose.remote.yml up -d`.
+2. `docker compose -f docker-compose.remote.yml exec agent trapdoor agent-cert` prints the
+   agent's certificate fingerprint (the agent's log shows it too).
+3. In the web UI: Hosts → Add a host, with a name (e.g. `vps`), `https://<address>:9443`
+   (`AGENT_PORT`), the token and the fingerprint. trapdoor connects once before saving.
+
+Its servers then appear in the server list, grouped by machine, and *Add a server* asks on
+which machine. They work like local ones: clients, sessions, traffic history, access rules,
+setup.
+
+- A server on another host has the id `<host>.<id>` in the web API and in the traffic
+  history (e.g. `vps.wg0`); this machine's servers keep their ids.
+- The remote agent listens on TCP with TLS 1.3 (`TD_AGENT_TLS=auto`) and a self-signed
+  certificate it creates on first start (`trapdoor-agent.crt` / `.key` in its OpenVPN
+  directory). The web UI trusts exactly that certificate (its SHA-256 fingerprint, like an SSH
+  host key) and sends the token with every request. Still, allow the agent port only from the
+  machine with the web UI.
+- The host list (with tokens) is kept in the web database. Removing a host only forgets it:
+  its servers keep running there, and their history stays.
+- A host that does not answer is shown on the Hosts page with the error; the other servers
+  keep working.
+
 ## Admin login and security
 
 Create admins with the CLI (`trapdoor user add <name>`, also `passwd`, `del`, `list`); the

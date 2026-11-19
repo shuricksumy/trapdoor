@@ -38,7 +38,7 @@ Run locally: `TD_AGENT_TOKEN=dev TD_OPENVPN_DIR=/tmp/td TD_CRL_COPIES=- TD_FIREW
 - `internal/wg`: WireGuard keys (crypto/ecdh X25519), server/client config rendering, `wg show dump` parsing. `internal/agent/wireguard.go`: WireGuard servers (`<id>.json` state in `TD_WIREGUARD_DIR`, `.conf` rendered from it, applied with `wg syncconf`; `TD_WIREGUARD=direct|file|off`, file mode left to the VPN container like the firewall). Sessions are derived from handshakes; byte counters are per interface lifetime, so a session counts from its start. AmneziaWG servers are the same `WGServer` with `Type: amneziawg`: `awg`/`awg-quick`, `TD_AMNEZIAWG_DIR`, obfuscation from `internal/wg/awg.go` (generation and validation follow the limits in the AmneziaWG docs). The image builds `amneziawg-go` and `amneziawg-tools` at pinned tags (Dockerfile ARGs).
 - `internal/mgmt`: management interface client (`status 3`, kill, signal).
 - `internal/ovpn`: builds `.ovpn` profiles (tls-crypt-v2 client keys in `keys-v2/`).
-- `internal/web`, `internal/auth`, `internal/store`, `internal/history`: web side. Traffic is stored per client per hour; poll gaps are spread over the missing hours and marked estimated.
+- `internal/web`, `internal/auth`, `internal/store`, `internal/history`: web side. `web/hosts.go`: `MultiAgent` spans the own agent and other hosts' (added in the UI, kept in the `hosts` table, `agent.NewPinnedClient`); their servers are `<host>.<id>`. Traffic is stored per client per hour; poll gaps are spread over the missing hours and marked estimated.
 - `web/src`: `pages/*.svelte`, `lib/state.svelte.js` (route, session, settings, theme), `lib/api.js`.
 - `docs/`: `guide.md` (how features work), `api.md`, `development.md`, `releases/`, `screenshots/`.
 
@@ -46,7 +46,7 @@ Run locally: `TD_AGENT_TOKEN=dev TD_OPENVPN_DIR=/tmp/td TD_CRL_COPIES=- TD_FIREW
 
 - **Never put real server details in the repo** (hostnames, public IPs, paths, networks). Use `vpn.example.com`, `203.0.113.x`, `10.8.0.0/24` and similar. Screenshots use demo data only: admin `admin`, `TD_TZ=UTC`.
 - Stay compatible with existing openvpn-ui directories: the PKI layout, `ccd` 2FA lines (`#2FA_KEY:` hex, `#STATIC_PASS:`) and the client profile format.
-- Security posture: web has no privileges, agent has no network port in Docker, the management interface stays on 127.0.0.1, strict CSP (any inline script needs its hash in `internal/webui`).
+- Security posture: web has no privileges, agent has no network port in Docker (except `docker-compose.remote.yml`: TLS 1.3 with a self-signed certificate pinned by fingerprint, plus the token), the management interface stays on 127.0.0.1, strict CSP (any inline script needs its hash in `internal/webui`).
 - Every feature gets unit tests, plus a step in `test/e2e/run.sh` (real OpenVPN) or `test/docker/smoke.sh` when it touches OpenVPN, the firewall or Docker. Fakes must behave like the real thing: e.g. a SIGTERMed OpenVPN keeps answering on management for a few seconds.
 - Go: stdlib first (net/http routing, log/slog). SQLite via `ncruces/go-sqlite3` (pure Go, CGO off). Go 1.24: check that a dependency's go.mod does not require a newer Go.
 - UI: plain sentence-case copy written for users, light and dark themes, phone layout. Check with `npm run check` and look at screenshots (puppeteer with Chrome).
@@ -58,4 +58,4 @@ Run locally: `TD_AGENT_TOKEN=dev TD_OPENVPN_DIR=/tmp/td TD_CRL_COPIES=- TD_FIREW
 - CI: `ci.yml` (test, ui, compat, e2e, lint), `docker-publish.yml` (smoke on PRs; on `main` it publishes `ghcr.io/shuricksumy/trapdoor:latest` plus a short-sha tag for amd64 and arm64), `codeql.yml`, `upstream-rebuild.yml` (daily: rebuilds `:latest` without cache when Alpine has newer packages, e.g. OpenVPN), and cleanup workflows. AmneziaWG versions are Dockerfile ARGs tracked by Renovate (`# renovate:` comments, `renovate.json` custom manager). Actions are pinned to commit SHAs.
 - Releases: put the notes in `docs/releases/vX.Y.Z.md`, then Actions → Release → version `X.Y.Z` on `main`. It creates the tag, a GitHub release with Linux binaries, and the `X.Y.Z` / `X.Y` / `latest` images.
 - The owner prefers one step at a time for anything he has to do on his own server.
-- Next up (ROADMAP.md): first release v0.1.0; remaining v3 items (AmneziaWG 3.1 extras, several hosts), then v4 backup / restore.
+- Next up (ROADMAP.md): first release v0.1.0; v4 backup / restore.

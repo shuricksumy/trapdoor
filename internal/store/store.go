@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	_ "github.com/ncruces/go-sqlite3/driver" // database/sql driver "sqlite3"
 	_ "github.com/ncruces/go-sqlite3/embed"  // bundled SQLite build
@@ -29,7 +31,20 @@ func Open(ctx context.Context, path string) (*DB, error) {
 		return nil, err
 	}
 	db := &DB{DB: sqlDB}
-	if err := db.migrate(ctx); err != nil {
+	// A new file switched to WAL by two processes at once (web starting
+	// while "trapdoor user add" runs) answers "database is locked" without
+	// waiting for busy_timeout: try again for a few seconds.
+	for try := 1; ; try++ {
+		err = db.migrate(ctx)
+		if err == nil || try == 20 || !strings.Contains(err.Error(), "database is locked") {
+			break
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(time.Duration(try) * 25 * time.Millisecond):
+		}
+	}
+	if err != nil {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("migrate %s: %w", path, err)
 	}
@@ -93,6 +108,15 @@ var migrations = []string{
 	// 3: history is keyed by server id; the single server so far is "openvpn"
 	`UPDATE sessions SET agent = 'openvpn' WHERE agent = 'default';
 	UPDATE traffic_hourly SET agent = 'openvpn' WHERE agent = 'default';`,
+
+	// 4: other hosts with an agent (their servers' history is keyed "<host>.<id>")
+	`CREATE TABLE hosts (
+		name        TEXT    PRIMARY KEY,
+		url         TEXT    NOT NULL,
+		token       TEXT    NOT NULL,
+		fingerprint TEXT    NOT NULL,
+		created_at  INTEGER NOT NULL
+	) WITHOUT ROWID;`,
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -108,9 +132,20 @@ func (db *DB) migrate(ctx context.Context) error {
 		return fmt.Errorf("database schema version %d is newer than this trapdoor (%d)", v, len(migrations))
 	}
 	for i := v; i < len(migrations); i++ {
-		tx, err := db.BeginTx(ctx, nil)
+		tx, err := db.BeginTx(ctx, nil) // IMMEDIATE (_txlock): one process at a time
 		if err != nil {
 			return err
+		}
+		// Another process (e.g. "trapdoor user add" while web starts) may
+		// have applied it since the version was read.
+		var done int
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_version`).Scan(&done); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if done > i {
+			_ = tx.Rollback()
+			continue
 		}
 		if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
 			_ = tx.Rollback()
@@ -125,4 +160,45 @@ func (db *DB) migrate(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// Host is another host's agent, as stored.
+type Host struct {
+	Name, URL, Token, Fingerprint string
+}
+
+// Hosts lists the hosts by name.
+func (db *DB) Hosts(ctx context.Context) ([]Host, error) {
+	rows, err := db.QueryContext(ctx, `SELECT name, url, token, fingerprint FROM hosts ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Host
+	for rows.Next() {
+		var h Host
+		if err := rows.Scan(&h.Name, &h.URL, &h.Token, &h.Fingerprint); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// SaveHost adds a host or replaces the one with the same name.
+func (db *DB) SaveHost(ctx context.Context, h Host, now int64) error {
+	_, err := db.ExecContext(ctx, `INSERT INTO hosts (name, url, token, fingerprint, created_at) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT (name) DO UPDATE SET url = excluded.url, token = excluded.token, fingerprint = excluded.fingerprint`,
+		h.Name, h.URL, h.Token, h.Fingerprint, now)
+	return err
+}
+
+// RemoveHost deletes a host; its servers' history stays.
+func (db *DB) RemoveHost(ctx context.Context, name string) (bool, error) {
+	res, err := db.ExecContext(ctx, `DELETE FROM hosts WHERE name = ?`, name)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }

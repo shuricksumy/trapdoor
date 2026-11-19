@@ -79,6 +79,8 @@ type AgentClient interface {
 // Deps are the web server's dependencies.
 type Deps struct {
 	Agent Agent
+	// Hosts manages other hosts (nil: none can be added).
+	Hosts HostManager
 	// Stats is the history database; its Agent field is set per request to
 	// the server in the URL.
 	Stats   *history.Stats
@@ -130,6 +132,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerCertRoutes(api)
 	s.registerServerRoutes(api)
 	s.registerWireGuardRoutes(api)
+	s.registerHostRoutes(api)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

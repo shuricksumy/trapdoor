@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,6 +44,23 @@ func NewClient(url, token string, timeout time.Duration) *Client {
 		}
 	}
 	c.slow = &http.Client{Transport: c.http.Transport, Timeout: 3 * time.Minute}
+	return c
+}
+
+// NewInsecureHealthClient is for health checks of a local TLS agent only:
+// it does not check the certificate and sends no token.
+func NewInsecureHealthClient(url string, timeout time.Duration) *Client {
+	c := NewClient(url, "", timeout)
+	c.http.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}} // #nosec G402 -- /healthz carries no secrets
+	return c
+}
+
+// NewPinnedClient returns a client for an agent on another host
+// (https://host:port) whose TLS certificate has the given fingerprint.
+func NewPinnedClient(url, token, fingerprint string, timeout time.Duration) *Client {
+	c := NewClient(url, token, timeout)
+	c.http.Transport = &http.Transport{TLSClientConfig: pinnedTLS(fingerprint), ForceAttemptHTTP2: true}
+	c.slow.Transport = c.http.Transport
 	return c
 }
 

@@ -42,8 +42,15 @@ server). Below, `…` stands for that prefix.
 | GET, PUT | `…/firewall` | access rules |
 | POST | `…/firewall/addresses` | `{"names":[…]}` → fixed VPN addresses for these clients |
 
-| POST | `/api/v1/servers` | add an OpenVPN, WireGuard or AmneziaWG server (body as the agent's `POST /v1/servers`) |
+| POST | `/api/v1/servers` | add an OpenVPN, WireGuard or AmneziaWG server (body as the agent's `POST /v1/servers`, plus `"host"`: the machine, empty for this one) |
 | DELETE | `/api/v1/servers/{server}` | remove a WireGuard / AmneziaWG server and its interface, or an added OpenVPN server |
+| GET | `/api/v1/hosts` | other machines: `[{"name","url","version","hostname","error"}]` (asks each one) |
+| POST | `/api/v1/hosts` | `{"name":"vps","url":"https://203.0.113.5:9443","token","fingerprint":"sha256:…"}`: connects once, then saves (same name: replaced); 400 when the agent does not answer, the token or the certificate is wrong |
+| DELETE | `/api/v1/hosts/{name}` | forget a host (its servers keep running there) |
+
+Servers on another host have the id `<host>.<id>` (e.g. `vps.wg0`) in every
+`/api/v1/servers/{server}/…` path and in `agent.servers` of `/api/v1/status`, with `"host"`
+set; `agent.hosts` lists the hosts and whether they answer.
 | GET, POST | `…/peers` | WireGuard clients: list / add `{"name","address"?,"lan"?,"no_psk"?}` |
 | GET, PUT, DELETE | `…/peers/{name}` | get / `{"disabled"?,"lan"?}` / delete |
 | GET | `…/peers/{name}/conf` | download the client's WireGuard configuration |

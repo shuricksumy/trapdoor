@@ -14,6 +14,7 @@
   import WireGuardOverview from './pages/WireGuardOverview.svelte';
   import WireGuardClients from './pages/WireGuardClients.svelte';
   import NewServer from './pages/NewServer.svelte';
+  import Hosts from './pages/Hosts.svelte';
 
   const pages = [
     { path: '/', label: 'Overview', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', component: Dashboard },
@@ -43,6 +44,8 @@
         ? { component: Account }
         : route.path === '/servers/new'
           ? { component: NewServer }
+          : route.path === '/hosts'
+            ? { component: Hosts }
           : route.path === '/setup' && !isWG
             ? { component: Setup }
             : (navPages.find((p) => p.path === route.path) ?? navPages[0]),
@@ -65,7 +68,7 @@
     api('/status')
       .then((st) => {
         if (st.expiry_warn_days) settings.expiryWarnDays = st.expiry_warn_days;
-        setServers(st.agent?.servers ?? []);
+        setServers(st.agent?.servers ?? [], st.agent?.hosts ?? []);
       })
       .catch(() => {});
   });
@@ -86,7 +89,7 @@
   });
 
   $effect(() => {
-    const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup', '/servers/new': 'Add a server' };
+    const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup', '/servers/new': 'Add a server', '/hosts': 'Hosts' };
     const name = titles[route.path] ?? navPages.find((p) => p.path === route.path)?.label ?? 'Overview';
     document.title = `${name} · trapdoor`;
   });
@@ -133,13 +136,27 @@
           <label class="server-switch">
             <span>Server</span>
             <select value={servers.current} onchange={(e) => { selectServer(e.currentTarget.value); navigate('/'); }}>
-              {#each servers.list as sv (sv.id)}
-                <option value={sv.id}>{sv.name}</option>
-              {/each}
+              {#if servers.hosts.length}
+                {#each [{ name: '', label: 'This machine' }, ...servers.hosts.map((h) => ({ name: h.name, label: h.name }))] as g (g.name)}
+                  {@const list = servers.list.filter((sv) => (sv.host ?? '') === g.name)}
+                  {#if list.length}
+                    <optgroup label={g.label}>
+                      {#each list as sv (sv.id)}<option value={sv.id}>{sv.name}</option>{/each}
+                    </optgroup>
+                  {/if}
+                {/each}
+              {:else}
+                {#each servers.list as sv (sv.id)}
+                  <option value={sv.id}>{sv.name}</option>
+                {/each}
+              {/if}
             </select>
           </label>
         {/if}
-        {#if route.path !== '/servers/new'}<a class="add-server small" href="/servers/new">Add a server</a>{/if}
+        <span class="bar-links small">
+          {#if route.path !== '/hosts'}<a class="add-server" href="/hosts">Hosts{servers.hosts.length ? ` (${servers.hosts.length + 1})` : ''}</a>{/if}
+          {#if route.path !== '/servers/new'}<a class="add-server" href="/servers/new">Add a server</a>{/if}
+        </span>
       </div>
       {#key servers.current}
         <current.component />
@@ -220,6 +237,7 @@
     font-size: 14px;
   }
   .add-server { color: var(--ink-2); }
+  .bar-links { display: inline-flex; gap: var(--space-4); }
   .avatar {
     display: grid;
     place-items: center;
