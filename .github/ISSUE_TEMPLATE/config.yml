@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Guide
+    url: https://github.com/shuricksumy/trapdoor/blob/main/docs/guide.md
+    about: How the features work, settings, backups, nodes, migration from openvpn-ui
+  - name: Report a security problem
+    url: https://github.com/shuricksumy/trapdoor/security/advisories/new
+    about: Privately, please - not as a public issue

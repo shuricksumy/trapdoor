@@ -5,6 +5,9 @@
 [![CodeQL](https://github.com/shuricksumy/trapdoor/actions/workflows/codeql.yml/badge.svg)](https://github.com/shuricksumy/trapdoor/actions/workflows/codeql.yml)
 [![Release](https://img.shields.io/github/v/release/shuricksumy/trapdoor)](https://github.com/shuricksumy/trapdoor/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/shuricksumy/trapdoor)](go.mod)
+[![Image](https://img.shields.io/badge/image-ghcr.io%2Fshuricksumy%2Ftrapdoor-2496ED?logo=docker&logoColor=white)](https://github.com/shuricksumy/trapdoor/pkgs/container/trapdoor)
+[![Platforms](https://img.shields.io/badge/platforms-amd64%20%7C%20arm64-555)](https://github.com/shuricksumy/trapdoor/pkgs/container/trapdoor)
 
 A web UI for your own OpenVPN, WireGuard and AmneziaWG servers: several of them, on one
 machine or several. Set a server up in a few clicks, create a profile for every phone and
@@ -227,16 +230,21 @@ an unprivileged user, with the same `TD_AGENT_TOKEN`; see
 
 ## Documentation
 
-- [Deployment examples](examples/): all in one, a container and folder per VPN type in one
-  compose file (also WireGuard on the host's network), remote machines
-
-- [How trapdoor works](docs/guide.md): setup, profiles, two-factor login, server
-  settings, client networks and named networks, access rules, traffic history, more OpenVPN
-  servers, WireGuard and AmneziaWG, the Servers page, several hosts, backup and restore,
-  security
+- [Deployment examples](examples/): all in one; several nodes in one compose file (each with
+  its own network stack, one also on the host's network); nodes on other machines joining
+  with a token
+- [How trapdoor works](docs/guide.md): setup, profiles, two-factor login, server settings,
+  client networks and named networks, access rules, scripts and extra rules, traffic
+  history, more OpenVPN servers, WireGuard and AmneziaWG, nodes, backups (also scheduled),
+  email, moving from openvpn-ui, security
 - [HTTP API](docs/api.md)
 - [Development](docs/development.md): building, tests, GitHub Actions, releases
-- [Roadmap](ROADMAP.md)
+- [Roadmap](ROADMAP.md) · [Release notes](docs/releases/)
+
+## Contributing and security
+
+Ideas, bug reports and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
+Security problems: please report them privately, see [SECURITY.md](SECURITY.md).
 
 ## License
 

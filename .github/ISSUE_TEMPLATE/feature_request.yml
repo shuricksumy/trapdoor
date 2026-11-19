@@ -1,0 +1,21 @@
+name: Idea or feature request
+description: Something trapdoor could do (better)
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you want to do?
+      description: The situation and what you are missing - not only the solution you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could it work?
+  - type: dropdown
+    id: vpn
+    attributes:
+      label: VPN type
+      multiple: true
+      options: [OpenVPN, WireGuard, AmneziaWG, not VPN specific]
