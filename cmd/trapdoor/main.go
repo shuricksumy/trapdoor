@@ -219,9 +219,11 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 		Auth: authSvc, APIToken: cfg.APIToken, CookieSecure: cfg.CookieSecure,
 		TrustedProxies: cfg.TrustedProxies, Location: cfg.Location, Log: log,
 		ExpiryWarnDays: cfg.ExpiryWarnDays, BackupDir: cfg.BackupDir, BackupPassphrase: cfg.BackupPassphrase,
+		PublicURL: cfg.PublicURL,
 	})
 	go srv.WatchExpiry(ctx)
 	go srv.RunBackups(ctx)
+	go srv.WatchNodes(ctx)
 	log.Info("listening", "addr", cfg.Listen, "agent", cfg.AgentURL, "db", cfg.DBPath,
 		"tz", cfg.Location.String(), "version", version.Version)
 	return httpx.Serve(ctx, l, srv.Handler())

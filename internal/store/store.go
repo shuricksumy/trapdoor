@@ -135,6 +135,14 @@ var migrations = []string{
 		key   TEXT PRIMARY KEY,
 		value TEXT NOT NULL
 	) WITHOUT ROWID;`,
+
+	// 7: clients' email addresses (to send them their profile)
+	`CREATE TABLE client_emails (
+		agent  TEXT NOT NULL,
+		client TEXT NOT NULL,
+		email  TEXT NOT NULL,
+		PRIMARY KEY (agent, client)
+	) WITHOUT ROWID;`,
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -286,5 +294,34 @@ func (db *DB) SetSetting(ctx context.Context, key string, v any) error {
 	}
 	_, err = db.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?)
 		ON CONFLICT (key) DO UPDATE SET value = excluded.value`, key, string(b))
+	return err
+}
+
+// ClientEmails are the email addresses of a server's clients (client → email).
+func (db *DB) ClientEmails(ctx context.Context, agent string) (map[string]string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT client, email FROM client_emails WHERE agent = ?`, agent)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]string{}
+	for rows.Next() {
+		var c, e string
+		if err := rows.Scan(&c, &e); err != nil {
+			return nil, err
+		}
+		out[c] = e
+	}
+	return out, rows.Err()
+}
+
+// SetClientEmail stores a client's email address; empty removes it.
+func (db *DB) SetClientEmail(ctx context.Context, agent, client, email string) error {
+	if email == "" {
+		_, err := db.ExecContext(ctx, `DELETE FROM client_emails WHERE agent = ? AND client = ?`, agent, client)
+		return err
+	}
+	_, err := db.ExecContext(ctx, `INSERT INTO client_emails (agent, client, email) VALUES (?, ?, ?)
+		ON CONFLICT (agent, client) DO UPDATE SET email = excluded.email`, agent, client, email)
 	return err
 }

@@ -96,6 +96,8 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
         *Add a server → From a backup*, traffic history included
   - [x] Scheduled: daily / weekly into `TD_BACKUP_DIR`, everything and optionally each server,
         encrypted with `TD_BACKUP_PASSPHRASE`, newest N kept, status on the Account and Servers pages
+- [x] Email (SMTP): profiles and configs to clients with instructions; notifications to the
+      admins (backup failed, node down / back, certificates expiring)
 - [ ] Audit log
 - [ ] easyrsa `vars` in the native PKI: certificate name fields (`EASYRSA_DN` org mode:
       country, province, city, org, email, OU), key type and size, digest, CA / certificate /
