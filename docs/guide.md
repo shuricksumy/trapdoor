@@ -511,6 +511,31 @@ in Docker, in the `web-data` volume).
   (`sudo chown 10001 ./backups`).
 - `TD_BACKUP_DIR=-` turns scheduled backups off.
 
+## Email
+
+Account → *Email*: an SMTP server (STARTTLS on 587, TLS on 465, or none for a relay on the
+same machine or network), a sender and the admins' addresses. *Save and send a test* checks
+it. The password is kept in the web database and never shown again; *Send emails* off keeps
+the settings.
+
+**Notifications to the admins**, each one can be turned off:
+
+- a scheduled backup failed (with the error);
+- a node has not answered for 5 minutes, and again when it is back;
+- certificates (client, server, and a CA within 90 days) enter the expiry warning window
+  (`TD_EXPIRY_WARN_DAYS`): one email per certificate, checked at start and once a day.
+
+**Clients**: *Email* on a WireGuard / AmneziaWG client (also in *Show config*) and *Email the
+profile* in an OpenVPN client's *More* menu send the client its `.conf` (with its QR code as
+an image, to scan from another screen) or `.ovpn`, the app to install and how to connect,
+plus your note. The address is kept for the client (shown under its name) and forgotten when
+the client is deleted. The file is the client's private key: anyone who can read the email can
+connect as that client, so send it only to the person's own mailbox. A WireGuard client with
+its own key has nothing to send.
+
+`TD_PUBLIC_URL` (e.g. `https://vpn-admin.example.com`) adds a link to the web UI under the
+notifications. The last email's error is shown on the Account page and in the web log.
+
 ## Admin login and security
 
 Create admins with the CLI (`trapdoor user add <name>`, also `passwd`, `del`, `list`); the

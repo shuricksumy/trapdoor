@@ -48,6 +48,11 @@ server). Below, `…` stands for that prefix.
 | POST | `/api/v1/servers/{server}/backup` | `{"passphrase"}` → one server's backup (its files and traffic history) |
 | POST | `/api/v1/servers/restore` | form upload: `file`, `passphrase`, `host` (empty: this machine), `replace` (`1`) → 201 the restored server; 409 when its id or port is taken |
 | POST | `/api/v1/backup` | `{"passphrase"}` → a backup file (`.tdbackup` encrypted, or `.tar.gz` without a passphrase); see the guide |
+| GET, PUT | `/api/v1/email` | email settings: `{"enabled","host","port","security":"starttls\|tls\|none","username","password","from","insecure_skip_verify","admins":[…],"notify":{"backup_failed","node_down","cert_expiry"}}`; GET never returns the password (`password_set`) and adds `last` (the last email's outcome); PUT with an empty password keeps it, `clear_password` removes it |
+| POST | `/api/v1/email/test` | `{"to"}` (optional, default: the admins) → a test email; 502 with the SMTP error |
+| GET | `/api/v1/servers/{server}/emails` | the clients' addresses: `{"<client>": "<email>"}` |
+| PUT | `/api/v1/servers/{server}/emails/{name}` | `{"email"}` (empty: forget it) |
+| POST | `/api/v1/servers/{server}/emails/{name}/send` | `{"email","note","qr_gif"}` (all optional; email: another address, stored; qr_gif: base64 GIF attached) → emails the client's `.ovpn` / `.conf` with instructions |
 | GET | `/api/v1/backups` | scheduled backups: `{"schedule","last","next","dir","encrypted","files":[{"name","size","time"}],"running"}`; 501 with `TD_BACKUP_DIR=-` |
 | PUT | `/api/v1/backups/schedule` | `{"every":"off\|daily\|weekly","weekday":0-6,"hour":0-23,"keep":1-365,"servers":true}` |
 | POST | `/api/v1/backups/run` | back up now (answer: the run's `{"time","ok","error","files"}`); 409 while one runs |

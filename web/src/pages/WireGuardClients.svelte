@@ -176,7 +176,7 @@
       const code = qrcode(0, 'L');
       code.addData(text);
       code.make();
-      qr = code.createDataURL(4, 8).split(',')[1] ?? '';
+      qr = code.createDataURL(5, 20).split(',')[1] ?? '';
     } catch {
       /* without the QR code then */
     }

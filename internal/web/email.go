@@ -309,8 +309,9 @@ func (s *Server) handleSendProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		msg.Attachments = append(msg.Attachments, mail.Attachment{Name: name + ".conf", ContentType: "text/plain", Data: conf})
-		steps = []string{"Install " + appLinks[info.Type] + ".", "On a phone: scan the attached QR code from another screen, or import " + name + ".conf. On a computer: import " + name + ".conf (Import tunnel from file)."}
+		steps = []string{"Install " + appLinks[info.Type] + ".", "In the app, add a tunnel from the attached " + name + ".conf (Import from file)."}
 		if req.QRGIF != "" {
+			steps[1] = "On a phone: add a tunnel by scanning the attached QR code shown on another screen, or import " + name + ".conf. On a computer: import " + name + ".conf (Import tunnel from file)."
 			qr, err := base64.StdEncoding.DecodeString(req.QRGIF)
 			if err != nil || len(qr) > 512<<10 {
 				httpx.WriteError(w, http.StatusBadRequest, "qr_gif: base64 of a GIF")
