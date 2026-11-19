@@ -37,7 +37,7 @@ type mounted struct {
 type Host struct {
 	token string
 	log   *slog.Logger
-	cfg   config.Agent // WireGuard settings for new servers
+	cfg   config.Agent  // WireGuard settings for new servers
 	ovpn  *config.Agent // settings for new OpenVPN servers (nil: none can be added)
 
 	mu      sync.RWMutex
