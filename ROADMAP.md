@@ -8,7 +8,7 @@ more than OpenVPN. Done in one go before v0.1.0, so nobody has to migrate settin
 - [x] Repo renamed on GitHub (old URLs redirect)
 - [x] Go module path, binary (`trapdoor agent` / `web` / `user` …), Docker image `ghcr.io/shuricksumy/trapdoor`
 - [x] Settings prefix `TW_` → `TD_`, cookie, firewall chain and file names, socket path, UI and docs
-- [ ] First release v0.1.0 under the new name
+- [x] First release v0.1.0 under the new name
 
 ## v1 — manage an existing OpenVPN server
 
