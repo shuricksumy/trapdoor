@@ -340,6 +340,47 @@ setup.
 - A host that does not answer is shown on the Hosts page with the error; the other servers
   keep working.
 
+## Backup and restore
+
+Account → *Download a backup* (or `POST /api/v1/backup` with `{"passphrase": "…"}`) makes one
+file:
+
+| In the file | From |
+|---|---|
+| `agent/openvpn/…` | this machine's OpenVPN directory: PKI, `server.conf`, `ccd/`, keys, added servers, access rules, named networks |
+| `agent/wireguard/…`, `agent/amneziawg/…` | WireGuard and AmneziaWG servers (`<id>.json` with keys and clients, `<id>.conf`) |
+| `web/trapdoor.db` | admins, traffic history, other hosts (a consistent copy, made while running) |
+| `hosts/<name>/…` | every other host's directories, like `agent/` (an unreachable host is left out with a note) |
+
+With a passphrase the file (`.tdbackup`) is encrypted: AES-256-GCM in 64 KiB chunks, the key
+from PBKDF2-SHA256 with 600 000 iterations. Changed, reordered or cut files are refused.
+Without one it is a plain `.tar.gz`; keep that one private, it holds the CA keys and the
+hosts' tokens. Runtime state (status files, `wg show` dumps) is left out.
+
+Restore with trapdoor stopped, on the machine and with the same settings (`TD_OPENVPN_DIR`
+and the others) the files go to:
+
+```bash
+trapdoor restore agent backup.tdbackup                 # VPN servers into TD_OPENVPN_DIR, TD_WIREGUARD_DIR, …
+trapdoor restore agent --host vps backup.tdbackup      # another host's part, on that host
+trapdoor restore web backup.tdbackup                   # the web database into TD_DB_PATH
+```
+
+In Docker the agent part goes through the `vpn` service (it has the directories mounted)
+and the web part through `web`; the backup file must be readable for the web container's
+user (`chmod 644`):
+
+```bash
+docker compose run --rm --no-deps -v ./backup.tdbackup:/b:ro --entrypoint trapdoor vpn restore agent /b
+docker compose run --rm --no-deps -v ./backup.tdbackup:/b:ro web restore web /b
+```
+
+The passphrase is asked for, or taken from `TD_BACKUP_PASSPHRASE`. Restore refuses to
+overwrite a machine that is set up already (`server.conf` or a CA) or an existing database;
+`--force` replaces the files that are in the backup (other files stay) and keeps the old
+database as `trapdoor.db.before-restore-<time>`. A restored agent keeps its TLS certificate,
+so the hosts' fingerprints stay valid.
+
 ## Admin login and security
 
 Create admins with the CLI (`trapdoor user add <name>`, also `passwd`, `del`, `list`); the

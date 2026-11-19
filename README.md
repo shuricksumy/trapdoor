@@ -123,13 +123,18 @@ Images on GitHub Container Registry, `ghcr.io/shuricksumy/trapdoor` (amd64 and a
 
 ## Backups
 
-Everything that matters is in two places:
+Account → Backup downloads one file with everything: the certificate authority and client
+keys, server settings, WireGuard and AmneziaWG servers, access rules, admins, traffic
+history and the other hosts. Give it a passphrase: the file is then encrypted (it holds your
+CA keys). Restore on a fresh machine, with trapdoor stopped:
 
-- **`OPENVPN_DIR`** (default `./openvpn`): the certificate authority and all client keys,
-  `server.conf`, per-client settings. Losing it means re-issuing every profile, so back it up
-  and keep it private.
-- **The `web-data` volume**: admin users and traffic history.
-  `docker compose stop web && docker compose cp web:/data/trapdoor.db ./trapdoor.db && docker compose start web`
+```bash
+docker compose run --rm --no-deps -v ./trapdoor-backup.tdbackup:/b:ro --entrypoint trapdoor vpn restore agent /b
+docker compose run --rm --no-deps -v ./trapdoor-backup.tdbackup:/b:ro web restore web /b
+docker compose up -d
+```
+
+Details (other hosts, `--force`, without Docker) are in the [guide](docs/guide.md#backup-and-restore).
 
 ## Settings
 

@@ -37,6 +37,8 @@ commands:
             manage admin users in TD_DB_PATH (password from TD_ADMIN_PASSWORD or stdin)
   auth-verify [--ccd DIR] <file>
             OpenVPN auth-user-pass-verify (via-file) for client 2FA
+  restore agent|web [--host NAME] [--force] <file>
+            restore a backup made in the web UI (trapdoor stopped)
   agent-cert
             print the agent's TLS fingerprint (TD_AGENT_TLS=auto), creating the certificate
   health    <url>  exit 0 if GET <url>/healthz answers 200 (http://, https:// or unix:/path)
@@ -69,6 +71,8 @@ func main() {
 		err = runHealth(ctx, os.Args[2:])
 	case "agent-cert":
 		err = runAgentCert()
+	case "restore":
+		err = runRestore(os.Args[2:])
 	case "auth-verify":
 		os.Exit(runAuthVerify(os.Args[2:]))
 	case "-h", "--help", "help":
@@ -189,7 +193,7 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 		log.Warn("TD_COOKIE_SECURE=false: login cookie is sent over plain HTTP")
 	}
 	srv := web.New(web.Deps{
-		Agent: agents, Hosts: agents, Stats: &history.Stats{DB: db},
+		Agent: agents, Hosts: agents, Backup: agents, Stats: &history.Stats{DB: db},
 		Auth: authSvc, APIToken: cfg.APIToken, CookieSecure: cfg.CookieSecure,
 		TrustedProxies: cfg.TrustedProxies, Location: cfg.Location, Log: log,
 		ExpiryWarnDays: cfg.ExpiryWarnDays,

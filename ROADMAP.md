@@ -86,6 +86,7 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
 ## v4 — extras
 
 - [ ] OIDC login (e.g. Authelia)
-- [ ] Backup / restore (PKI + config + DB)
+- [x] Backup / restore (PKI + config + DB, every host): one file from the UI, optionally
+      encrypted; `trapdoor restore agent|web`
 - [ ] Audit log
 - [ ] Optional easyrsa backend for the PKI interface

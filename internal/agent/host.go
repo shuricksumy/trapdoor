@@ -155,6 +155,7 @@ func (h *Host) list() []backend {
 func (h *Host) Handler() http.Handler {
 	v1 := http.NewServeMux()
 	v1.HandleFunc("GET /v1/info", h.handleInfo)
+	v1.HandleFunc("GET /v1/backup", h.handleBackup)
 	v1.HandleFunc("POST /v1/servers", h.handleCreate)
 	v1.HandleFunc("DELETE /v1/servers/{server}", h.handleRemove)
 	v1.HandleFunc("/v1/servers/{server}/", func(w http.ResponseWriter, r *http.Request) {

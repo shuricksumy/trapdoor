@@ -332,6 +332,29 @@ func (c *Client) Info(ctx context.Context) (api.AgentInfo, error) {
 	return out, err
 }
 
+// Backup streams the agent's directories as a tar (see Host.handleBackup).
+// The caller closes it; a cut stream shows up as a tar error.
+func (c *Client) Backup(ctx context.Context) (io.ReadCloser, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/v1/backup", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set(api.HeaderToken, c.token)
+	// No overall timeout: the context bounds it (backups can be large).
+	hc := &http.Client{Transport: c.http.Transport}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("agent backup: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer func() { _ = resp.Body.Close() }()
+		var e api.Error
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&e)
+		return nil, &APIError{Status: resp.StatusCode, Message: e.Error}
+	}
+	return resp.Body, nil
+}
+
 func (c *Client) doJSON(ctx context.Context, method, path string, in, out any) error {
 	return c.do(ctx, c.http, method, path, in, out)
 }

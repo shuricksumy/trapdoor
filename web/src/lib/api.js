@@ -8,7 +8,7 @@ export class ApiError extends Error {
 }
 
 // Paths that do not belong to one VPN server.
-const hostPaths = /^\/(auth\/|status$|servers($|\/)|hosts($|\/))/;
+const hostPaths = /^\/(auth\/|status$|servers($|\/)|hosts($|\/)|backup$)/;
 
 /**
  * URL of an API path. Per-server paths (everything but auth and status) go
@@ -46,6 +46,35 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
   }
   if (res.status === 204) return null;
   return (res.headers.get('content-type') || '').includes('json') ? res.json() : res.text();
+}
+
+/** POST body to path and save the answer as a file (its name from Content-Disposition). */
+export async function download(path, body, fallbackName) {
+  const res = await fetch(apiURL(path), {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try {
+      msg = (await res.json()).error || msg;
+    } catch {
+      /* not JSON */
+    }
+    throw new ApiError(res.status, msg);
+  }
+  const blob = await res.blob();
+  const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '')?.[1] ?? fallbackName;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+  return { name, size: blob.size };
 }
 
 /** Poll fn every ms while the page is visible; returns a stop function. */

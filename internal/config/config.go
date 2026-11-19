@@ -115,6 +115,15 @@ type Web struct {
 // ErrNoToken is returned when the shared agent token is not set.
 var ErrNoToken = errors.New("TD_AGENT_TOKEN must be set")
 
+// AgentDirs are the agent's directories from the environment, without the
+// checks LoadAgent does (for commands like restore that need no token).
+func AgentDirs() (openvpn, pki, ccd, servers, wireguard, amneziawg string) {
+	openvpn = env("TD_OPENVPN_DIR", "/etc/openvpn")
+	return openvpn, env("TD_PKI_DIR", openvpn+"/easy-rsa/pki"), env("TD_CCD_DIR", openvpn+"/ccd"),
+		env("TD_OPENVPN_SERVERS_DIR", openvpn+"/servers"),
+		env("TD_WIREGUARD_DIR", "/etc/wireguard"), env("TD_AMNEZIAWG_DIR", "/etc/amnezia/amneziawg")
+}
+
 // LoadAgent reads agent settings from the environment.
 func LoadAgent() (Agent, error) {
 	openvpnDir := env("TD_OPENVPN_DIR", "/etc/openvpn")

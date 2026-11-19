@@ -303,6 +303,35 @@ api -X DELETE "$WEB/api/v1/hosts/remote" || fail "remove the host"
 ! api "$WEB/api/v1/status" | grep -q '"remote\.' || fail "remote servers still listed"
 log "second host: added with its pinned certificate, server and client created there; removed"
 
+log "backup: download through the web API (encrypted), restore into a fresh setup"
+cainfo() { api "$WEB/api/v1/status" | python3 -c 'import json,sys; s=[x for x in json.load(sys.stdin)["agent"]["servers"] if x["id"]=="openvpn"][0]; print(s["ca_name"], s["ca_not_after"])'; }
+cainfo >"$WORK/ca-before.txt" || fail "CA before backup"
+api "$WEB/api/v1/servers/openvpn/certs" | python3 -c 'import json,sys; print(sorted(c["name"] + ":" + c["status"] for c in json.load(sys.stdin)))' >"$WORK/certs-before.txt"
+api -H "Content-Type: application/json" -d '{"passphrase":"smoke backup pass"}' "$WEB/api/v1/backup" -o "$WORK/backup.tdbackup" || fail "download backup"
+[[ $(head -c 8 "$WORK/backup.tdbackup") == TDBACKUP ]] || fail "backup is not encrypted"
+! grep -qa "BEGIN" "$WORK/backup.tdbackup" || fail "keys readable in the encrypted backup"
+chmod 644 "$WORK/backup.tdbackup"
+dc down -v >/dev/null 2>&1
+for d in openvpn wireguard amneziawg; do sudo mv "$WORK/$d" "$WORK/$d.before"; mkdir -p "$WORK/$d"; done
+run_restore() { # <service> <part>
+	dc run --rm --no-deps -T -e TD_BACKUP_PASSPHRASE="$3" -v "$WORK/backup.tdbackup:/backup.tdbackup:ro" \
+		--entrypoint trapdoor "$1" restore "$2" /backup.tdbackup
+}
+! run_restore vpn agent "wrong pass" 2>"$WORK/restore-wrong.log" || fail "restore with a wrong passphrase worked"
+grep -q "passphrase" "$WORK/restore-wrong.log" || fail "wrong passphrase not reported: $(cat "$WORK/restore-wrong.log")"
+run_restore vpn agent "smoke backup pass" || fail "restore agent"
+run_restore web web "smoke backup pass" || fail "restore web"
+(cd "$WORK" && dc up -d)
+for _ in $(seq 60); do api "$WEB/api/v1/status" 2>/dev/null | grep -q '"openvpn_version":"OpenVPN' && break; sleep 1; done
+api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "OpenVPN not running after restore: $(dc logs --tail 20 vpn)"
+cainfo >"$WORK/ca-after.txt" || fail "CA after restore"
+diff "$WORK/ca-before.txt" "$WORK/ca-after.txt" || fail "CA changed by the restore"
+api "$WEB/api/v1/servers/openvpn/certs" | python3 -c 'import json,sys; print(sorted(c["name"] + ":" + c["status"] for c in json.load(sys.stdin)))' >"$WORK/certs-after.txt"
+diff "$WORK/certs-before.txt" "$WORK/certs-after.txt" || fail "clients differ after restore"
+rm -f "$JAR"
+curl -fsS -c "$JAR" -H "Content-Type: application/json" -d '{"username":"admin","password":"smoke-admin-password"}' "$WEB/api/v1/auth/login" >/dev/null || fail "admin login after restore"
+log "backup restored: same CA and clients, OpenVPN running, admin can log in"
+
 log "web container is locked down"
 [[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' tdsmoke-web-1) == true ]] || fail "web rootfs not read-only"
 [[ $(dc exec -T web id -u) == 10001 ]] || fail "web not running as uid 10001"

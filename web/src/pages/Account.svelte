@@ -1,5 +1,5 @@
 <script>
-  import { api } from '../lib/api.js';
+  import { api, download } from '../lib/api.js';
   import { session, navigate, toast } from '../lib/state.svelte.js';
   import ThemeSwitch from '../lib/ThemeSwitch.svelte';
 
@@ -26,6 +26,30 @@
       error = err.message;
     } finally {
       busy = false;
+    }
+  }
+
+  // Backup: everything in one file, encrypted with a passphrase if given.
+  let bpass = $state('');
+  let bpass2 = $state('');
+  let bbusy = $state(false);
+  let berror = $state('');
+  async function makeBackup(e) {
+    e.preventDefault();
+    berror = '';
+    if (bpass !== bpass2) {
+      berror = 'The passphrases do not match.';
+      return;
+    }
+    bbusy = true;
+    try {
+      const f = await download('/backup', { passphrase: bpass }, 'trapdoor-backup.tar.gz');
+      toast(`Saved ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB). Keep it somewhere safe${bpass ? ' with its passphrase' : ''}.`);
+      bpass = bpass2 = '';
+    } catch (err) {
+      berror = err.message;
+    } finally {
+      bbusy = false;
     }
   }
 
@@ -76,6 +100,29 @@
     <div class="panel-body">
       <button class="btn" onclick={logout}>Log out</button>
     </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Backup</h2></div>
+    <form class="panel-body form" onsubmit={makeBackup}>
+      <p class="muted small">
+        One file with everything: certificates and keys, server settings, clients, WireGuard and AmneziaWG servers, access
+        rules, admins, traffic history and the other hosts. Restore it with <code>trapdoor restore</code> (see the guide).
+      </p>
+      {#if berror}<div class="banner bad" role="alert">{berror}</div>{/if}
+      <label class="field">
+        <span>Passphrase</span>
+        <input type="password" bind:value={bpass} autocomplete="new-password" />
+        <span class="hint">Encrypts the file. Strongly recommended: it holds your CA keys. Without the passphrase it cannot be restored.</span>
+      </label>
+      {#if bpass}
+        <label class="field">
+          <span>Passphrase again</span>
+          <input type="password" bind:value={bpass2} autocomplete="new-password" />
+        </label>
+      {/if}
+      <div><button class="btn primary" type="submit" disabled={bbusy}>{bbusy ? 'Preparing…' : 'Download a backup'}</button></div>
+    </form>
   </section>
 </div>
 

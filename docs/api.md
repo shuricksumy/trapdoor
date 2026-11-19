@@ -44,6 +44,7 @@ server). Below, `…` stands for that prefix.
 
 | POST | `/api/v1/servers` | add an OpenVPN, WireGuard or AmneziaWG server (body as the agent's `POST /v1/servers`, plus `"host"`: the machine, empty for this one) |
 | DELETE | `/api/v1/servers/{server}` | remove a WireGuard / AmneziaWG server and its interface, or an added OpenVPN server |
+| POST | `/api/v1/backup` | `{"passphrase"}` → a backup file (`.tdbackup` encrypted, or `.tar.gz` without a passphrase); see the guide |
 | GET | `/api/v1/hosts` | other machines: `[{"name","url","version","hostname","error"}]` (asks each one) |
 | POST | `/api/v1/hosts` | `{"name":"vps","url":"https://203.0.113.5:9443","token","fingerprint":"sha256:…"}`: connects once, then saves (same name: replaced); 400 when the agent does not answer, the token or the certificate is wrong |
 | DELETE | `/api/v1/hosts/{name}` | forget a host (its servers keep running there) |
@@ -79,6 +80,7 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 |---|---|---|---|
 | GET | `/healthz` | – | `{"status":"ok"}` (no token) |
 | GET | `/v1/info` | – | version, hostname, `servers` (as `…/info`) |
+| GET | `/v1/backup` | – | tar of the agent's directories (`openvpn/`, `wireguard/`, `amneziawg/`, and `pki/`, `ccd/`, `openvpn-servers/` when they are elsewhere) |
 | GET | `…/info` | – | id, type, name, dirs, `pki_ready`, CA, OpenVPN version |
 | GET | `…/setup` | – | `needed`, `has_pki`, defaults, container-fixed port/proto |
 | GET / PUT | `…/firewall` | access rules `{enabled, default, rules[]}` | rules, generated iptables text, `applied`, warnings |
