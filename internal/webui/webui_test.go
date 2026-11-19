@@ -11,7 +11,7 @@ import (
 
 func TestPolicyHashesInlineScripts(t *testing.T) {
 	js := "document.documentElement.dataset.theme='dark';"
-	csp := policy([]byte("<html><script>" + js + "</script><script type=\"module\" src=\"/x.js\"></script></html>"))
+	csp := policy([]byte("<html><script>"+js+"</script><script type=\"module\" src=\"/x.js\"></script></html>"), nil)
 	sum := sha256.Sum256([]byte(js))
 	want := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
 	if !strings.Contains(csp, "script-src 'self' "+want) {
@@ -50,5 +50,16 @@ func TestHandler(t *testing.T) {
 	}
 	if rec := get("/favicon.svg"); rec.Code != http.StatusOK {
 		t.Errorf("favicon = %d", rec.Code)
+	}
+}
+
+func TestFrameAncestors(t *testing.T) {
+	index := []byte("<html><script>x()</script></html>")
+	if p := policy(index, nil); !strings.Contains(p, "frame-ancestors 'none'") {
+		t.Errorf("default: %s", p)
+	}
+	p := policy(index, []string{"https://admin.example.com", "'self'"})
+	if !strings.Contains(p, "frame-ancestors https://admin.example.com 'self'") || strings.Contains(p, "frame-ancestors 'none'") {
+		t.Errorf("allowed: %s", p)
 	}
 }

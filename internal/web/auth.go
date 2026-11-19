@@ -252,12 +252,16 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-// securityHeaders sets defensive headers on every response.
-func securityHeaders(next http.Handler) http.Handler {
+// securityHeaders sets defensive headers on every response. With framing
+// allowed (TD_FRAME_ANCESTORS), the CSP's frame-ancestors decides instead of
+// X-Frame-Options (which cannot name other origins).
+func securityHeaders(next http.Handler, allowFrames bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("X-Frame-Options", "DENY")
+		if !allowFrames {
+			h.Set("X-Frame-Options", "DENY")
+		}
 		h.Set("Referrer-Policy", "same-origin")
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			h.Set("Cache-Control", "no-store")

@@ -220,7 +220,7 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 		Auth: authSvc, APIToken: cfg.APIToken, CookieSecure: cfg.CookieSecure,
 		TrustedProxies: cfg.TrustedProxies, Location: cfg.Location, Log: log,
 		ExpiryWarnDays: cfg.ExpiryWarnDays, BackupDir: cfg.BackupDir, BackupPassphrase: cfg.BackupPassphrase,
-		PublicURL: cfg.PublicURL,
+		PublicURL: cfg.PublicURL, FrameAncestors: cfg.FrameAncestors,
 	})
 	go srv.WatchExpiry(ctx)
 	go srv.RunBackups(ctx)

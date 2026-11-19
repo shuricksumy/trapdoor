@@ -93,6 +93,7 @@ services:
       TD_TRUSTED_PROXIES: ${TD_TRUSTED_PROXIES:-}
       TD_WEB_API_TOKEN: ${TD_WEB_API_TOKEN:-}
       TD_PUBLIC_URL: ${TD_PUBLIC_URL:-} # link in notification emails
+      TD_FRAME_ANCESTORS: ${TD_FRAME_ANCESTORS:-} # sites that may show the UI in an iframe
       TD_BACKUP_PASSPHRASE: ${TD_BACKUP_PASSPHRASE:-} # encrypts scheduled backups (Account → Scheduled backups)
       TD_JOIN_SECRET: ${TD_JOIN_SECRET:-} # optional: nodes started with it join by themselves
       TD_EXPIRY_WARN_DAYS: ${TD_EXPIRY_WARN_DAYS:-30}

@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -132,7 +133,10 @@ type Web struct {
 	PollInterval time.Duration
 	// JoinSecret lets nodes join with it instead of a one-time token, e.g.
 	// the nodes of the same compose file (empty = tokens only). TD_JOIN_SECRET
-	JoinSecret string
+	// FrameAncestors may show the web UI in an iframe: origins like
+	// https://admin.example.com, comma-separated (TD_FRAME_ANCESTORS); empty = nobody.
+	FrameAncestors []string
+	JoinSecret     string
 	// BackupDir: scheduled backups go here (TD_BACKUP_DIR, default "backups"
 	// next to the database; "-" turns them off). BackupPassphrase encrypts
 	// them (TD_BACKUP_PASSPHRASE).
@@ -295,6 +299,12 @@ func LoadWeb() (Web, error) {
 	}
 	c.BackupPassphrase = os.Getenv("TD_BACKUP_PASSPHRASE")
 	c.PublicURL = strings.TrimRight(os.Getenv("TD_PUBLIC_URL"), "/")
+	for _, o := range list(env("TD_FRAME_ANCESTORS", "-")) {
+		if o != "'self'" && !frameOrigin.MatchString(o) {
+			return c, fmt.Errorf("TD_FRAME_ANCESTORS: %q is not an origin like https://admin.example.com", o)
+		}
+		c.FrameAncestors = append(c.FrameAncestors, o)
+	}
 	if c.JoinSecret != "" && len(c.JoinSecret) < 24 {
 		return c, fmt.Errorf("TD_JOIN_SECRET must be at least 24 characters (openssl rand -hex 32)")
 	}
@@ -303,6 +313,10 @@ func LoadWeb() (Web, error) {
 	}
 	return c, nil
 }
+
+// frameOrigin is a CSP source for frame-ancestors: scheme, host (optionally
+// *.domain), optional port; nothing that could end the directive.
+var frameOrigin = regexp.MustCompile(`^https?://(\*\.)?[A-Za-z0-9.-]+(:[0-9]{1,5})?$`)
 
 // list splits a comma-separated value; "-" means an empty list.
 func list(v string) []string {
