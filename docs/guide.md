@@ -36,6 +36,64 @@ The generated `server.conf` drops OpenVPN's privileges (`user nobody`), checks t
 every connect, allows TLS 1.2+ with AES-GCM / ChaCha20 data ciphers, and keeps the
 management interface on 127.0.0.1.
 
+## Moving from openvpn-ui
+
+openvpn-ui's directory works as trapdoor's `TD_OPENVPN_DIR` with a few edits. Do them on a
+copy, start trapdoor on it next to the old server (other ports, or another machine), and
+switch when the checks below pass; going back is starting openvpn-ui on the untouched
+original.
+
+**`server.conf`**
+
+| openvpn-ui | trapdoor |
+|---|---|
+| `auth-user-pass-verify /opt/scripts/auth_client.sh via-file` | `auth-user-pass-verify "/usr/local/bin/trapdoor auth-verify --ccd /etc/openvpn/ccd" via-file` |
+| `port <old port>` | `port 1194`, and `VPN_PORT` / `VPN_PROTO` = the old port and protocol: profiles keep `remote … <old port>` |
+| `ncp-ciphers …` | `data-ciphers …` (removed in OpenVPN 2.7) |
+| `log /etc/openvpn/openvpn.log` | optional: without it OpenVPN logs to the `vpn` container (`docker compose logs vpn`) |
+| `management 0.0.0.0 2080` | `management 127.0.0.1 2080` (both work) |
+
+The rest stays: `dev tun5` or other names, relative paths (`ca ca.crt`: OpenVPN runs in
+the directory), `user nobody` / `group nogroup`, `client-to-client`, pushed routes and DNS.
+`crl-verify crl.pem` is kept current: trapdoor copies the CRL there after every revoke
+(`TD_CRL_COPIES`).
+
+**Not needed any more:** openvpn-ui's `set_fw.sh` / `rm_fw.sh` (the `vpn` container does NAT
+for the server subnet, `VPN_NAT_SUBNET=auto`), its SQL dumps, `.bac` copies and old
+`clients/*.ovpn` exports, and a copy of `ca.key` next to `server.conf` if there is one (the
+CA key is in `easy-rsa/pki/private/`). Its database is not read: admins are created again;
+openvpn-ui's routes come over as the `ccd` lines (create named networks for them if you
+like).
+
+**Logins:** `#STATIC_PASS:` and `#2FA_KEY:` in `ccd` work unchanged. A client with neither
+must send an empty password; give it a static password if its device sends one.
+
+**Docker network:** if openvpn-ui's container was on a network that clients reach (e.g.
+pushed `route 172.30.0.0 …` or a DNS server there), add that network to the `vpn` service:
+
+```yaml
+services:
+  vpn:
+    networks: [default, proxy]
+networks:
+  proxy:
+    external: true
+    name: <the network's name>
+```
+
+**Checks before switching**
+
+- Clients: the same names, the revoked ones revoked, expiry dates as before.
+- Client → Network: fixed address, routes, LANs behind it as in its `ccd` file.
+- A profile downloaded from trapdoor has the same `<ca>`, `<cert>`, `<key>` as openvpn-ui's;
+  only template lines may differ (trapdoor uses the current `client-template.txt`).
+- A real client connects with its old profile and password (point its `remote` at the test
+  server in a copy of the profile); a wrong password is refused.
+
+Then make a backup in trapdoor (Account → Backup, with a passphrase) and restore it on the
+production machine (`trapdoor restore`, see [Backup and restore](#backup-and-restore)), or
+copy the edited directory there.
+
 ## Client profiles
 
 `.ovpn` files are built like openvpn-ui did, so existing servers produce the same files:

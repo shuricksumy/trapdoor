@@ -112,14 +112,21 @@ docker compose exec -it web trapdoor user add admin    # choose your admin passw
 ## Moving from openvpn-ui
 
 trapdoor reads openvpn-ui's directory as it is (`server.conf`, `client-template.txt`,
-`easy-rsa/pki`, `ccd/`): certificates, profiles, routes and two-factor logins keep working.
+`easy-rsa/pki`, `ccd/`): certificates, profiles, routes and two-factor logins keep working,
+and devices keep their profiles. Try it on a copy first: [guide](docs/guide.md#moving-from-openvpn-ui).
 
-1. Back up the directory.
-2. Stop the openvpn-ui containers.
-3. In `.env` set `OPENVPN_DIR` to that directory, then `docker compose up -d` and create an
-   admin as above.
-4. Check that `server.conf` has a `management` line (openvpn-ui's `management 0.0.0.0 2080`
-   works; `127.0.0.1 2080` is better). The Server page points out anything missing.
+1. Back up the directory and stop the openvpn-ui container.
+2. In a copy of it, change `server.conf`:
+   - `auth-user-pass-verify "/usr/local/bin/trapdoor auth-verify --ccd /etc/openvpn/ccd" via-file`
+     instead of openvpn-ui's `auth_client.sh`;
+   - `port 1194`: the container listens there; set `VPN_PORT` / `VPN_PROTO` in `.env` to the
+     old port and protocol, so profiles keep their `remote` line;
+   - `ncp-ciphers` → `data-ciphers` (OpenVPN 2.7);
+   - a `management 127.0.0.1 2080` line (openvpn-ui's `0.0.0.0` works too).
+3. In `.env` set `OPENVPN_DIR` to the copy, then `docker compose up -d` and create an admin as
+   above. The Server page points out anything else.
+4. If openvpn-ui's container was on another Docker network that clients reach (pushed routes,
+   DNS), add that network to the `vpn` service.
 
 Admin users are not taken over: create them with `trapdoor user add`.
 
