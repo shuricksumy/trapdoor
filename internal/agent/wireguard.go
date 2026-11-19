@@ -68,6 +68,7 @@ type wgPeer struct {
 	AllowedIPs []netip.Prefix `json:"allowed_ips,omitempty"`
 	MTU        int            `json:"mtu,omitempty"`
 	Keepalive  *int           `json:"keepalive,omitempty"`
+	ExpiresAt  *time.Time     `json:"expires_at,omitempty"`
 }
 
 // WGServer is one WireGuard server managed by the agent.
@@ -86,6 +87,7 @@ type WGServer struct {
 	applyErr string
 	sess     map[string]*wgSession // by public key, while connected
 	last     map[string][2]int64   // last rx/tx seen per public key
+	expired  string                // expiredKey() when the config was last written
 }
 
 type wgSession struct {
@@ -367,8 +369,9 @@ func (s *WGServer) serverConfig() string {
 		srv.Extra = wg.ObfuscationSettings(*o, false)
 	}
 	var peers []wg.Peer
+	now := s.now()
 	for _, p := range s.st.Peers {
-		if p.Disabled {
+		if p.Disabled || p.expired(now) {
 			continue
 		}
 		peers = append(peers, wg.Peer{Name: p.Name, PublicKey: p.PublicKey, PresharedKey: p.PSK,
@@ -378,6 +381,7 @@ func (s *WGServer) serverConfig() string {
 }
 
 func (s *WGServer) applyLocked(ctx context.Context, restart bool) {
+	s.expired = s.expiredKey()
 	if err := writeFileAtomic(s.confPath(), []byte(s.serverConfig())); err != nil {
 		s.applyErr = err.Error()
 		return
@@ -524,7 +528,8 @@ func (s *WGServer) handleSessions(w http.ResponseWriter, r *http.Request) {
 func (s *WGServer) peerView(p wgPeer, live map[string]wg.DumpPeer) api.Peer {
 	v := api.Peer{Name: p.Name, PublicKey: p.PublicKey, Address: p.Address.String(), Disabled: p.Disabled,
 		HasPSK: p.PSK != "", CreatedAt: p.CreatedAt, LAN: []string{}, OwnKey: p.PrivateKey == "",
-		PeerSettings: api.PeerSettings{Notes: p.Notes, DNS: p.DNS, MTU: p.MTU, Keepalive: p.Keepalive}}
+		Expired:      p.expired(s.now()),
+		PeerSettings: api.PeerSettings{Notes: p.Notes, DNS: p.DNS, MTU: p.MTU, Keepalive: p.Keepalive, ExpiresAt: p.ExpiresAt}}
 	for _, a := range p.AllowedIPs {
 		v.AllowedIPs = append(v.AllowedIPs, a.String())
 	}

@@ -128,6 +128,7 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 		log.Info("WireGuard", "mode", cfg.WireGuard, "dir", cfg.WireGuardDir, "servers", len(wgs))
 	}
 	host.SetNames(cfg.Machine, cfg.NodeName)
+	go host.WatchClientExpiry(ctx)
 	if cfg.JoinURL != "" {
 		_, fp, err := agent.AgentCert(cfg.TLSCert, cfg.TLSKey)
 		if err != nil {

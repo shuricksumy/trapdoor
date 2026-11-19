@@ -109,7 +109,7 @@
       <h2><i class="dot ok" aria-hidden="true"></i> OpenVPN is running</h2>
       <p class="muted">Clients connect to <span class="mono">{f.public_host.trim()}:{port}</span> over {f.proto.toUpperCase()}. Make sure that port is open in your router or firewall and forwarded to this server.</p>
       <div class="row">
-        <button class="btn primary" onclick={() => navigate('/certificates')}>Create the first client</button>
+        <button class="btn primary" onclick={() => navigate('/clients')}>Create the first client</button>
         <a class="btn ghost" href="/server">View server.conf</a>
       </div>
     {:else}

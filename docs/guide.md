@@ -114,6 +114,13 @@ Overview shows the running OpenVPN version.
 
 ## Expiring certificates
 
+A client certificate is valid for 825 days unless chosen otherwise. *New client* offers 30
+days to 10 years or *Until a date…* (e.g. a guest until Sunday: the certificate's end is the
+client's end date). Each OpenVPN server can have its own lifetime for new and renewed
+certificates (*Use this for new clients and renewals on this server* in *New client*, or
+`PUT /api/v1/servers/{server}/cert-defaults {"validity_days": 3650}`); the renew dialogs
+start with it.
+
 - Client certificates expiring within `TD_EXPIRY_WARN_DAYS` (default 30) are flagged in the UI
   and logged by the web process at start and once a day; the CA is flagged 90 days ahead
   (when it expires, every client stops working at once).
@@ -297,6 +304,10 @@ interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/2
   or the device's own public key (then trapdoor never has its private key and the config
   has a placeholder for it), a preshared key on or off, networks behind it, and its own
   DNS, allowed IPs, MTU and keepalive. All of it can be changed later (Clients → Edit).
+- **End date** (*Works until*, also for several at once): after that day the client is taken
+  off the interface (the agent checks every minute, also when the web UI is down) and shown
+  as *Expired*. A later date, or none, brings it back at once; nothing else changes. With
+  email set up, the admins hear about it three days before.
 - **Settings and client defaults** (Overview): name, the public address and port clients
   connect to, and the defaults for every client's config: DNS, allowed IPs, MTU,
   keepalive, preshared key for new clients. A client's own settings win. Devices need the

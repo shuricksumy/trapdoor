@@ -9,6 +9,7 @@
   import NamedNetworks from '../lib/NamedNetworks.svelte';
   import { placeMenu } from '../lib/menu.js';
   import SendProfile from '../lib/SendProfile.svelte';
+  import Lifetime from '../lib/Lifetime.svelte';
 
   let twoFactor = $state({ open: false, name: '' });
   let network = $state({ open: false, name: '' });
@@ -104,6 +105,17 @@
     );
   }
 
+  // The server's lifetime for new and renewed certificates (0 = 825 days).
+  let defaultDays = $state(825);
+  async function loadDefaults() {
+    try {
+      defaultDays = (await api('/cert-defaults')).validity_days || 825;
+    } catch {
+      defaultDays = 825;
+    }
+  }
+  onMount(loadDefaults);
+
   let bulk = $state({ open: false, validity: 825, busy: false, results: null });
   async function renewSelected() {
     bulk.busy = true;
@@ -123,14 +135,15 @@
 
   // Create
   let createOpen = $state(false);
-  let form = $state({ name: '', passphrase: '', validity: 825 });
+  let form = $state({ name: '', passphrase: '', validity: 825, makeDefault: false });
+  let presetLife = $state(true);
   let showPass = $state(false);
   let busy = $state(false);
   let formError = $state('');
   const nameOk = $derived(/^[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}$/.test(form.name) && form.name !== 'ca');
 
   function openCreate() {
-    form = { name: '', passphrase: '', validity: 825 };
+    form = { name: '', passphrase: '', validity: defaultDays, makeDefault: false };
     formError = '';
     showPass = false;
     createOpen = true;
@@ -144,6 +157,10 @@
       const body = { name: form.name, validity_days: Number(form.validity) };
       if (form.passphrase) body.passphrase = form.passphrase;
       await api('/certs', { method: 'POST', body });
+      if (form.makeDefault && presetLife && Number(form.validity) !== defaultDays) {
+        await api('/cert-defaults', { method: 'PUT', body: { validity_days: Number(form.validity) } });
+        await loadDefaults();
+      }
       createOpen = false;
       toast(`Created ${form.name}. Download the profile to set up the device.`);
       await load();
@@ -233,7 +250,7 @@
 {#if selected.size > 0}
   <div class="bulkbar" role="region" aria-label="Selected clients">
     <span><strong>{selected.size}</strong> selected</span>
-    <button class="btn small primary" onclick={() => { bulk.results = null; bulk.open = true; }}>Renew selected</button>
+    <button class="btn small primary" onclick={() => { bulk.results = null; bulk.validity = defaultDays; bulk.open = true; }}>Renew selected</button>
     <button class="btn small ghost" onclick={() => (selected = new Set())}>Clear</button>
   </div>
 {/if}
@@ -336,16 +353,10 @@
       <input bind:value={form.name} placeholder="e.g. alice-phone" autocomplete="off" autocapitalize="none" spellcheck="false" required />
       <span class="hint" class:bad={form.name && !nameOk}>Letters, digits, dot, dash, underscore or @. Starts with a letter or digit.</span>
     </label>
-    <label class="field">
-      <span>Valid for</span>
-      <select bind:value={form.validity}>
-        <option value={30}>30 days</option>
-        <option value={90}>90 days</option>
-        <option value={365}>1 year</option>
-        <option value={825}>825 days (default)</option>
-        <option value={1825}>5 years</option>
-      </select>
-    </label>
+    {#key createOpen}<Lifetime bind:days={form.validity} bind:preset={presetLife} {defaultDays} />{/key}
+    {#if presetLife && Number(form.validity) !== defaultDays}
+      <label class="check small"><input type="checkbox" bind:checked={form.makeDefault} /> Use this for new clients and renewals on this server</label>
+    {/if}
     <label class="field">
       <span>Key passphrase (optional)</span>
       <div class="pass">
@@ -372,15 +383,7 @@
   {:else}
     <p>New certificates are issued with the same keys. The old ones stop working, so each device needs its new profile.</p>
     <p class="small muted names">{[...selected].join(', ')}</p>
-    <label class="field">
-      <span>Valid for</span>
-      <select bind:value={bulk.validity}>
-        <option value={90}>90 days</option>
-        <option value={365}>1 year</option>
-        <option value={825}>825 days (default)</option>
-        <option value={1825}>5 years</option>
-      </select>
-    </label>
+    {#key bulk.open}<Lifetime bind:days={bulk.validity} {defaultDays} />{/key}
   {/if}
   {#snippet actions()}
     {#if bulk.results}
