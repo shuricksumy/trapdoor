@@ -9,6 +9,7 @@
   let form = $state(null);
   let warnings = $state([]);
   let named = $state([]);
+  let allNamed = $state([]); // every named network of the server
   let error = $state('');
   let busy = $state(false);
   let saved = $state(false);
@@ -22,8 +23,9 @@
     saved = false;
     warnings = [];
     newRoute = newLan = '';
-    Promise.all([api('/network'), api(`/certs/${name}/network`)])
-      .then(([srv, net]) => {
+    Promise.all([api('/network'), api(`/certs/${name}/network`), api('/named-networks')])
+      .then(([srv, net, nn]) => {
+        allNamed = nn.networks;
         server = srv;
         form = { static_ip: net.static_ip ?? '', full_tunnel: net.full_tunnel, routes: [...net.routes], lan: [...net.lan] };
         warnings = net.warnings ?? [];
@@ -70,6 +72,43 @@
     }
   }
 
+  // Named networks: membership changes right away (it is the network that
+  // changes, for this client).
+  const findNet = (n) => allNamed.find((x) => x.name === n);
+  const label = (n) => `${n} · ${findNet(n)?.networks.join(', ') ?? ''}`;
+  const canReach = $derived(allNamed.filter((x) => x.via !== name && !x.clients.includes(name)));
+  const canBehind = $derived(allNamed.filter((x) => x.via !== name));
+
+  async function changeNamed(netName, change, done) {
+    const n = findNet(netName);
+    if (!n) return;
+    const body = { ...n, clients: [...n.clients] };
+    change(body);
+    try {
+      const r = await api(`/named-networks/${encodeURIComponent(netName)}`, { method: 'PUT', body });
+      allNamed = r.networks;
+      named = (await api(`/certs/${name}/network`)).named ?? [];
+      warnings = [...new Set([...(r.warnings ?? [])])];
+      saved = true;
+      onsaved?.();
+      toast(done);
+    } catch (err) {
+      error = err.message;
+    }
+  }
+  function joinReach(netName) {
+    changeNamed(netName, (b) => b.clients.push(name), `${name} can reach ${netName}.`);
+  }
+  function joinBehind(netName) {
+    const n = findNet(netName);
+    if (n?.via && n.via !== name && !window.confirm(`${netName} is behind ${n.via} now. Move it behind ${name}?`)) return;
+    changeNamed(netName, (b) => { b.via = name; b.clients = b.clients.filter((c) => c !== name); }, `${netName} is behind ${name} now.`);
+  }
+  function leave(u) {
+    changeNamed(u.name, (b) => (u.as === 'lan' ? (b.via = '') : (b.clients = b.clients.filter((c) => c !== name))),
+      u.as === 'lan' ? `${u.name} is no longer behind ${name}.` : `${name} no longer reaches ${u.name}.`);
+  }
+
   async function reconnect() {
     try {
       await api(`/certs/${name}/sessions`, { method: 'DELETE' });
@@ -109,10 +148,19 @@
         <legend>Networks this client can reach</legend>
         <span class="hint">For example your home LAN behind another client or the server. Sent to the device as routes.</span>
         <div class="chips">
+          {#each named.filter((u) => u.as === 'route') as u (u.name)}
+            <span class="chip named" title="Named network: changes for every client that has it">{label(u.name)}<button type="button" aria-label="Leave {u.name}" onclick={() => leave(u)}>×</button></span>
+          {/each}
           {#each form.routes as r (r)}
             <span class="chip mono">{r}<button type="button" aria-label="Remove {r}" onclick={() => remove('routes', r)}>×</button></span>
           {/each}
         </div>
+        {#if canReach.length}
+          <select class="named-pick" value="" onchange={(e) => { const v = e.currentTarget.value; e.currentTarget.value = ''; if (v) joinReach(v); }}>
+            <option value="">Add a named network…</option>
+            {#each canReach as n (n.name)}<option value={n.name}>{n.name} ({n.networks.join(', ')})</option>{/each}
+          </select>
+        {/if}
         <div class="add">
           <input bind:value={newRoute} placeholder="192.168.1.0/24" aria-label="Add a network to reach"
             onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), add('routes', newRoute, () => (newRoute = '')))} />
@@ -124,10 +172,19 @@
         <legend>Networks behind this client</legend>
         <span class="hint">When this device is a router (site-to-site), e.g. the LAN of a NAS or a remote office.</span>
         <div class="chips">
+          {#each named.filter((u) => u.as === 'lan') as u (u.name)}
+            <span class="chip named" title="Named network: changes for every client that has it">{label(u.name)}<button type="button" aria-label="Not behind {name}" onclick={() => leave(u)}>×</button></span>
+          {/each}
           {#each form.lan as r (r)}
             <span class="chip mono">{r}<button type="button" aria-label="Remove {r}" onclick={() => remove('lan', r)}>×</button></span>
           {/each}
         </div>
+        {#if canBehind.length}
+          <select class="named-pick" value="" onchange={(e) => { const v = e.currentTarget.value; e.currentTarget.value = ''; if (v) joinBehind(v); }}>
+            <option value="">Add a named network behind this client…</option>
+            {#each canBehind as n (n.name)}<option value={n.name}>{n.name} ({n.networks.join(', ')}){n.via ? ` · behind ${n.via}` : ''}</option>{/each}
+          </select>
+        {/if}
         <div class="add">
           <input bind:value={newLan} placeholder="192.168.50.0/24" aria-label="Add a network behind this client"
             onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), add('lan', newLan, () => (newLan = '')))} />
@@ -135,13 +192,7 @@
         </div>
       </fieldset>
 
-      {#if named.length}
-        <p class="hint">
-          Also from named networks:
-          {named.map((n) => `${n.name} (${n.as === 'lan' ? 'behind this client' : 'can reach'})`).join(', ')}.
-          Change them with "Named networks" on the Clients page.
-        </p>
-      {/if}
+
 
       {#if warnings.length}
         <div class="banner warn" role="status">
@@ -190,6 +241,8 @@
     cursor: pointer;
   }
   .chip button:hover { background: var(--line); color: var(--ink); }
+  .chip.named { background: var(--accent-soft, var(--sunken)); border-color: var(--accent); font-size: 12px; }
+  .named-pick { margin-top: var(--space-2); max-width: 100%; }
   .add { display: flex; gap: var(--space-2); }
   .add input { flex: 1; }
   .banner p + p { margin-top: var(--space-1); }

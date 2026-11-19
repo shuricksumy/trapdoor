@@ -16,12 +16,14 @@
   import NewServer from './pages/NewServer.svelte';
   import Hosts from './pages/Hosts.svelte';
   import Servers from './pages/Servers.svelte';
+  import Network from './pages/Network.svelte';
 
   const pages = [
     { path: '/', label: 'Overview', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', component: Dashboard },
     { path: '/certificates', label: 'Clients', icon: 'M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z', component: Certificates },
     { path: '/sessions', label: 'Connected', icon: 'M4 12h4l2-5 4 10 2-5h4', component: Sessions },
     { path: '/statistics', label: 'Traffic', icon: 'M5 20V11M10 20V5M15 20v-7M20 20V8', component: Statistics },
+    { path: '/network', label: 'Network', icon: 'M12 3v6M5 21v-4h14v4M12 9a2 2 0 1 0 0 .01M12 11v6M5 17v-2h14v2', component: Network },
     { path: '/access', label: 'Access', icon: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5zM12 15v2', component: Access },
     { path: '/server', label: 'Server', icon: 'M4 5h16v5H4zM4 14h16v5H4zM8 7.5h.01M8 16.5h.01', component: Server },
   ];
@@ -32,6 +34,7 @@
     pages[2],
     pages[3],
     pages[4],
+    pages[5],
   ];
 
   // WireGuard and AmneziaWG servers share their pages.
@@ -311,21 +314,25 @@
       inset: auto 0 0 0;
       height: auto;
       flex-direction: row;
-      padding: 6px var(--space-2) calc(6px + env(safe-area-inset-bottom));
+      padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
       border-top: 1px solid var(--line);
       background: var(--surface);
       z-index: 40;
     }
     .brand, .rail-foot :global(.theme) { display: none; }
-    ul { grid-auto-flow: column; flex: 1; }
+    /* Up to 7 items: equal columns that may shrink; the account stays visible. */
+    ul { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); flex: 1; min-width: 0; }
     ul a, .who {
       flex-direction: column;
       gap: 2px;
-      padding: 6px 4px;
-      font-size: 11px;
+      padding: 6px 2px;
+      font-size: 10px;
+      letter-spacing: -0.2px;
       justify-content: center;
+      min-width: 0;
     }
-    .rail-foot { margin: 0; }
+    ul a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rail-foot { margin: 0; flex-shrink: 0; }
     .who span:not(.avatar) { display: none; }
     main { padding: var(--space-5) var(--space-4) 96px; }
     .toasts { left: var(--space-4); right: var(--space-4); bottom: 84px; }

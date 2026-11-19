@@ -29,6 +29,7 @@ func (s *Server) registerCertRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/servers/{server}/certs/{name}/network", s.handleGetClientNetwork)
 	mux.HandleFunc("PUT /api/v1/servers/{server}/certs/{name}/network", s.handleSetClientNetwork)
 	mux.HandleFunc("GET /api/v1/servers/{server}/named-networks", s.handleNamedNetworks)
+	mux.HandleFunc("GET /api/v1/servers/{server}/network/clients", s.handleClientsNetwork)
 	mux.HandleFunc("PUT /api/v1/servers/{server}/named-networks/{network}", s.handleSetNamedNetwork)
 	mux.HandleFunc("DELETE /api/v1/servers/{server}/named-networks/{network}", s.handleRemoveNamedNetwork)
 }
@@ -70,6 +71,15 @@ func (s *Server) handleSetClientNetwork(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.audit(r, "client.network", name)
+	httpx.WriteJSON(w, http.StatusOK, n)
+}
+
+func (s *Server) handleClientsNetwork(w http.ResponseWriter, r *http.Request) {
+	n, err := s.agent(r).ClientsNetwork(r.Context())
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, n)
 }
 

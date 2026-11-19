@@ -85,6 +85,14 @@ func TestNamedNetworks(t *testing.T) {
 	if gw, _ := c.ClientNetwork(ctx, "office-gw"); len(gw.LAN) != 0 || len(gw.Named) != 1 || gw.Named[0].As != api.NamedLAN {
 		t.Errorf("gateway network = %+v", gw)
 	}
+	// All clients at once (the Network page).
+	all, err := c.ClientsNetwork(ctx)
+	if err != nil || len(all) != 3 || all[0].Name != "laptop" || all[1].Name != "office-gw" || len(all[2].Named) != 1 {
+		t.Errorf("clients network = %+v, %v", all, err)
+	}
+	if strings.Join(all[0].Routes, ",") != "10.30.0.0/16" || all[0].Named[0].Name != "Office LAN" {
+		t.Errorf("laptop in the list = %+v", all[0])
+	}
 
 	// Rename and change: the phone leaves, a second network is added.
 	if _, err := c.SetNamedNetwork(ctx, "Office LAN", api.NamedNetwork{Name: "Office", Networks: []string{"192.168.50.0/24", "192.168.51.0/24"},

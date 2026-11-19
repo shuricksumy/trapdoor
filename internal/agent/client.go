@@ -207,6 +207,13 @@ func (c *Client) SetClientNetwork(ctx context.Context, name string, n api.Client
 	return out, err
 }
 
+// ClientsNetwork lists every client's network settings.
+func (c *Client) ClientsNetwork(ctx context.Context) ([]api.ClientRoutes, error) {
+	var out []api.ClientRoutes
+	err := c.doJSON(ctx, http.MethodGet, c.path("/network/clients"), nil, &out)
+	return out, err
+}
+
 // NamedNetworks lists the named networks.
 func (c *Client) NamedNetworks(ctx context.Context) (api.NamedNetworks, error) {
 	var out api.NamedNetworks
