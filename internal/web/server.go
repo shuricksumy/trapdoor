@@ -53,6 +53,9 @@ type AgentClient interface {
 	ClientNetwork(ctx context.Context, name string) (api.ClientNetwork, error)
 	SetClientNetwork(ctx context.Context, name string, n api.ClientNetwork) (api.ClientNetwork, error)
 	ServerBackup(ctx context.Context) (io.ReadCloser, error)
+	StartServer(ctx context.Context) (api.ServerInfo, error)
+	StopServer(ctx context.Context) (api.ServerInfo, error)
+	SetAutostart(ctx context.Context, on bool) (api.ServerInfo, error)
 	NamedNetworks(ctx context.Context) (api.NamedNetworks, error)
 	SetNamedNetwork(ctx context.Context, name string, n api.NamedNetwork) (api.NamedNetworks, error)
 	RemoveNamedNetwork(ctx context.Context, name string) (api.NamedNetworks, error)
@@ -138,6 +141,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerWireGuardRoutes(api)
 	s.registerHostRoutes(api)
 	s.registerBackupRoutes(api)
+	s.registerServerControlRoutes(api)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/shuricksumy/trapdoor/internal/api"
 	"github.com/shuricksumy/trapdoor/internal/httpx"
@@ -29,6 +30,10 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	if s.stopped() {
+		httpx.WriteJSON(w, http.StatusOK, api.Sessions{Time: time.Now().UTC(), Sessions: []api.Session{}})
+		return
+	}
 	st, err := s.mgmt.Status(r.Context())
 	if err != nil {
 		s.mgmtError(w, err)

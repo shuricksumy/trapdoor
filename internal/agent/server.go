@@ -105,6 +105,7 @@ func (s *Server) routes() http.Handler {
 	s.registerServerConfigRoutes(mux)
 	s.registerSetupRoutes(mux)
 	s.registerFirewallRoutes(mux)
+	s.registerControlRoutes(mux)
 	return mux
 }
 
@@ -117,6 +118,8 @@ func (s *Server) Info(ctx context.Context) api.ServerInfo {
 		OpenVPNDir: s.cfg.OpenVPNDir,
 		PKIDir:     s.cfg.PKIDir,
 		PKIReady:   s.PKI() != nil,
+		Stopped:    s.stopped(),
+		Autostart:  s.autostart(),
 	}
 	if s.extra != nil {
 		info.ListenPort, info.Proto = s.extra.Port, s.extra.Proto
@@ -128,7 +131,9 @@ func (s *Server) Info(ctx context.Context) api.ServerInfo {
 			info.CAName, info.CANotAfter = ca.Name, ca.NotAfter
 		}
 	}
-	if v, err := s.mgmt.Version(ctx); err != nil {
+	if info.Stopped {
+		// Not asked: not running is expected.
+	} else if v, err := s.mgmt.Version(ctx); err != nil {
 		info.MgmtError = err.Error()
 	} else {
 		info.OpenVPNVersion = v

@@ -52,6 +52,23 @@ WG_DIR=${WG_DIR:-/etc/wireguard}
 AWG_DIR=${AWG_DIR:-/etc/amnezia/amneziawg}
 WG_STATE_ROOT=/run/trapdoor-wg
 rm -rf "$WG_STATE_ROOT" # a restarted container has no interfaces or rules yet
+OVPN_SERVERS_DIR=${OVPN_SERVERS_DIR:-$(dirname "$CONF")/servers}
+
+# Servers stopped in trapdoor have a "stopped" marker (OpenVPN:
+# trapdoor.stopped in its directory, WireGuard: <id>.stopped). Autostart off
+# ("noautostart" marker): they stay stopped when this container starts.
+for d in "$(dirname "$CONF")" "$OVPN_SERVERS_DIR"/*; do
+	if [ -f "$d/trapdoor.noautostart" ]; then
+		touch "$d/trapdoor.stopped"
+		echo "$(basename "$d"): autostart off, stays stopped"
+	fi
+done
+for f in "$WG_DIR"/*.noautostart "$AWG_DIR"/*.noautostart; do
+	if [ -f "$f" ]; then
+		touch "${f%.noautostart}.stopped"
+		echo "$(basename "${f%.noautostart}"): autostart off, stays stopped"
+	fi
+done
 wg_iface() { ip route | awk '/^default/ { print $5; exit }'; }
 wg_nat() { # add|del <address/bits>
 	[ -n "$2" ] || return 0
@@ -78,6 +95,15 @@ wg_sync() { # <dir> <wg tool> <wg-quick tool>: WireGuard or AmneziaWG
 		[ -f "$conf" ] || continue
 		id=$(basename "$conf" .conf)
 		[ -f "$dir/$id.json" ] || continue # only interfaces trapdoor manages
+		if [ -f "$dir/$id.stopped" ]; then # stopped in trapdoor: down, nothing reported
+			if ip link show "$id" >/dev/null 2>&1; then
+				"$quick" down "$conf" >/dev/null 2>&1 || ip link del "$id" 2>/dev/null || true
+				wg_nat del "$(cat "$WG_STATE/$id.addr" 2>/dev/null)"
+				echo "$label $id: stopped"
+			fi
+			rm -f "$WG_STATE/$id.sum" "$WG_STATE/$id.addr" "$WG_STATE/$id.failed" "$dir/$id.dump" "$dir/$id.error"
+			continue
+		fi
 		sum=$(sha256sum "$conf" | cut -d' ' -f1)
 		[ "$sum" = "$(cat "$WG_STATE/$id.failed" 2>/dev/null)" ] && continue # retried when it changes
 		addr=$(awk -F' *= *' '$1 == "Address" { print $2; exit }' "$conf")
@@ -193,7 +219,8 @@ ovpn_supervise() {
 		echo "$name: NAT $want via $IFACE"
 	}
 	cd "$(dirname "$conf")"
-	while [ -f "$conf" ]; do
+	stop_marker=$(dirname "$conf")/trapdoor.stopped
+	while [ -f "$conf" ] && [ ! -f "$stop_marker" ]; do
 		nat || echo "$name: NAT setup failed"
 		openvpn --config "$conf" &
 		pid=$!
@@ -204,8 +231,11 @@ ovpn_supervise() {
 		while kill -0 "$pid" 2>/dev/null; do wait "$pid"; rc=$?; done
 		set -e
 		pid=
-		[ "$stopping" = 1 ] && exit 0
-		if [ ! -f "$conf" ]; then
+		if [ "$stopping" = 1 ]; then # docker stop, or stopped in trapdoor (main loop)
+			if [ -f "$stop_marker" ]; then echo "$name: stopped"; fi
+			exit 0
+		fi
+		if [ ! -f "$conf" ] || [ -f "$stop_marker" ]; then
 			break
 		elif [ "$rc" = 0 ]; then
 			echo "$name: exited, starting again (restart requested)"
@@ -217,7 +247,11 @@ ovpn_supervise() {
 	if [ -n "$nat_rule" ]; then
 		iptables -t nat -D POSTROUTING -s "$nat_rule" -o "${VPN_NAT_IFACE:-$(ip route | awk '/^default/ { print $5; exit }')}" -j MASQUERADE 2>/dev/null || true
 	fi
-	echo "$name: removed, stopped"
+	if [ -f "$stop_marker" ] && [ -f "$conf" ]; then
+		echo "$name: stopped"
+	else
+		echo "$name: removed, stopped"
+	fi
 }
 
 # Access rules of an added server: chain TD-<id> for its device <id>,
@@ -246,7 +280,7 @@ trap 'stopping=1; for f in "$OVPN_STATE"/*.pid; do [ -f "$f" ] && kill -TERM "$(
 
 waited=0
 while [ "$stopping" = 0 ]; do
-	if [ -f "$CONF" ] && ! [ -f "$OVPN_STATE/openvpn.pid" ]; then
+	if [ -f "$CONF" ] && ! [ -f "$OVPN_STATE/openvpn.pid" ] && ! [ -f "$(dirname "$CONF")/trapdoor.stopped" ]; then
 		ovpn_supervise openvpn "$CONF" &
 		echo $! >"$OVPN_STATE/openvpn.pid"
 	elif ! [ -f "$CONF" ] && [ "$waited" = 0 ]; then
@@ -261,15 +295,23 @@ while [ "$stopping" = 0 ]; do
 		[ "$id" = openvpn ] && continue
 		ovpn_fw "$id" "$dir"
 		[ -f "$OVPN_STATE/$id.pid" ] && continue
+		[ -f "$dir/trapdoor.stopped" ] && continue
 		echo "$id: starting OpenVPN"
 		ovpn_supervise "$id" "$conf" &
 		echo $! >"$OVPN_STATE/$id.pid"
 	done
-	# Supervisors that ended (removed servers): forget them and their rules.
+	# Supervisors that ended (removed or stopped servers): forget them and
+	# their rules. A stopped server whose OpenVPN did not exit (management
+	# unreachable) is stopped here.
 	for f in "$OVPN_STATE"/*.pid; do
 		[ -f "$f" ] || continue
-		kill -0 "$(cat "$f")" 2>/dev/null && continue
 		id=$(basename "$f" .pid)
+		sdir=$OVPN_SERVERS_DIR/$id
+		[ "$id" = openvpn ] && sdir=$(dirname "$CONF")
+		if kill -0 "$(cat "$f")" 2>/dev/null; then
+			if [ -f "$sdir/trapdoor.stopped" ]; then kill -TERM "$(cat "$f")" 2>/dev/null || true; fi
+			continue
+		fi
 		rm -f "$f"
 		[ "$id" = openvpn ] && continue
 		if [ -f "$OVPN_STATE/$id.fwsum" ]; then
