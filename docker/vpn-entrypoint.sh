@@ -191,6 +191,7 @@ wg_sync() { # <dir> <wg tool> <wg-quick tool>: WireGuard or AmneziaWG
 	wg_sync "$AWG_DIR" awg awg-quick
 	sleep 1
 done) &
+WG_LOOP=$!
 
 # OpenVPN servers: the first one ($CONF) and the ones added in trapdoor
 # ($OVPN_SERVERS_DIR/<id>/server.conf, each with its own tun device <id>).
@@ -283,7 +284,7 @@ ovpn_fw() { # <id> <dir>
 }
 
 stopping=0
-trap 'stopping=1; for f in "$OVPN_STATE"/*.pid; do [ -f "$f" ] && kill -TERM "$(cat "$f")" 2>/dev/null; done; true' TERM INT
+trap 'stopping=1; kill "$WG_LOOP" 2>/dev/null; for f in "$OVPN_STATE"/*.pid; do [ -f "$f" ] && kill -TERM "$(cat "$f")" 2>/dev/null; done; true' TERM INT
 
 waited=0
 while [ "$stopping" = 0 ]; do
@@ -336,5 +337,16 @@ for f in "$OVPN_STATE"/*.pid; do
 	[ -f "$f" ] || continue
 	p=$(cat "$f")
 	while kill -0 "$p" 2>/dev/null; do wait "$p" 2>/dev/null || sleep 0.2; done
+done
+# Take down the WireGuard / AmneziaWG interfaces brought up here, with their NAT and
+# rules: on the host's network (network_mode: host) they would outlive the container.
+for f in "$WG_STATE_ROOT"/*/*.addr; do
+	[ -f "$f" ] || continue
+	id=$(basename "$f" .addr)
+	ip link del "$id" 2>/dev/null || true
+	wg_nat del "$(cat "$f")"
+	for c in INPUT FORWARD; do iptables -D "$c" -i "$id" -j "TD-$id" 2>/dev/null || true; done
+	iptables -F "TD-$id" 2>/dev/null && iptables -X "TD-$id" 2>/dev/null || true
+	echo "$id: down (container stopping)"
 done
 exit 0

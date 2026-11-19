@@ -112,6 +112,4 @@ jobs:
           check -f docker-compose.yml
           check -f docker-compose.yml -f docker-compose.traefik.yml
           check -f docker-compose.remote.yml
-          docker network create trapdoor >/dev/null # external in the wireguard example
-          ( cd examples/separate-containers/openvpn && check -f docker-compose.yml && check -f docker-compose.yml -f docker-compose.host-access.yml )
-          ( cd examples/separate-containers/wireguard && check -f docker-compose.yml && check -f docker-compose.yml -f docker-compose.host.yml )
+          ( cd examples/separate-containers && check -f docker-compose.yml && check -f docker-compose.yml -f docker-compose.host.yml )

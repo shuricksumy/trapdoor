@@ -8,7 +8,7 @@ up to you. Three setups:
 | Example | What runs where | Choose it when |
 | --- | --- | --- |
 | [All in one](all-in-one/) | one machine, one `vpn` container runs every OpenVPN, WireGuard and AmneziaWG server | the usual case: simple, one place to publish ports |
-| [Separate containers](separate-containers/) | one machine, OpenVPN in one `vpn` container, WireGuard and AmneziaWG in another | the VPN types should not share a network stack, or need different networking (e.g. WireGuard on the host network) |
+| [Separate containers](separate-containers/) | one machine, one compose file, a `vpn` container and a folder per VPN type (`vpn-openvpn`, `vpn-wireguard`, `vpn-amneziawg`) | the VPN types should not share a network stack, or need different networking (e.g. WireGuard on the host network) |
 | [Remote machines](remote/) | the web UI on one machine, VPN servers on others | VPN servers in several places (a VPS, home, an office), managed from one UI |
 
 The setups combine: a remote machine can itself use separate containers, and any machine
@@ -30,16 +30,16 @@ trapdoor's access rules (iptables chains per server), not by network stacks.
 ## Separate containers
 
 ```
- browser ──▶ web ──unix socket──▶ agent ──▶ vpn (OpenVPN)          UDP 1194, TCP 1195
-              │
-              └──TLS, Docker network "trapdoor"──▶ agent ──▶ vpn (WireGuard, AmneziaWG)
-                                                              UDP 51820, 51830
+ browser ──▶ web ──▶ agent ─┬─ shares network ─▶ vpn-openvpn     ← ./openvpn    UDP 1194, TCP 1195
+                            ├─ files ──────────▶ vpn-wireguard   ← ./wireguard  UDP 51820
+                            └─ files ──────────▶ vpn-amneziawg   ← ./amneziawg  UDP 51830
 ```
 
-Each `vpn` container has its own network stack, NAT and firewall: OpenVPN clients and
-WireGuard clients cannot reach each other at the network level, and each container can be
-connected differently (e.g. WireGuard on the host's network, OpenVPN on a Docker bridge).
-The second stack is added in the web UI as a host, so both appear on the Servers page.
+One compose file, one web UI and one agent; each VPN type gets its own container and folder.
+Each container has its own network stack, NAT and firewall: clients of one type cannot reach
+another type's networks, and each container can be connected differently (e.g. WireGuard on
+the host's network). In the UI everything is on *This machine*; the type decides the
+container.
 
 ## Remote machines
 
