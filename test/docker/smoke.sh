@@ -58,7 +58,7 @@ log "image runs as non-root and reports its version"
 docker run --rm "$IMAGE" version
 [[ $(docker run --rm --entrypoint id "$IMAGE" -u) == 10001 ]] || fail "image does not run as uid 10001"
 
-log "compose up (openvpn waits for server.conf)"
+log "compose up (the vpn container waits for server.conf)"
 (cd "$WORK" && dc up -d)
 for _ in $(seq 60); do curl -fs "$WEB/healthz" >/dev/null 2>&1 && break; sleep 1; done
 curl -fs "$WEB/healthz" >/dev/null || fail "web not healthy"
@@ -73,7 +73,7 @@ api -H "Content-Type: application/json" -m 90 \
 	-d '{"public_host":"127.0.0.1","public_port":11194,"subnet":"10.77.0.0/24","dns":["10.77.0.1"]}' \
 	"$WEB/api/v1/servers/openvpn/setup" >"$WORK/setup.json" || fail "setup failed"
 grep -q '"running":true' "$WORK/setup.json" || fail "OpenVPN not running after setup: $(cat "$WORK/setup.json")"
-dc logs openvpn | grep -q "NAT 10.77.0.0/255.255.255.0" || fail "NAT not derived from server.conf"
+dc logs vpn | grep -q "NAT 10.77.0.0/255.255.255.0" || fail "NAT not derived from server.conf"
 sudo grep -q "^remote 127.0.0.1 11194$" "$WORK/openvpn/client-template.txt" || fail "client template"
 code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 	-d '{"public_host":"127.0.0.1"}' "$WEB/api/v1/servers/openvpn/setup")
@@ -82,7 +82,7 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" 
 log "agent reaches OpenVPN's management interface (shared network namespace)"
 for _ in $(seq 60); do api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' && break; sleep 1; done
 api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "agent cannot reach management"
-dc exec -T openvpn sh -c 'netstat -ltn 2>/dev/null || ss -ltn' | grep -q '127.0.0.1:2080' || fail "management not on 127.0.0.1"
+dc exec -T vpn sh -c 'netstat -ltn 2>/dev/null || ss -ltn' | grep -q '127.0.0.1:2080' || fail "management not on 127.0.0.1"
 
 log "admin user via CLI in the web container, login with cookie"
 echo "smoke-admin-password" | dc exec -T web trapdoor user add admin >/dev/null
@@ -118,7 +118,7 @@ PY
 wj -X PUT -d @"$WORK/sc-new.json" "$WEB/api/v1/servers/openvpn/server/config" >/dev/null || fail "save server config"
 wj -X POST -d '{"rollback":true}' "$WEB/api/v1/servers/openvpn/server/restart" >"$WORK/restart.json"
 grep -q '"ok":true' "$WORK/restart.json" || fail "restart: $(cat "$WORK/restart.json")"
-dc logs openvpn | grep -q "starting again (restart requested)" || fail "supervisor did not restart OpenVPN"
+dc logs vpn | grep -q "starting again (restart requested)" || fail "supervisor did not restart OpenVPN"
 api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "agent lost OpenVPN after restart (network namespace)"
 
 log "a config that passes the checks but cannot start is rolled back"
@@ -135,24 +135,24 @@ grep -q "running again" "$WORK/rollback.json" || fail "OpenVPN not back after ro
 ! sudo grep -q "203.0.113.99" "$WORK/openvpn/server.conf" || fail "bad config still in place"
 grep -q "9.9.9.9" "$WORK/openvpn/server.conf" || fail "rolled back to the wrong version"
 
-log "access rules: written by the agent, applied by the openvpn container (TD_FIREWALL=file)"
+log "access rules: written by the agent, applied by the vpn container (TD_FIREWALL=file)"
 api -X PUT -H "Content-Type: application/json" -m 30 \
 	-d '{"enabled":true,"default":"deny","rules":[{"to":"10.77.0.1","proto":"icmp","action":"allow"}]}' \
 	"$WEB/api/v1/servers/openvpn/firewall" >"$WORK/fw.json" || fail "save access rules"
 grep -q '"applied":true' "$WORK/fw.json" || fail "rules not applied: $(cat "$WORK/fw.json")"
-dc exec -T openvpn iptables -S TD-FWD | grep -q -- "-d 10.77.0.1/32 -p icmp -j ACCEPT" || fail "rule not in the container"
-dc exec -T openvpn iptables -C FORWARD -i tun+ -j TD-FWD || fail "no FORWARD jump"
-dc logs openvpn | grep -q "access rules applied" || fail "no apply log"
+dc exec -T vpn iptables -S TD-FWD | grep -q -- "-d 10.77.0.1/32 -p icmp -j ACCEPT" || fail "rule not in the container"
+dc exec -T vpn iptables -C FORWARD -i tun+ -j TD-FWD || fail "no FORWARD jump"
+dc logs vpn | grep -q "access rules applied" || fail "no apply log"
 ! dc exec -T agent iptables -N TD-PROBE >/dev/null 2>&1 || fail "agent container can change the firewall"
 
-log "WireGuard: created through the web API, run by the openvpn container (TD_WIREGUARD=file)"
+log "WireGuard: created through the web API, run by the vpn container (TD_WIREGUARD=file)"
 api -H "Content-Type: application/json" \
 	-d '{"type":"wireguard","id":"wg0","name":"Smoke","port":15182,"public_host":"127.0.0.1","subnet":"10.78.0.0/24","allowed_ips":["10.78.0.0/24"]}' \
 	"$WEB/api/v1/servers" >"$WORK/wg.json" || fail "create WireGuard server"
 wgrunning() { api "$WEB/api/v1/status" | grep -q '"id":"wg0"[^}]*"running":true'; }
 for _ in $(seq 20); do wgrunning && break; sleep 1; done
 wgrunning || fail "wg0 not running: $(api "$WEB/api/v1/status")"
-dc logs openvpn | grep -q "wireguard wg0: up (10.78.0.1/24)" || fail "no wg0 up log"
+dc logs vpn | grep -q "wireguard wg0: up (10.78.0.1/24)" || fail "no wg0 up log"
 sudo head -1 "$WORK/wireguard/wg0.dump" | grep -q '^(hidden)' || fail "private key in the dump file"
 api -H "Content-Type: application/json" -d '{"name":"wgsmoke"}' "$WEB/api/v1/servers/wg0/peers" >/dev/null || fail "add WireGuard client"
 sudo mkdir -p /etc/wireguard
@@ -160,14 +160,14 @@ api "$WEB/api/v1/servers/wg0/peers/wgsmoke/conf" | sudo sh -c 'umask 077; cat >/
 sudo wg-quick up /etc/wireguard/tdsmoke.conf >/dev/null 2>&1 || fail "host WireGuard client"
 wgping() { ping -c 1 -W 1 10.78.0.1 >/dev/null 2>&1; }
 for _ in $(seq 15); do wgping && break; sleep 1; done
-wgping || fail "no ping through WireGuard: $(dc logs --tail 20 openvpn)"
+wgping || fail "no ping through WireGuard: $(dc logs --tail 20 vpn)"
 ! sudo awk -F'\t' 'NR > 1 && $2 != "(hidden)"' "$WORK/wireguard/wg0.dump" | grep -q . || fail "preshared key in the dump file"
 for _ in $(seq 10); do api "$WEB/api/v1/servers/wg0/sessions" | grep -q '"name":"wgsmoke"' && break; sleep 1; done
 api "$WEB/api/v1/servers/wg0/sessions" | grep -q '"name":"wgsmoke"' || fail "wgsmoke not in live sessions"
 api -X PUT -H "Content-Type: application/json" -m 30 -d '{"enabled":true,"default":"deny","rules":[]}' \
 	"$WEB/api/v1/servers/wg0/firewall" >"$WORK/wgfw.json" || fail "save WireGuard rules"
 grep -q '"applied":true' "$WORK/wgfw.json" || fail "WireGuard rules not applied by the container: $(cat "$WORK/wgfw.json")"
-dc exec -T openvpn iptables -C FORWARD -i wg0 -j TD-wg0 || fail "no jump to TD-wg0 in the container"
+dc exec -T vpn iptables -C FORWARD -i wg0 -j TD-wg0 || fail "no jump to TD-wg0 in the container"
 sleep 1
 ! wgping || fail "ping passes although the WireGuard rules block everything"
 api -X PUT -H "Content-Type: application/json" -m 30 -d '{"enabled":true,"default":"deny","rules":[{"client":"wgsmoke","proto":"icmp","action":"allow"}]}' \
@@ -175,14 +175,14 @@ api -X PUT -H "Content-Type: application/json" -m 30 -d '{"enabled":true,"defaul
 for _ in $(seq 5); do wgping && break; sleep 1; done
 wgping || fail "allowed ping blocked"
 api -X PUT -H "Content-Type: application/json" -d '{"disabled":true}' "$WEB/api/v1/servers/wg0/peers/wgsmoke" >/dev/null
-for _ in $(seq 10); do dc logs openvpn | grep -q "wireguard wg0: peers updated" && break; sleep 1; done
+for _ in $(seq 10); do dc logs vpn | grep -q "wireguard wg0: peers updated" && break; sleep 1; done
 sleep 1
 ! wgping || fail "disabled WireGuard client still gets through"
 sudo wg-quick down /etc/wireguard/tdsmoke.conf >/dev/null 2>&1 || true
 api -X DELETE "$WEB/api/v1/servers/wg0" || fail "remove WireGuard server"
-for _ in $(seq 10); do dc exec -T openvpn ip link show wg0 >/dev/null 2>&1 || break; sleep 1; done
-! dc exec -T openvpn ip link show wg0 >/dev/null 2>&1 || fail "wg0 still up after remove"
-! dc exec -T openvpn iptables -S TD-wg0 >/dev/null 2>&1 || fail "TD-wg0 left after remove"
+for _ in $(seq 10); do dc exec -T vpn ip link show wg0 >/dev/null 2>&1 || break; sleep 1; done
+! dc exec -T vpn ip link show wg0 >/dev/null 2>&1 || fail "wg0 still up after remove"
+! dc exec -T vpn iptables -S TD-wg0 >/dev/null 2>&1 || fail "TD-wg0 left after remove"
 log "WireGuard client connected through the container; disable and remove work"
 
 log "AmneziaWG: obfuscated server in the container (userspace), a client from the image connects"
@@ -192,8 +192,8 @@ api -H "Content-Type: application/json" \
 grep -q '"level":"2.0"' "$WORK/awg.json" || fail "no 2.0 obfuscation: $(cat "$WORK/awg.json")"
 awgrunning() { api "$WEB/api/v1/status" | grep -q '"id":"awg0"[^}]*"running":true'; }
 for _ in $(seq 20); do awgrunning && break; sleep 1; done
-awgrunning || fail "awg0 not running: $(api "$WEB/api/v1/status"; dc logs --tail 20 openvpn)"
-dc exec -T openvpn awg show awg0 | grep -q "h4: " || fail "awg0 has no obfuscation settings"
+awgrunning || fail "awg0 not running: $(api "$WEB/api/v1/status"; dc logs --tail 20 vpn)"
+dc exec -T vpn awg show awg0 | grep -q "h4: " || fail "awg0 has no obfuscation settings"
 api -H "Content-Type: application/json" -d '{"name":"awgsmoke"}' "$WEB/api/v1/servers/awg0/peers" >/dev/null || fail "add AmneziaWG client"
 api "$WEB/api/v1/servers/awg0/peers/awgsmoke/conf" >"$WORK/awgc.conf"
 grep -q "^S3 = " "$WORK/awgc.conf" && grep -q "^H1 = [0-9]*-[0-9]*$" "$WORK/awgc.conf" || fail "client config lacks obfuscation: $(grep -v Key "$WORK/awgc.conf")"
@@ -206,11 +206,11 @@ docker run --rm --network host --cap-add NET_ADMIN --device /dev/net/tun -u root
 	awg-quick down tdawgc >/dev/null 2>&1
 	[ -n "${ok:-}" ]' || fail "no ping through AmneziaWG (rc $?)"
 api -X DELETE "$WEB/api/v1/servers/awg0" || fail "remove AmneziaWG server"
-for _ in $(seq 10); do dc exec -T openvpn ip link show awg0 >/dev/null 2>&1 || break; sleep 1; done
-! dc exec -T openvpn ip link show awg0 >/dev/null 2>&1 || fail "awg0 still up after remove"
+for _ in $(seq 10); do dc exec -T vpn ip link show awg0 >/dev/null 2>&1 || break; sleep 1; done
+! dc exec -T vpn ip link show awg0 >/dev/null 2>&1 || fail "awg0 still up after remove"
 log "AmneziaWG client connected through the obfuscated tunnel; remove works"
 
-log "second OpenVPN server: added through the web API, TCP, run by the openvpn container"
+log "second OpenVPN server: added through the web API, TCP, run by the vpn container"
 J=(-H "Content-Type: application/json")
 api "${J[@]}" -d '{"type":"openvpn","id":"ovpn-tcp","name":"TCP","port":11195,"proto":"tcp"}' \
 	"$WEB/api/v1/servers" >"$WORK/ovpn2.json" || fail "add OpenVPN server"
@@ -218,8 +218,8 @@ api "$WEB/api/v1/servers/ovpn-tcp/setup" | grep -q '"needed":true' || fail "setu
 api "${J[@]}" -m 60 -d '{"public_host":"127.0.0.1","subnet":"10.80.0.0/24"}' \
 	"$WEB/api/v1/servers/ovpn-tcp/setup" >"$WORK/setup2.json" || fail "setup of the second server"
 grep -q '"running":true' "$WORK/setup2.json" || fail "second OpenVPN not running: $(cat "$WORK/setup2.json")"
-dc logs openvpn | grep -q "ovpn-tcp: NAT 10.80.0.0/255.255.255.0" || fail "no NAT for the second server"
-dc exec -T openvpn ip link show ovpn-tcp >/dev/null || fail "no ovpn-tcp device"
+dc logs vpn | grep -q "ovpn-tcp: NAT 10.80.0.0/255.255.255.0" || fail "no NAT for the second server"
+dc exec -T vpn ip link show ovpn-tcp >/dev/null || fail "no ovpn-tcp device"
 api "${J[@]}" -d '{"name":"bob"}' "$WEB/api/v1/servers/ovpn-tcp/certs" >/dev/null || fail "issue bob"
 api "$WEB/api/v1/servers/ovpn-tcp/certs/bob/ovpn" >"$WORK/bob.ovpn" || fail "download bob's profile"
 grep -q "^remote 127.0.0.1 11195" "$WORK/bob.ovpn" && grep -q "^proto tcp" "$WORK/bob.ovpn" || fail "bob's profile: $(head -20 "$WORK/bob.ovpn")"
@@ -234,15 +234,15 @@ api "$WEB/api/v1/servers/ovpn-tcp/sessions" | grep -q '"name":"bob"' || fail "bo
 api -X PUT "${J[@]}" -m 30 -d '{"enabled":true,"default":"deny","rules":[{"to":"10.80.0.1","proto":"icmp","action":"allow"}]}' \
 	"$WEB/api/v1/servers/ovpn-tcp/firewall" >"$WORK/fw2.json" || fail "save access rules of the second server"
 grep -q '"applied":true' "$WORK/fw2.json" || fail "second server's rules not applied: $(cat "$WORK/fw2.json")"
-dc exec -T openvpn iptables -C FORWARD -i ovpn-tcp -j TD-ovpn-tcp || fail "no jump to TD-ovpn-tcp"
+dc exec -T vpn iptables -C FORWARD -i ovpn-tcp -j TD-ovpn-tcp || fail "no jump to TD-ovpn-tcp"
 sudo kill "$BOB_PID" 2>/dev/null || true
 BOB_PID=
 api -X DELETE "$WEB/api/v1/servers/ovpn-tcp" || fail "remove the second OpenVPN server"
-for _ in $(seq 15); do dc exec -T openvpn ip link show ovpn-tcp >/dev/null 2>&1 || break; sleep 1; done
-! dc exec -T openvpn ip link show ovpn-tcp >/dev/null 2>&1 || fail "ovpn-tcp still up after remove"
-for _ in $(seq 10); do dc exec -T openvpn iptables -S TD-ovpn-tcp >/dev/null 2>&1 || break; sleep 1; done
-! dc exec -T openvpn iptables -S TD-ovpn-tcp >/dev/null 2>&1 || fail "TD-ovpn-tcp left after remove"
-dc logs openvpn | grep -q "ovpn-tcp: removed, stopped" || fail "no remove log"
+for _ in $(seq 15); do dc exec -T vpn ip link show ovpn-tcp >/dev/null 2>&1 || break; sleep 1; done
+! dc exec -T vpn ip link show ovpn-tcp >/dev/null 2>&1 || fail "ovpn-tcp still up after remove"
+for _ in $(seq 10); do dc exec -T vpn iptables -S TD-ovpn-tcp >/dev/null 2>&1 || break; sleep 1; done
+! dc exec -T vpn iptables -S TD-ovpn-tcp >/dev/null 2>&1 || fail "TD-ovpn-tcp left after remove"
+dc logs vpn | grep -q "ovpn-tcp: removed, stopped" || fail "no remove log"
 sudo sh -c "ls -d '$WORK'/openvpn/servers/.removed/ovpn-tcp-*" >/dev/null || fail "removed server's files not kept"
 api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "the first server stopped too"
 log "second OpenVPN server: client over TCP, own clients and access rules; remove works"
@@ -250,6 +250,6 @@ log "second OpenVPN server: client over TCP, own clients and access rules; remov
 log "web container is locked down"
 [[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' tdsmoke-web-1) == true ]] || fail "web rootfs not read-only"
 [[ $(dc exec -T web id -u) == 10001 ]] || fail "web not running as uid 10001"
-[[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' tdsmoke-openvpn-1) != *2080* ]] || fail "management port published"
+[[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' tdsmoke-vpn-1) != *2080* ]] || fail "management port published"
 
 log "PASS"

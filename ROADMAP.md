@@ -75,8 +75,9 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
 - [ ] Access rules for WireGuard / AmneziaWG interfaces; two-factor login
       stays OpenVPN-only (WireGuard has no login step)
   - [x] WireGuard: chain `TD-<id>` per server, same Access page, direct and file (Docker) mode
-- [ ] Docker: WireGuard / AmneziaWG in the `openvpn` (renamed `vpn`) container, ports per server
-  - [x] WireGuard in the `openvpn` container (`TD_WIREGUARD=file`), `WG_PORT`, smoke-tested with a real client
+- [x] Docker: WireGuard / AmneziaWG in the `vpn` container (called `openvpn` before), ports per server
+  - [x] Container renamed `vpn`; the old entrypoint name still works
+  - [x] WireGuard in the same container (`TD_WIREGUARD=file`), `WG_PORT`, smoke-tested with a real client
   - [x] AmneziaWG in the same container (userspace `amneziawg-go`), `AWG_PORT`, smoke-tested
 - [ ] Later: one UI for several hosts (one agent per host)
 

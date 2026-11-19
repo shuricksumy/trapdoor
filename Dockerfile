@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# One image for all three services (openvpn, agent, web); see docker-compose.yml.
+# One image for all three services (vpn, agent, web); see docker-compose.yml.
 
 # UI and Go are built on the build machine's platform and cross-compiled,
 # so multi-arch builds do not run Node or Go under emulation.
@@ -44,7 +44,7 @@ RUN make && make install DESTDIR=/out WITH_WGQUICK=yes WITH_BASHCOMPLETION=no WI
 
 FROM alpine:3.24
 # openvpn: the server itself, and `openvpn --genkey` for tls-crypt-v2 client keys (agent)
-# iptables: NAT for VPN clients (openvpn service only)
+# iptables: NAT for VPN clients (vpn service only)
 # wireguard-tools: wg / wg-quick for WireGuard servers (the kernel module comes from the host;
 # also pulls in bash, which awg-quick needs too)
 RUN apk add --no-cache openvpn iptables ca-certificates wireguard-tools \
@@ -55,7 +55,9 @@ RUN apk add --no-cache openvpn iptables ca-certificates wireguard-tools \
 COPY --from=go /out/trapdoor /usr/local/bin/trapdoor
 COPY --from=awg-go /out/amneziawg-go /usr/local/bin/amneziawg-go
 COPY --from=awg-tools /out/usr/bin/awg /out/usr/bin/awg-quick /usr/local/bin/
-COPY docker/openvpn-entrypoint.sh /usr/local/bin/openvpn-entrypoint.sh
+COPY docker/vpn-entrypoint.sh /usr/local/bin/vpn-entrypoint.sh
+# The old name, for compose files from before the "vpn" service.
+RUN ln -s vpn-entrypoint.sh /usr/local/bin/openvpn-entrypoint.sh
 
 ENV TD_DB_PATH=/data/trapdoor.db \
     TD_WEB_LISTEN=:8080
