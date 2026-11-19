@@ -49,6 +49,10 @@ func TestCertManagement(t *testing.T) {
 		{http.MethodPut, "/api/v1/servers/openvpn/certs/alice/network", `{"routes":["192.168.1.0/24"],"lan":[],"full_tunnel":true}`, http.StatusOK, `"full_tunnel":true`},
 		{http.MethodGet, "/api/v1/servers/openvpn/certs/alice/network", "", http.StatusOK, `"192.168.1.0/24"`},
 		{http.MethodPut, "/api/v1/servers/openvpn/certs/alice/network", `{"routes":["bad"],"lan":[]}`, http.StatusBadRequest, ""},
+		{http.MethodPut, "/api/v1/servers/openvpn/named-networks/Office%20LAN", `{"networks":["10.50.0.0/24"],"clients":["alice"]}`, http.StatusOK, `"name":"Office LAN"`},
+		{http.MethodGet, "/api/v1/servers/openvpn/named-networks", "", http.StatusOK, `"10.50.0.0/24"`},
+		{http.MethodGet, "/api/v1/servers/openvpn/certs/alice/network", "", http.StatusOK, `"named":[{"name":"Office LAN","as":"route"}]`},
+		{http.MethodDelete, "/api/v1/servers/openvpn/named-networks/Office%20LAN", "", http.StatusOK, `"networks":[]`},
 		{http.MethodDelete, "/api/v1/servers/openvpn/certs/alice", "", http.StatusNoContent, ""},
 		{http.MethodGet, "/api/v1/servers/openvpn/certs/alice", "", http.StatusOK, `"status":"revoked"`},
 	}

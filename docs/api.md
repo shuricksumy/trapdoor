@@ -30,7 +30,9 @@ server). Below, `…` stands for that prefix.
 | GET | `…/certs/{name}/ovpn` | download the `.ovpn` profile |
 | DELETE | `…/certs/{name}/sessions`, `…/sessions/{client_id}` | disconnect |
 | GET | `…/network` | VPN subnet, topology, server routes, static addresses in use |
-| GET, PUT | `…/certs/{name}/network` | `{"static_ip","full_tunnel","routes":[cidr],"lan":[cidr]}`, response adds `warnings` |
+| GET, PUT | `…/certs/{name}/network` | `{"static_ip","full_tunnel","routes":[cidr],"lan":[cidr]}`: the client's own settings; response adds `warnings` and `named` (`[{"name","as":"route"\|"lan"}]`, the named networks it is part of) |
+| GET | `…/named-networks` | `{"networks":[{"name","description","networks":[cidr],"via","clients":[name]}],"warnings"}` |
+| PUT, DELETE | `…/named-networks/{name}` | save (body: a network; `name` in the body renames it) or remove a named network; rewrites the ccd files of its clients; answers like GET (409 for a used name, 404 for an unknown one) |
 | GET, PUT | `…/certs/{name}/auth` | 2FA status / change: `{"totp":"enable\|reset\|disable","static_password":"…","remove_static":true}`; a new key's secret and `otpauth://` URI are returned once |
 | GET, PUT | `…/server/config` | server.conf as `raw` + `settings`; save with `{"base_version", "raw"\|"settings"}` (422 with `problems`, 409 if changed) |
 | POST | `…/server/config/check` | dry run: resulting `raw` + `problems` |

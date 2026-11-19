@@ -6,9 +6,11 @@
   import Dialog from '../lib/Dialog.svelte';
   import TwoFactor from '../lib/TwoFactor.svelte';
   import NetworkDialog from '../lib/NetworkDialog.svelte';
+  import NamedNetworks from '../lib/NamedNetworks.svelte';
 
   let twoFactor = $state({ open: false, name: '' });
   let network = $state({ open: false, name: '' });
+  let namedOpen = $state(false);
   let staticIPs = $state({});
 
   let certs = $state([]);
@@ -72,6 +74,9 @@
     }
     return n;
   });
+
+  // Clients a named network can be given to: every current, not revoked one (whatever the filter).
+  const namedClients = $derived(clientCerts.filter((c) => c.current && c.status !== 'revoked').map((c) => c.name).sort());
 
   // Selection for bulk renew: current, not revoked.
   let selected = $state(new Set());
@@ -191,7 +196,10 @@
     <h1>Clients</h1>
     <p class="muted">One certificate per device. Download its profile to connect.</p>
   </div>
-  <button class="btn primary" onclick={openCreate}>New client</button>
+  <div class="head-actions">
+    <button class="btn" onclick={() => (namedOpen = true)}>Named networks</button>
+    <button class="btn primary" onclick={openCreate}>New client</button>
+  </div>
 </header>
 
 <div class="toolbar">
@@ -374,6 +382,7 @@
 </Dialog>
 
 <TwoFactor bind:open={twoFactor.open} name={twoFactor.name} />
+<NamedNetworks bind:open={namedOpen} clients={namedClients} onsaved={load} />
 <NetworkDialog bind:open={network.open} name={network.name} online={online.has(network.name)} onsaved={load} />
 
 <Dialog bind:open={confirm.open} title={confirmText[confirm.kind]?.title ?? ''}>
@@ -387,6 +396,7 @@
 </Dialog>
 
 <style>
+  .head-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-5); }
   .head p { margin-top: var(--space-1); }
 

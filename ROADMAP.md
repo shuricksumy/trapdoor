@@ -41,7 +41,7 @@ more than OpenVPN. Done in one go before v0.1.0, so nobody has to migrate settin
 - [x] Setup wizard: CA, server cert, key type, port/proto, subnet, DNS, tls-crypt(-v2)/tls-auth, 2FA; NAT follows the subnet in Docker
 - [x] Server config editor: form for common options + raw editor, OpenVPN-checked before saving, diff preview, backups, restart with automatic rollback
 - [x] Routing: per-client routes (`push route`), LAN behind a client (`iroute`), static client IPs, full/split tunnel
-- [ ] Named networks reusable across clients (openvpn-ui "routes")
+- [x] Named networks reusable across clients (openvpn-ui "routes"): written into each client's ccd file
 - [x] Certificate expiry warnings (clients, server, CA; UI + daily log) and bulk renew
 - [x] Access rules (firewall) per client or for all: networks, ports, allow/block, default policy; iptables chain applied by the agent or the OpenVPN container
 
