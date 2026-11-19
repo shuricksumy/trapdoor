@@ -258,6 +258,35 @@ are added or removed.
 Nothing is changed until rules are saved for the first time. In direct mode the agent
 restores them when it starts.
 
+## Scripts and extra rules
+
+Each server's page (Server for OpenVPN, Overview for WireGuard and AmneziaWG) has *Scripts
+and extra rules*. They run in the server's `vpn` container, as root, while its interface is
+up, and are undone when it goes down, the server is stopped or removed, or the container
+stops. A change runs the old stop scripts, then the new start scripts, without restarting
+the server. NAT for the VPN network is always on; who may reach what is the Access page.
+
+**Presets** (rules trapdoor writes, in their own chain `TDH-<id>`):
+
+- *Send the clients' DNS to …*: plain DNS (port 53) to any server goes to this address
+  instead (e.g. AdGuard or Pi-hole);
+- *Block DNS-over-TLS and DNS-over-QUIC* (port 853): apps fall back to plain DNS;
+- *Clients cannot reach each other*. For OpenVPN this needs `client-to-client` out of
+  `server.conf` (OpenVPN passes that traffic itself, past iptables).
+
+**Own scripts**: *On start* and *On stop*, `sh` scripts (busybox, not bash), 30 s at most,
+with `$IFACE` (`tun+` for the first OpenVPN server), `$SUBNET`, `$SERVER_ID`, `$TYPE` and
+`$NAT_IFACE`. They are files in the server's folder: `trapdoor-up.sh` / `trapdoor-down.sh`
+for OpenVPN, `<id>.up.sh` / `<id>.down.sh` for WireGuard and AmneziaWG. Since they run as
+root, the web UI may change them only on nodes whose agent has `TD_SCRIPTS=on`; otherwise
+they are shown read-only and edited on the host (picked up within a second). The page
+shows *Running*, *Failed* (with the error), *Being applied…* or *Server not running*.
+
+This replaces `PostUp` / `PostDown` of `wg-quick` and `up` / `down` in `server.conf`: those
+would run as `nobody` after OpenVPN drops its privileges, and not at all for WireGuard (the
+agent writes its config). They need a `vpn` container (`TD_FIREWALL=file` /
+`TD_WIREGUARD=file`, the Docker setups).
+
 ## Traffic history
 
 The web process asks the agent for the connected clients every `TD_POLL_INTERVAL` (default

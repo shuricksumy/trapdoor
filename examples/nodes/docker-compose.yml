@@ -42,6 +42,7 @@ x-agent-env: &agent-env
   TD_OPENVPN_MGMT: 127.0.0.1:2080
   TD_OPENVPN_RESTART: SIGTERM # the vpn container starts OpenVPN again
   TD_FIREWALL: file # the vpn container applies the access rules
+  TD_SCRIPTS: ${TD_SCRIPTS:-off} # on: own start / stop scripts editable in the web UI (run as root in the vpn container)
   TD_WIREGUARD: file # the vpn container runs WireGuard and AmneziaWG
   TD_SETUP_PORT: "1194"
   TD_SETUP_PROTO: udp

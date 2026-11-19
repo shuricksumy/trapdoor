@@ -292,6 +292,20 @@ func (c *Client) SetFirewall(ctx context.Context, p api.FirewallPolicy) (api.Fir
 	return out, err
 }
 
+// Scripts returns the server's presets and own start / stop scripts.
+func (c *Client) Scripts(ctx context.Context) (api.Scripts, error) {
+	var out api.Scripts
+	err := c.doJSON(ctx, http.MethodGet, c.path("/scripts"), nil, &out)
+	return out, err
+}
+
+// SetScripts saves them; the vpn container applies them.
+func (c *Client) SetScripts(ctx context.Context, in api.Scripts) (api.Scripts, error) {
+	var out api.Scripts
+	err := c.doJSON(ctx, http.MethodPut, c.path("/scripts"), in, &out)
+	return out, err
+}
+
 // AssignAddresses gives clients fixed VPN addresses (for access rules).
 func (c *Client) AssignAddresses(ctx context.Context, names []string) (api.Firewall, error) {
 	var out api.Firewall

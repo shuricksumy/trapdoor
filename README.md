@@ -39,6 +39,9 @@ same two-factor logins.
 - **Backup and restore**: one server (also to move it to another machine) or everything at
   once, optionally encrypted with a passphrase; **scheduled** daily or weekly into a folder,
   the newest N kept ([how](docs/guide.md#backup-and-restore))
+- **Scripts and extra rules** per server: presets (DNS redirect to your AdGuard / Pi-hole,
+  block DNS-over-TLS, isolate clients) and own start / stop scripts, run by the vpn
+  container while the server is up ([how](docs/guide.md#scripts-and-extra-rules))
 - **Client lifetimes**: OpenVPN certificates from 30 days to 10 years or until a date, a
   default per server; WireGuard / AmneziaWG clients with an end date (e.g. guests), taken
   off the server when it passes

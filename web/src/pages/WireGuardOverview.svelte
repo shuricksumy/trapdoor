@@ -1,5 +1,6 @@
 <script>
   import ServerBackup from '../lib/ServerBackup.svelte';
+  import ServerScripts from '../lib/ServerScripts.svelte';
   import ClientDefaults from '../lib/ClientDefaults.svelte';
   import { where } from '../lib/location.js';
   import { onMount } from 'svelte';
@@ -132,6 +133,8 @@
 {/if}
 
 <ClientDefaults />
+
+<ServerScripts />
 
 <ServerBackup />
 

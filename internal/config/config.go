@@ -75,6 +75,10 @@ type Agent struct {
 	// Firewall: how access rules are applied: direct (iptables in this
 	// process), file (the OpenVPN container applies them) or off. TD_FIREWALL
 	Firewall string
+	// Scripts lets the web UI edit each server's own start / stop scripts
+	// (they run as root in the vpn container). Off: they are files on the
+	// host, shown read-only.                                TD_SCRIPTS=on
+	Scripts bool
 	// IPTablesDir holds iptables/iptables-restore if not in PATH. TD_IPTABLES_DIR
 	IPTablesDir string
 	// WireGuard: how WireGuard servers are run: direct (wg / wg-quick in
@@ -188,6 +192,7 @@ func LoadAgent() (Agent, error) {
 			*v.dst = n
 		}
 	}
+	c.Scripts = env("TD_SCRIPTS", "off") == "on"
 	c.Firewall = env("TD_FIREWALL", "direct")
 	if c.Firewall != "direct" && c.Firewall != "file" && c.Firewall != "off" {
 		return c, fmt.Errorf("TD_FIREWALL must be direct, file or off")

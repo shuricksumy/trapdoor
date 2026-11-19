@@ -76,6 +76,7 @@ set; `agent.hosts` lists the other nodes and whether they answer, `agent.machine
 | POST | `…/peers/bulk` | add several clients |
 | GET, PUT | `…/settings` | WireGuard server settings and client defaults |
 | GET, PUT, DELETE | `…/peers/{name}` | get / `{"disabled"?,"lan"?,"address"?,"psk"?,"settings"?:{notes,dns,allowed_ips,mtu,keepalive,expires_at}}` / delete |
+| GET, PUT | `…/scripts` | presets and own scripts: `{"dns_redirect","block_dot","isolate","up","down"}`; GET adds `editable` (`TD_SCRIPTS=on`), `supported`, `iface`, `files`, `state` (`ok`, `error` + `message`, `pending`, `inactive`); PUT 403 when `up` / `down` change on a node without `TD_SCRIPTS=on` |
 | GET, PUT | `…/cert-defaults` | OpenVPN: `{"validity_days"}` for new and renewed client certificates when a request has none (0 = 825 days) |
 | GET | `…/peers/{name}/conf` | download the client's WireGuard configuration |
 
