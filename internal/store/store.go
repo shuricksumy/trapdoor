@@ -4,6 +4,8 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -126,6 +128,12 @@ var migrations = []string{
 		created_at  INTEGER NOT NULL,
 		expires_at  INTEGER NOT NULL,
 		used_at     INTEGER
+	) WITHOUT ROWID;`,
+
+	// 6: settings changed in the UI (JSON values), e.g. the backup schedule
+	`CREATE TABLE settings (
+		key   TEXT PRIMARY KEY,
+		value TEXT NOT NULL
 	) WITHOUT ROWID;`,
 }
 
@@ -255,4 +263,28 @@ func (db *DB) UseJoinToken(ctx context.Context, hash []byte, now int64) (bool, e
 	}
 	n, err := res.RowsAffected()
 	return n > 0, err
+}
+
+// Setting reads the JSON setting key into v; false when it is not set.
+func (db *DB) Setting(ctx context.Context, key string, v any) (bool, error) {
+	var raw string
+	err := db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, key).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, json.Unmarshal([]byte(raw), v)
+}
+
+// SetSetting stores v as JSON under key.
+func (db *DB) SetSetting(ctx context.Context, key string, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?)
+		ON CONFLICT (key) DO UPDATE SET value = excluded.value`, key, string(b))
+	return err
 }

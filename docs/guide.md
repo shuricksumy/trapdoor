@@ -419,7 +419,8 @@ setup.
 
 ## Backup and restore
 
-There are two kinds of backup: one server, and everything on the machine.
+There are two kinds of backup: one server, and everything (every node). Both can also run
+on a schedule.
 
 ### One server
 
@@ -484,6 +485,31 @@ overwrite a machine that is set up already (`server.conf` or a CA) or an existin
 `--force` replaces the files that are in the backup (other files stay) and keeps the old
 database as `trapdoor.db.before-restore-<time>`. A restored agent keeps its TLS certificate,
 so the hosts' fingerprints stay valid.
+
+### Scheduled
+
+Account → *Scheduled backups*: every day or every week at a set hour (in `TD_TZ`), into
+`TD_BACKUP_DIR` on the web UI's machine (default `backups/` next to the database: `/data/backups`
+in Docker, in the `web-data` volume).
+
+- Each run writes `trapdoor-all-<time>` (everything, as *Download a backup*, every node
+  included) and, with *Also one file per server*, `trapdoor-server-<id>-<time>` for every
+  server (restore with *Add a server → From a backup*).
+- *Keep* is how many files of each kind stay; older ones are deleted. Other files in the
+  folder are never touched.
+- `TD_BACKUP_PASSPHRASE` on the web service encrypts them (`.tdbackup`); without it they are
+  plain `.tar.gz` and the page warns. The passphrase is not stored in the database, so a copy
+  of the folder alone cannot be opened. `trapdoor restore` reads the same variable.
+- The page shows the last run (and its error), the next one, *Back up now*, and the files to
+  download or delete; the Servers page shows a line, or the error when the last one failed.
+- A run that was due while the web UI was down runs when it is back; a failed one is not
+  retried before the next slot. Files are written to a temporary name first, so a failed run
+  leaves no half file.
+- Keep a copy somewhere else: mount the folder from a NAS, or copy it off the machine (e.g.
+  `rsync` in cron). In Docker, a host folder instead of the volume:
+  `- ./backups:/data/backups` under `web`'s volumes, owned by the web user
+  (`sudo chown 10001 ./backups`).
+- `TD_BACKUP_DIR=-` turns scheduled backups off.
 
 ## Admin login and security
 

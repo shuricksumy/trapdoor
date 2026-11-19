@@ -8,7 +8,7 @@ export class ApiError extends Error {
 }
 
 // Paths that do not belong to one VPN server.
-const hostPaths = /^\/(auth\/|status$|servers($|\/)|(hosts|nodes)($|\/)|backup$)/;
+const hostPaths = /^\/(auth\/|status$|servers($|\/)|(hosts|nodes)($|\/)|backup$|backups($|\/))/;
 
 /**
  * URL of an API path. Per-server paths (everything but auth and status) go

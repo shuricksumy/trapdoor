@@ -37,7 +37,8 @@ same two-factor logins.
 - **Servers page**: every server on every machine with its state, clients, connected devices
   and today's traffic; start, stop, autostart on / off, backup, remove
 - **Backup and restore**: one server (also to move it to another machine) or everything at
-  once, optionally encrypted with a passphrase ([how](docs/guide.md#backup-and-restore))
+  once, optionally encrypted with a passphrase; **scheduled** daily or weekly into a folder,
+  the newest N kept ([how](docs/guide.md#backup-and-restore))
 
 **OpenVPN**
 
@@ -161,7 +162,7 @@ Every server's page has *Backup* for that server alone (keys, clients, settings,
 
 Account → Backup downloads one file with everything: the certificate authority and client
 keys, server settings, WireGuard and AmneziaWG servers, access rules, admins, traffic
-history and the other hosts. Give it a passphrase: the file is then encrypted (it holds your
+history and the other nodes. Give it a passphrase: the file is then encrypted (it holds your
 CA keys). Restore on a fresh machine, with trapdoor stopped:
 
 ```bash
@@ -170,7 +171,11 @@ docker compose run --rm --no-deps -v ./trapdoor-backup.tdbackup:/b:ro web restor
 docker compose up -d
 ```
 
-Details (other hosts, `--force`, without Docker) are in the [guide](docs/guide.md#backup-and-restore).
+**Scheduled backups** (Account → Scheduled backups): every day or week into `/data/backups`
+of the web container (or a host folder you mount), encrypted with `TD_BACKUP_PASSPHRASE`
+from `.env`, the newest N of each kept. Copy that folder off the machine as well.
+
+Details (other nodes, `--force`, without Docker, scheduled) are in the [guide](docs/guide.md#backup-and-restore).
 
 ## Settings
 

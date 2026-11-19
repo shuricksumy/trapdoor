@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -76,9 +77,113 @@ func (s *Server) registerBackupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/servers/restore", s.handleRestoreServer)
 }
 
-// handleBackup streams one file: manifest.json, the own agent's
-// directories (agent/…), the web database (web/trapdoor.db) and every other
-// host's directories (hosts/<name>/…).
+// machineBackup is everything a backup of the whole setup needs, opened
+// before the first byte is written (so an HTTP answer can still be an error).
+type machineBackup struct {
+	snap  string
+	own   io.ReadCloser
+	hosts []string
+	m     backup.Manifest
+}
+
+func (b *machineBackup) Close() {
+	_ = os.Remove(b.snap)
+	_ = b.own.Close()
+}
+
+func (s *Server) prepareMachineBackup(ctx context.Context) (*machineBackup, error) {
+	snap, err := s.Stats.DB.Snapshot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("database snapshot: %w", err)
+	}
+	own, err := s.Backup.AgentBackup(ctx, "")
+	if err != nil {
+		_ = os.Remove(snap)
+		return nil, err
+	}
+	b := &machineBackup{snap: snap, own: own, hosts: s.Backup.BackupHosts(),
+		m: backup.Manifest{Format: 1, Kind: backup.KindMachine, Version: version.Version, Created: s.Now().UTC(), Parts: []string{"agent", "web"}}}
+	if info, err := s.Agent.Info(ctx); err == nil {
+		b.m.Hostname = info.Hostname
+	}
+	for _, h := range b.hosts {
+		b.m.Parts = append(b.m.Parts, "hosts/"+h)
+	}
+	return b, nil
+}
+
+// writeMachineBackup writes manifest.json, the own agent's directories
+// (agent/…), the web database (web/trapdoor.db) and every other node's
+// directories (hosts/<name>/…), encrypted when passphrase is set.
+func (s *Server) writeMachineBackup(ctx context.Context, b *machineBackup, w io.Writer, passphrase string) error {
+	out, finish, err := backupWriter(w, passphrase)
+	if err != nil {
+		return err
+	}
+	tw := tar.NewWriter(out)
+	mj, _ := json.MarshalIndent(b.m, "", "  ")
+	if err := writeEntry(tw, "manifest.json", mj, b.m.Created); err != nil {
+		return err
+	}
+	if err := backup.Copy(tw, b.own, "agent"); err != nil {
+		return fmt.Errorf("agent: %w", err)
+	}
+	if err := addFile(tw, b.snap, "web/trapdoor.db"); err != nil {
+		return fmt.Errorf("web: %w", err)
+	}
+	for _, h := range b.hosts {
+		hctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		rc, err := s.Backup.AgentBackup(hctx, h)
+		if err == nil {
+			err = backup.Copy(tw, rc, "hosts/"+h)
+			_ = rc.Close()
+		}
+		cancel()
+		if err != nil {
+			// One unreachable node should not cost the rest of the backup.
+			s.Log.Warn("backup: node left out", "node", h, "err", err)
+			if err := writeEntry(tw, "hosts/"+h+".error", []byte(err.Error()+"\n"), b.m.Created); err != nil {
+				return err
+			}
+		}
+	}
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return finish()
+}
+
+// backupWriter is gzip, inside encryption when a passphrase is set; finish
+// closes both.
+func backupWriter(w io.Writer, passphrase string) (io.Writer, func() error, error) {
+	var enc io.WriteCloser
+	if passphrase != "" {
+		var err error
+		if enc, err = backup.NewEncrypter(w, passphrase); err != nil {
+			return nil, nil, err
+		}
+		w = enc
+	}
+	gz := gzip.NewWriter(w)
+	return gz, func() error {
+		if err := gz.Close(); err != nil {
+			return err
+		}
+		if enc != nil {
+			return enc.Close()
+		}
+		return nil
+	}, nil
+}
+
+func backupExt(passphrase string) string {
+	if passphrase != "" {
+		return ".tdbackup"
+	}
+	return ".tar.gz"
+}
+
+// handleBackup streams a backup of everything as one file.
 func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
 	if s.Backup == nil {
 		httpx.WriteError(w, http.StatusNotImplemented, "backups are not available")
@@ -88,99 +193,21 @@ func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	ctx := r.Context()
-	// Start everything that can fail before the first byte is sent.
-	snap, err := s.Stats.DB.Snapshot(ctx)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "database snapshot: "+err.Error())
-		return
-	}
-	defer func() { _ = os.Remove(snap) }()
-	own, err := s.Backup.AgentBackup(ctx, "")
+	b, err := s.prepareMachineBackup(r.Context())
 	if err != nil {
 		s.agentError(w, err)
 		return
 	}
-	defer func() { _ = own.Close() }()
-
-	hosts := s.Backup.BackupHosts()
-	m := backup.Manifest{Format: 1, Kind: backup.KindMachine, Version: version.Version, Created: s.Now().UTC(), Parts: []string{"agent", "web"}}
-	if info, err := s.Agent.Info(ctx); err == nil {
-		m.Hostname = info.Hostname
-	}
-	for _, h := range hosts {
-		m.Parts = append(m.Parts, "hosts/"+h)
-	}
-
-	name := "trapdoor-backup-" + s.Now().In(s.Location).Format("20060102-1504")
-	if req.Passphrase != "" {
-		name += ".tdbackup"
-	} else {
-		name += ".tar.gz"
-	}
+	defer b.Close()
+	name := "trapdoor-backup-" + s.Now().In(s.Location).Format("20060102-1504") + backupExt(req.Passphrase)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 	w.Header().Set("Cache-Control", "no-store")
-
-	var out io.Writer = w
-	var enc io.WriteCloser
-	if req.Passphrase != "" {
-		if enc, err = backup.NewEncrypter(w, req.Passphrase); err != nil {
-			s.Log.Error("backup", "err", err)
-			return
-		}
-		out = enc
-	}
-	gz := gzip.NewWriter(out)
-	tw := tar.NewWriter(gz)
-	fail := func(what string, err error) {
-		// Headers are sent: stop here, so the file is unreadable rather
-		// than silently incomplete.
-		s.Log.Error("backup failed", "part", what, "err", err)
-	}
-	mj, _ := json.MarshalIndent(m, "", "  ")
-	if err := writeEntry(tw, "manifest.json", mj, m.Created); err != nil {
-		fail("manifest", err)
+	// Headers are sent: on an error stop, so the file is unreadable rather
+	// than silently incomplete.
+	if err := s.writeMachineBackup(r.Context(), b, w, req.Passphrase); err != nil {
+		s.Log.Error("backup failed", "err", err)
 		return
-	}
-	if err := backup.Copy(tw, own, "agent"); err != nil {
-		fail("agent", err)
-		return
-	}
-	if err := addFile(tw, snap, "web/trapdoor.db"); err != nil {
-		fail("web", err)
-		return
-	}
-	for _, h := range hosts {
-		hctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-		rc, err := s.Backup.AgentBackup(hctx, h)
-		if err == nil {
-			err = backup.Copy(tw, rc, "hosts/"+h)
-			_ = rc.Close()
-		}
-		cancel()
-		if err != nil {
-			// One unreachable host should not cost the rest of the backup.
-			s.Log.Warn("backup: host left out", "host", h, "err", err)
-			if err := writeEntry(tw, "hosts/"+h+".error", []byte(err.Error()+"\n"), m.Created); err != nil {
-				fail(h, err)
-				return
-			}
-		}
-	}
-	if err := tw.Close(); err != nil {
-		fail("tar", err)
-		return
-	}
-	if err := gz.Close(); err != nil {
-		fail("gzip", err)
-		return
-	}
-	if enc != nil {
-		if err := enc.Close(); err != nil {
-			fail("encryption", err)
-			return
-		}
 	}
 	s.audit(r, "backup.download", name)
 }
@@ -210,74 +237,80 @@ func addFile(tw *tar.Writer, path, name string) error {
 	return err
 }
 
-// handleServerBackup streams one server's backup: manifest.json (kind
-// "server"), history.jsonl (its sessions and traffic) and server/… (the
-// agent's tar of the server).
-func (s *Server) handleServerBackup(w http.ResponseWriter, r *http.Request) {
-	var req BackupRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	ctx := r.Context()
-	id := r.PathValue("server")
-	info, err := s.agent(r).ServerInfo(ctx)
+// serverBackup is one server's backup, opened before the first byte.
+type serverBackup struct {
+	id   string
+	src  io.ReadCloser
+	hist bytes.Buffer
+	m    backup.Manifest
+}
+
+func (s *Server) prepareServerBackup(ctx context.Context, id string) (*serverBackup, error) {
+	ag := s.Agent.Server(id)
+	info, err := ag.ServerInfo(ctx)
 	if err != nil {
-		s.agentError(w, err)
-		return
+		return nil, err
 	}
-	src, err := s.agent(r).ServerBackup(ctx)
-	if err != nil {
-		s.agentError(w, err)
-		return
+	b := &serverBackup{id: id}
+	if err := s.Stats.DB.ExportHistory(ctx, id, &b.hist); err != nil {
+		return nil, fmt.Errorf("history: %w", err)
 	}
-	defer func() { _ = src.Close() }()
-	var hist bytes.Buffer
-	if err := s.Stats.DB.ExportHistory(ctx, id, &hist); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "history: "+err.Error())
-		return
+	if b.src, err = ag.ServerBackup(ctx); err != nil {
+		return nil, err
 	}
-	// The agent answers with the id on its machine; "<host>.<id>" names the host.
+	// The agent answers with the id on its node; "<node>.<id>" names the node.
 	host := ""
 	if h, _, ok := strings.Cut(id, "."); ok {
 		host = h
 	}
-	m := backup.Manifest{Format: 1, Kind: backup.KindServer, Version: version.Version, Created: s.Now().UTC(), Parts: []string{"server"},
+	b.m = backup.Manifest{Format: 1, Kind: backup.KindServer, Version: version.Version, Created: s.Now().UTC(), Parts: []string{"server"},
 		Server: &backup.Server{Type: info.Type, ID: info.ID, Name: info.Name, Host: host}}
+	return b, nil
+}
 
-	name := "trapdoor-" + strings.ReplaceAll(id, ".", "-") + "-" + s.Now().In(s.Location).Format("20060102-1504")
-	name += map[bool]string{true: ".tdbackup", false: ".tar.gz"}[req.Passphrase != ""]
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
-	w.Header().Set("Cache-Control", "no-store")
-	var out io.Writer = w
-	var enc io.WriteCloser
-	if req.Passphrase != "" {
-		if enc, err = backup.NewEncrypter(w, req.Passphrase); err != nil {
-			s.Log.Error("server backup", "err", err)
-			return
-		}
-		out = enc
+// writeServerBackup writes manifest.json (kind "server"), history.jsonl
+// (its sessions and traffic) and server/… (the agent's tar of the server).
+func writeServerBackup(b *serverBackup, w io.Writer, passphrase string) error {
+	out, finish, err := backupWriter(w, passphrase)
+	if err != nil {
+		return err
 	}
-	gz := gzip.NewWriter(out)
-	tw := tar.NewWriter(gz)
-	mj, _ := json.MarshalIndent(m, "", "  ")
-	err = writeEntry(tw, "manifest.json", mj, m.Created)
+	tw := tar.NewWriter(out)
+	mj, _ := json.MarshalIndent(b.m, "", "  ")
+	err = writeEntry(tw, "manifest.json", mj, b.m.Created)
 	if err == nil {
-		err = writeEntry(tw, "history.jsonl", hist.Bytes(), m.Created)
+		err = writeEntry(tw, "history.jsonl", b.hist.Bytes(), b.m.Created)
 	}
 	if err == nil {
-		err = backup.Copy(tw, src, "server")
+		err = backup.Copy(tw, b.src, "server")
 	}
 	if err == nil {
 		err = tw.Close()
 	}
 	if err == nil {
-		err = gz.Close()
+		err = finish()
 	}
-	if err == nil && enc != nil {
-		err = enc.Close()
+	return err
+}
+
+// handleServerBackup streams one server's backup.
+func (s *Server) handleServerBackup(w http.ResponseWriter, r *http.Request) {
+	var req BackupRequest
+	if !decodeJSON(w, r, &req) {
+		return
 	}
+	id := r.PathValue("server")
+	b, err := s.prepareServerBackup(r.Context(), id)
 	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	defer func() { _ = b.src.Close() }()
+	name := "trapdoor-" + strings.ReplaceAll(id, ".", "-") + "-" + s.Now().In(s.Location).Format("20060102-1504") + backupExt(req.Passphrase)
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	w.Header().Set("Cache-Control", "no-store")
+	if err := writeServerBackup(b, w, req.Passphrase); err != nil {
 		s.Log.Error("server backup failed", "server", id, "err", err)
 		return
 	}

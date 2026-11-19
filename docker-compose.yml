@@ -91,6 +91,7 @@ services:
       TD_COOKIE_SECURE: ${TD_COOKIE_SECURE:-true}
       TD_TRUSTED_PROXIES: ${TD_TRUSTED_PROXIES:-}
       TD_WEB_API_TOKEN: ${TD_WEB_API_TOKEN:-}
+      TD_BACKUP_PASSPHRASE: ${TD_BACKUP_PASSPHRASE:-} # encrypts scheduled backups (Account → Scheduled backups)
       TD_JOIN_SECRET: ${TD_JOIN_SECRET:-} # optional: nodes started with it join by themselves
       TD_EXPIRY_WARN_DAYS: ${TD_EXPIRY_WARN_DAYS:-30}
       TD_SESSION_IDLE: ${TD_SESSION_IDLE:-12h}
@@ -98,6 +99,7 @@ services:
       - "${WEB_BIND:-127.0.0.1:8080}:8080"
     volumes:
       - web-data:/data
+      # - ./backups:/data/backups   # scheduled backups in a host folder (sudo chown 10001 ./backups)
       - run:/run/trapdoor
     read_only: true
     cap_drop: [ALL]
