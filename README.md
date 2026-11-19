@@ -6,9 +6,10 @@
 [![Release](https://img.shields.io/github/v/release/shuricksumy/trapdoor)](https://github.com/shuricksumy/trapdoor/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-A web UI for your own OpenVPN, WireGuard and AmneziaWG servers. Set the server up in a few clicks, create a profile
-for every phone and laptop, see who is connected and how much traffic each device used,
-and decide which networks each device may reach.
+A web UI for your own OpenVPN, WireGuard and AmneziaWG servers: several of them, on one
+machine or several. Set a server up in a few clicks, create a profile for every phone and
+laptop, see who is connected and how much traffic each device used, decide which networks
+each device may reach, and back it all up.
 
 trapdoor is the successor to [openvpn-ui](https://github.com/shuricksumy/openvpn-ui) and
 works with an existing openvpn-ui directory as it is: same certificates, same profiles,
@@ -18,11 +19,27 @@ same two-factor logins.
 | --- | --- |
 | <img src="docs/screenshots/overview.png" width="560"> | <img src="docs/screenshots/mobile-dark.png" width="220"> |
 
+| Servers (all machines) |
+| --- |
+| <img src="docs/screenshots/servers.png" width="800"> |
+
 | Clients | Traffic | Access rules |
 | --- | --- | --- |
 | <img src="docs/screenshots/clients.png" width="300"> | <img src="docs/screenshots/traffic-dark.png" width="300"> | <img src="docs/screenshots/access.png" width="300"> |
 
 ## Features
+
+**Servers**
+
+- **OpenVPN, WireGuard and AmneziaWG** side by side, as many as you need (e.g. OpenVPN on UDP
+  1194 and TCP 443, a WireGuard and an AmneziaWG server), on this machine and on other hosts
+  from one web UI ([how](docs/guide.md#several-hosts))
+- **Servers page**: every server on every machine with its state, clients, connected devices
+  and today's traffic; start, stop, autostart on / off, backup, remove
+- **Backup and restore**: one server (also to move it to another machine) or everything at
+  once, optionally encrypted with a passphrase ([how](docs/guide.md#backup-and-restore))
+
+**OpenVPN**
 
 - **Setup** that creates the certificate authority, keys and `server.conf` with modern
   defaults (tls-crypt-v2, AES-GCM, TLS 1.2+) ([what it asks](docs/guide.md#setup))
@@ -37,20 +54,30 @@ same two-factor logins.
   a Network page with what every client can reach
 - **Access rules**: which client may reach which network or port; everything else allowed or
   blocked
-- **Servers page**: every server on every machine with its state and numbers; start, stop,
-  autostart on / off
-- **Several servers** on one host: more OpenVPN servers (e.g. TCP 443 next to UDP 1194),
-  WireGuard and AmneziaWG ([how](docs/guide.md#more-openvpn-servers)), and on several hosts
-  from one web UI ([how](docs/guide.md#several-hosts))
 - **Server settings** in a form or as raw `server.conf`, checked by OpenVPN before saving,
   with a preview of the changes, backups and restart with automatic rollback
+
+**WireGuard and AmneziaWG**
+
+- **Clients** with a QR code for the apps; add one or many at once, notes, your own address,
+  the device's own key if you prefer, per-client DNS, allowed IPs, MTU and keepalive
+  ([how](docs/guide.md#wireguard-servers))
+- **AmneziaWG** hides the VPN from blocking: obfuscation levels 1.5, 2.0 (default) and 3.1,
+  random values within the AmneziaWG limits; no kernel module needed in Docker
+- Live state from the interface, traffic history and access rules as for OpenVPN
+- Changes apply without disconnecting anybody (`wg syncconf`)
+
+**Everywhere**
+
 - Light / dark / auto theme, works on phones
 - Secure by design: the web UI has no privileges, admin passwords are hashed, login attempts
   are throttled, no external scripts or CDNs
 
 ## Quick start (Docker)
 
-You need a Linux server with Docker and a UDP port reachable from the internet.
+You need a Linux server with Docker and a UDP port reachable from the internet (one per VPN
+server; the compose file publishes OpenVPN UDP 1194, a second OpenVPN on TCP 1195, WireGuard
+UDP 51820 and AmneziaWG UDP 51830 by default).
 
 ```bash
 mkdir trapdoor && cd trapdoor
@@ -71,6 +98,9 @@ docker compose exec -it web trapdoor user add admin    # choose your admin passw
    to this server.
 4. **Clients → New client**, then **Download profile** and import it in the OpenVPN app on the
    device (OpenVPN Connect, Tunnelblick, network-manager-openvpn, …).
+5. More servers: **Add a server** (top right) for WireGuard, AmneziaWG or another OpenVPN
+   server; forward its port too. Other machines: **Hosts**
+   ([how](docs/guide.md#several-hosts)).
 
 ## Moving from openvpn-ui
 
@@ -151,7 +181,10 @@ Set in `.env` next to `docker-compose.yml`:
 | `TD_AGENT_TOKEN` | — | Shared secret between the web UI and the agent; required, long and random |
 | `TD_TZ` | `UTC` | Time zone for days, months and years in traffic reports, e.g. `Europe/Berlin` |
 | `OPENVPN_DIR` | `./openvpn` | OpenVPN directory on the host |
-| `VPN_PORT` / `VPN_PROTO` | `1194` / `udp` | Port and protocol published for VPN clients |
+| `VPN_PORT` / `VPN_PROTO` | `1194` / `udp` | Port and protocol published for the first OpenVPN server |
+| `VPN2_PORT` / `VPN2_PROTO` | `1195` / `tcp` | A second OpenVPN server (the same port inside and outside) |
+| `WIREGUARD_DIR` / `WG_PORT` | `./wireguard` / `51820` | WireGuard servers' files on the host, and the UDP port published for them |
+| `AMNEZIAWG_DIR` / `AWG_PORT` | `./amneziawg` / `51830` | The same for AmneziaWG |
 | `VPN_NAT_SUBNET` | `auto` | NAT for VPN clients: `auto` follows `server.conf`, or a subnet, or empty for none |
 | `WEB_BIND` | `127.0.0.1:8080` | Where the web UI listens on the host |
 | `TD_COOKIE_SECURE` | `true` | `false` only for testing over plain HTTP |
@@ -166,14 +199,17 @@ Set in `.env` next to `docker-compose.yml`:
 
 Each [release](https://github.com/shuricksumy/trapdoor/releases) has Linux binaries
 (amd64, arm64, armv7) with the web UI built in. Run `trapdoor agent` as root next to
-OpenVPN and `trapdoor web` as an unprivileged user, with the same `TD_AGENT_TOKEN`; see
+OpenVPN (and `wireguard-tools` / `amneziawg-tools` for those servers) and `trapdoor web` as
+an unprivileged user, with the same `TD_AGENT_TOKEN`; see
 [docs/guide.md](docs/guide.md#admin-login-and-security) for how the parts fit together and
 [`internal/config/config.go`](internal/config/config.go) for every setting.
 
 ## Documentation
 
 - [How trapdoor works](docs/guide.md): setup, profiles, two-factor login, server
-  settings, client networks, access rules, traffic history, security
+  settings, client networks and named networks, access rules, traffic history, more OpenVPN
+  servers, WireGuard and AmneziaWG, the Servers page, several hosts, backup and restore,
+  security
 - [HTTP API](docs/api.md)
 - [Development](docs/development.md): building, tests, GitHub Actions, releases
 - [Roadmap](ROADMAP.md)
