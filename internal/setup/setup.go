@@ -111,6 +111,7 @@ type Paths struct {
 	Management    string // "127.0.0.1 2080"
 	AuthVerify    string // command, e.g. /usr/local/bin/trapdoor auth-verify --ccd /etc/openvpn/ccd
 	Group         string // group to drop to: nogroup or nobody; "" keeps root
+	Dev           string // tun device: "" or "tun" (tun0, tun1, …), or a name
 }
 
 const dataCiphers = "AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305"
@@ -130,7 +131,12 @@ func ServerConf(r Request, p Paths, now time.Time) string {
 		w("proto udp")
 		w("explicit-exit-notify 1")
 	}
-	w("dev tun")
+	if p.Dev == "" || p.Dev == "tun" {
+		w("dev tun")
+	} else {
+		w("dev %s", p.Dev)
+		w("dev-type tun")
+	}
 	w("topology subnet")
 	w("server %s %s", sub.Addr(), mask(sub.Bits()))
 	w("keepalive 10 60")

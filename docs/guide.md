@@ -189,10 +189,45 @@ session count and online time. Upload/download are from the user's point of view
 Traffic is stored per user per hour. If polls were missed (web down, agent unreachable) the
 traffic of the gap is spread over its hours and flagged `estimated` instead of one spike.
 
+## More OpenVPN servers
+
+The first OpenVPN server is the one in `TD_OPENVPN_DIR` (an existing openvpn-ui
+directory, or the one the setup creates). More can be added next to it, for example a
+second one on TCP 443 for networks that block everything else: "Add a server" → OpenVPN,
+with an id (also its network device, e.g. `ovpn-tcp`), a port and UDP or TCP. The setup
+wizard then runs for it, with that port and protocol fixed.
+
+- Each added server is independent: its own directory `TD_OPENVPN_SERVERS_DIR/<id>/`
+  (default `<openvpn dir>/servers/<id>/`) with `server.conf`, its own certificate
+  authority in `pki/`, `ccd/`, clients, two-factor logins, access rules and traffic
+  history. A client of one server cannot connect to another.
+- trapdoor keeps the id, port, protocol and management port in `trapdoor.json` there.
+  Management ports follow the first one: 2081, 2082, … on 127.0.0.1.
+- Its tun device is named after the id (`dev ovpn-tcp` + `dev-type tun`), so its access
+  rules have their own chain `TD-<id>`. Ids starting with `tun` are not allowed: the first
+  server's rules cover `tun+`.
+- The setup suggests a subnet no other server uses and refuses one that overlaps.
+- Removing a server stops OpenVPN and moves its directory to `servers/.removed/<id>-<time>`:
+  the certificates are kept until you delete that folder. The first server cannot be
+  removed.
+
+In Docker, the `openvpn` service runs every server: it starts OpenVPN for each
+`servers/<id>/server.conf` as soon as the setup writes it, restarts it like the first
+one, adds NAT for its subnet (`VPN_NAT_SUBNET=auto` or empty for none; a fixed CIDR
+applies to the first server only), applies its access rules and stops it when the server is
+removed. The compose file publishes one more port for it, `VPN2_PORT` / `VPN2_PROTO`
+(default TCP 1195), the same inside and outside: add the server with that port. For TCP
+443, set `VPN2_PORT=443` if nothing else on the host uses it.
+
+Without Docker, start each added server yourself, for example with a systemd unit running
+`openvpn --cd /etc/openvpn/servers/<id> --config server.conf`. With
+`TD_OPENVPN_RESTART=SIGHUP` (the default outside Docker) trapdoor restarts it through its
+management interface.
+
 ## WireGuard servers
 
 Next to OpenVPN, the agent can run WireGuard servers (so far through the
-[agent API](api.md#wireguard)). In the web UI, use "Add WireGuard server" to create one; its Clients page adds devices, shows the config with a QR code and disables or deletes them. Each server is a network
+[agent API](api.md#wireguard)). In the web UI, use "Add a server" to create one; its Clients page adds devices, shows the config with a QR code and disables or deletes them. Each server is a network
 interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/24`:
 
 - The agent keeps each server in `TD_WIREGUARD_DIR` (default `/etc/wireguard`):

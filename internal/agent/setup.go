@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,6 +46,7 @@ func (s *Server) setupStatus(ctx context.Context) api.SetupStatus {
 	st.FixedPort, st.FixedProto = s.cfg.SetupPort, s.cfg.SetupProto
 	st.Defaults.Port, st.Defaults.Proto, st.Defaults.PublicPort = st.FixedPort, st.FixedProto, s.cfg.SetupPublicPort
 	setup.Defaults(&st.Defaults)
+	st.Defaults.Subnet = freeSubnet(st.Defaults.Subnet, s.usedSubnets())
 	if st.CAName != "" {
 		st.Defaults.CAName = st.CAName
 	}
@@ -67,6 +69,10 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		req.Proto = s.cfg.SetupProto
 	}
 	setup.Defaults(&req)
+	if s.extra != nil && (req.Port != s.extra.Port || req.Proto != s.extra.Proto) {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Sprintf("this server listens on %s %d, chosen when it was added", strings.ToUpper(s.extra.Proto), s.extra.Port))
+		return
+	}
 	if p := s.cfg.SetupPort; p != 0 && req.Port != p {
 		httpx.WriteError(w, http.StatusBadRequest, fmt.Sprintf("OpenVPN must listen on port %d: the container publishes only that port (change VPN_PORT for the public port)", p))
 		return
@@ -78,6 +84,14 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	if err := setup.Validate(req); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if sub, err := netip.ParsePrefix(req.Subnet); err == nil {
+		for _, u := range s.usedSubnets() {
+			if u.Overlaps(sub.Masked()) {
+				httpx.WriteError(w, http.StatusConflict, "subnet overlaps "+u.String()+", used by another server on this host")
+				return
+			}
+		}
 	}
 	// One setup (or restart) at a time.
 	s.restartMu.Lock()
@@ -204,6 +218,38 @@ func (s *Server) runSetup(ctx context.Context, req setup.Request) (api.SetupResu
 	return res, http.StatusOK, nil
 }
 
+// usedSubnets are the subnets of the other servers on the host.
+func (s *Server) usedSubnets() []netip.Prefix {
+	if s.others == nil {
+		return nil
+	}
+	return s.others(s.id)
+}
+
+// freeSubnet is def, or the first 10.N.0.0/24 after it that no other
+// server uses.
+func freeSubnet(def string, used []netip.Prefix) string {
+	free := func(p netip.Prefix) bool {
+		for _, u := range used {
+			if u.Overlaps(p) {
+				return false
+			}
+		}
+		return true
+	}
+	p, err := netip.ParsePrefix(def)
+	if err != nil || free(p) {
+		return def
+	}
+	for n := 8; n < 255; n++ {
+		c := netip.PrefixFrom(netip.AddrFrom4([4]byte{10, byte(n), 0, 0}), 24)
+		if free(c) {
+			return c.String()
+		}
+	}
+	return def
+}
+
 func (s *Server) setupWait() time.Duration {
 	if s.restartWait > 0 {
 		return s.restartWait
@@ -261,6 +307,7 @@ func (s *Server) setupPaths(req setup.Request) (setup.Paths, error) {
 		Management: host + " " + port,
 		AuthVerify: bin + " auth-verify --ccd " + ccdDir,
 		Group:      group,
+		Dev:        s.dev,
 	}
 	switch req.TLS {
 	case setup.TLSCryptV2:

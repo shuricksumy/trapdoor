@@ -4,13 +4,16 @@
 
   import { route } from '../lib/state.svelte.js';
 
-  // WireGuard, or AmneziaWG: WireGuard with traffic that is hard to detect.
+  // OpenVPN (set up with the wizard afterwards), WireGuard, or AmneziaWG:
+  // WireGuard with traffic that is hard to detect.
   const kinds = {
+    openvpn: { label: 'OpenVPN', prefix: 'ovpn', port: 1195, net: 0, app: 'OpenVPN' },
     wireguard: { label: 'WireGuard', prefix: 'wg', port: 51820, net: 9, app: 'WireGuard' },
     amneziawg: { label: 'AmneziaWG', prefix: 'awg', port: 51830, net: 50, app: 'AmneziaWG' },
   };
-  const initial = route.query.get('type') === 'amneziawg' ? 'amneziawg' : 'wireguard';
+  const initial = kinds[route.query.get('type')] ? route.query.get('type') : 'wireguard';
   let type = $state(initial);
+  const isOVPN = $derived(type === 'openvpn');
 
   function freeID(prefix) {
     for (let i = 0; i < 100; i++) {
@@ -22,7 +25,8 @@
   // A second server needs its own port and subnet, so suggest the next ones.
   function defaults(t) {
     const k = kinds[t];
-    const taken = servers.list.filter((s) => s.type === t).length;
+    let taken = servers.list.filter((s) => s.type === t).length;
+    if (t === 'openvpn') taken = Math.max(0, taken - 1); // the first one has its own port (VPN_PORT)
     return { id: freeID(k.prefix), port: k.port + taken, subnet: `10.${k.net + taken}.0.0/24` };
   }
   let f = $state({
@@ -33,6 +37,7 @@
     imitation: '',
     dns: '',
     publicPort: '',
+    proto: 'tcp',
     mtu: '',
     allowed: '0.0.0.0/0, ::/0',
     keepalive: 25,
@@ -46,7 +51,10 @@
     Object.assign(f, defaults(t));
   }
 
-  const idOk = $derived(/^[a-z0-9][a-z0-9-]{0,14}$/.test(f.id) && !servers.list.some((s) => s.id === f.id));
+  // OpenVPN: "tun…" names belong to the first server's device.
+  const idOk = $derived(
+    /^[a-z][a-z0-9-]{0,14}$/.test(f.id) && !servers.list.some((s) => s.id === f.id) && !(isOVPN && f.id.startsWith('tun')),
+  );
   const list = (s) => s.split(/[\s,]+/).filter(Boolean);
 
   async function create(e) {
@@ -54,6 +62,17 @@
     busy = true;
     error = '';
     try {
+      if (type === 'openvpn') {
+        const sv = await api('/servers', {
+          method: 'POST',
+          body: { type, id: f.id, name: f.name.trim() || f.id, port: Number(f.port), proto: f.proto },
+        });
+        await reloadServers();
+        selectServer(sv.id);
+        toast(`Added ${sv.name}. Finish its setup.`);
+        navigate('/setup');
+        return;
+      }
       const body = {
         type,
         id: f.id,
@@ -90,13 +109,21 @@
 
 <header class="head">
   <h1>Add a server</h1>
-  <p class="muted">A new {kinds[type].label} network next to your other servers. Clients scan a QR code in the {kinds[type].app} app to join.</p>
+  {#if isOVPN}
+    <p class="muted">A second OpenVPN server next to your other servers, for example on TCP 443 for networks that block other ports. It gets its own certificates and clients; the setup comes next.</p>
+  {:else}
+    <p class="muted">A new {kinds[type].label} network next to your other servers. Clients scan a QR code in the {kinds[type].app} app to join.</p>
+  {/if}
 </header>
 
 <form class="panel form" onsubmit={create}>
   {#if error}<div class="banner bad" role="alert">{error}</div>{/if}
 
   <div class="kinds" role="radiogroup" aria-label="Type">
+    <button type="button" role="radio" aria-checked={type === 'openvpn'} class:on={type === 'openvpn'} onclick={() => pick('openvpn')}>
+      <strong>OpenVPN</strong>
+      <span>Works almost everywhere, also over TCP. Uses the OpenVPN apps.</span>
+    </button>
     <button type="button" role="radio" aria-checked={type === 'wireguard'} class:on={type === 'wireguard'} onclick={() => pick('wireguard')}>
       <strong>WireGuard</strong>
       <span>Fast and simple. Works with the official WireGuard apps.</span>
@@ -116,10 +143,26 @@
     <label class="field">
       <span>Interface name</span>
       <input bind:value={f.id} class="mono" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="15" required />
-      <span class="hint" class:bad={f.id && !idOk}>Lower-case letters, digits and dashes, at most 15. Must not exist yet.</span>
+      <span class="hint" class:bad={f.id && !idOk}>Lower-case letters, digits and dashes, at most 15. Must not exist yet{isOVPN ? ' or start with "tun"' : ''}.</span>
     </label>
   </div>
 
+  {#if isOVPN}
+    <div class="grid">
+      <label class="field">
+        <span>Port</span>
+        <input type="number" bind:value={f.port} min="1" max="65535" required />
+        <span class="hint">In Docker, the port the openvpn container publishes for it (VPN2_PORT).</span>
+      </label>
+      <label class="field">
+        <span>Protocol</span>
+        <select bind:value={f.proto}>
+          <option value="udp">UDP (faster)</option>
+          <option value="tcp">TCP (gets through more firewalls)</option>
+        </select>
+      </label>
+    </div>
+  {:else}
   <label class="field">
     <span>Public address</span>
     <input bind:value={f.host} placeholder="vpn.example.com" autocomplete="off" autocapitalize="none" spellcheck="false" required />
@@ -192,9 +235,11 @@
     </div>
   </details>
 
+  {/if}
+
   <div class="actions">
     <a class="btn" href="/">Cancel</a>
-    <button class="btn primary" type="submit" disabled={busy || !idOk || !f.host.trim()}>{busy ? 'Adding…' : 'Add server'}</button>
+    <button class="btn primary" type="submit" disabled={busy || !idOk || (!isOVPN && !f.host.trim())}>{busy ? 'Adding…' : 'Add server'}</button>
   </div>
 </form>
 
@@ -204,7 +249,7 @@
   .form { display: grid; gap: var(--space-4); padding: var(--space-5); max-width: 720px; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: start; }
   .hint.bad { color: var(--bad); }
-  .kinds { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+  .kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
   .kinds button {
     display: grid; gap: 2px; text-align: left; padding: var(--space-3) var(--space-4);
     border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit;

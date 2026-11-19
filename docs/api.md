@@ -40,8 +40,8 @@ server). Below, `…` stands for that prefix.
 | GET, PUT | `…/firewall` | access rules |
 | POST | `…/firewall/addresses` | `{"names":[…]}` → fixed VPN addresses for these clients |
 
-| POST | `/api/v1/servers` | create a WireGuard server (body as the agent's `POST /v1/servers`) |
-| DELETE | `/api/v1/servers/{server}` | remove a WireGuard server and its interface |
+| POST | `/api/v1/servers` | add an OpenVPN, WireGuard or AmneziaWG server (body as the agent's `POST /v1/servers`) |
+| DELETE | `/api/v1/servers/{server}` | remove a WireGuard / AmneziaWG server and its interface, or an added OpenVPN server |
 | GET, POST | `…/peers` | WireGuard clients: list / add `{"name","address"?,"lan"?,"no_psk"?}` |
 | GET, PUT, DELETE | `…/peers/{name}` | get / `{"disabled"?,"lan"?}` / delete |
 | GET | `…/peers/{name}/conf` | download the client's WireGuard configuration |
@@ -93,7 +93,8 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 | Method | Path | Body | Result |
 |---|---|---|---|
 | POST | `/v1/servers` | `{"type":"wireguard"\|"amneziawg","id":"wg0","name","port","public_host","public_port","subnet","dns":[…],"mtu","allowed_ips":[…],"keepalive"}`; AmneziaWG also `"awg_level":"2.0"\|"1.5"` and optional `"obfuscation":{jc,jmin,jmax,s1…s4,h1…h4,i1…i5}` (only `i1`–`i5`: the rest is generated) | 201 server info (with `obfuscation`); 409 for a used id, port or overlapping subnet |
-| DELETE | `/v1/servers/{id}` | – | 204; takes the interface down and deletes its files (WireGuard only) |
+| POST | `/v1/servers` | `{"type":"openvpn","id":"ovpn-tcp","name","port":443,"proto":"udp"\|"tcp"}`: an OpenVPN server in `TD_OPENVPN_SERVERS_DIR/<id>/`, then set up with `…/setup` | 201 server info; 409 for a used id or port |
+| DELETE | `/v1/servers/{id}` | – | 204; WireGuard: takes the interface down and deletes its files; added OpenVPN server: stops it and moves its directory to `.removed/` (the first server: 409) |
 | GET | `…/peers` | – | clients with live state (`connected`, `endpoint`, `last_handshake`, bytes) |
 | POST | `…/peers` | `{"name","address"?,"lan"?:[cidr],"no_psk"?}` | 201 client (keys generated, next free address) |
 | GET, PUT, DELETE | `…/peers/{name}` | PUT: `{"disabled"?,"lan"?}` | client / updated client / 204 |

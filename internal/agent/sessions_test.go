@@ -22,6 +22,7 @@ type fakeMgmt struct {
 	mu     sync.Mutex
 	down   bool
 	killed []string
+	sigs   []string
 }
 
 func (f *fakeMgmt) err() error {
@@ -44,7 +45,12 @@ func (f *fakeMgmt) KillClient(_ context.Context, id int64) error {
 	}
 	return f.err()
 }
-func (f *fakeMgmt) Signal(context.Context, string) error { return f.err() }
+func (f *fakeMgmt) Signal(_ context.Context, sig string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sigs = append(f.sigs, sig)
+	return f.err()
+}
 
 func (f *fakeMgmt) KillName(_ context.Context, name string) (int, error) {
 	f.mu.Lock()

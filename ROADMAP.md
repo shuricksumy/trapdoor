@@ -70,8 +70,8 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
       2.0 by default), random values within the documented limits, matching client configs
       for the AmneziaWG apps; `amneziawg-go` built into the image (no kernel module needed)
   - [ ] Later: AmneziaWG 3.1 extras (header protection, timing ranges, random trailers)
-- [ ] Several OpenVPN servers (e.g. UDP 1194 + TCP 443), each with its own management port;
-      the container supervisor runs all of them
+- [x] Several OpenVPN servers (e.g. UDP 1194 + TCP 443), each with its own directory, PKI,
+      management port and tun device; the container supervisor runs all of them
 - [ ] Access rules for WireGuard / AmneziaWG interfaces; two-factor login
       stays OpenVPN-only (WireGuard has no login step)
   - [x] WireGuard: chain `TD-<id>` per server, same Access page, direct and file (Docker) mode

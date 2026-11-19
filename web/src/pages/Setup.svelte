@@ -145,7 +145,11 @@
           </label>
         </div>
         {#if status.fixed_port}
-          <p class="hint">Port and protocol come from the container setup (<code>VPN_PORT</code> and <code>VPN_PROTO</code> in <code>.env</code>); OpenVPN listens on {status.fixed_port} inside the container.</p>
+          {#if servers.current && servers.current !== 'openvpn'}
+            <p class="hint">Port and protocol were chosen when this server was added.</p>
+          {:else}
+            <p class="hint">Port and protocol come from the container setup (<code>VPN_PORT</code> and <code>VPN_PROTO</code> in <code>.env</code>); OpenVPN listens on {status.fixed_port} inside the container.</p>
+          {/if}
         {/if}
         <label class="check">
           <input type="checkbox" bind:checked={samePort} />

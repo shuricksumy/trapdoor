@@ -3,10 +3,15 @@ package agent
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/shuricksumy/trapdoor/internal/api"
@@ -32,7 +37,8 @@ type mounted struct {
 type Host struct {
 	token string
 	log   *slog.Logger
-	cfg   config.Agent // WireGuard settings for new servers
+	cfg   config.Agent  // WireGuard settings for new servers
+	ovpn  *config.Agent // settings for new OpenVPN servers (nil: none can be added)
 
 	mu      sync.RWMutex
 	servers []mounted
@@ -59,10 +65,66 @@ func (h *Host) EnableWireGuard(cfg config.Agent, existing []*WGServer) {
 	}
 }
 
+// EnableOpenVPN lets the API add OpenVPN servers (in
+// cfg.OpenVPNServersDir) and mounts the existing ones.
+func (h *Host) EnableOpenVPN(cfg config.Agent, existing []*Server) {
+	h.mu.Lock()
+	h.ovpn = &cfg
+	h.mu.Unlock()
+	for _, s := range existing {
+		h.add(s)
+	}
+}
+
 func (h *Host) add(b backend) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.mountLocked(b)
+}
+
+func (h *Host) mountLocked(b backend) {
+	if s, ok := b.(*Server); ok {
+		s.others = h.subnets
+	}
 	h.servers = append(h.servers, mounted{b: b, h: http.StripPrefix("/v1/servers/"+b.ID(), b.routes())})
+}
+
+// subnets are the VPN subnets of every server except self.
+func (h *Host) subnets(self string) []netip.Prefix {
+	var out []netip.Prefix
+	for _, b := range h.list() {
+		if b.ID() == self {
+			continue
+		}
+		var p netip.Prefix
+		switch s := b.(type) {
+		case *Server:
+			p = s.subnet()
+		case *WGServer:
+			p = s.subnet()
+		}
+		if p.IsValid() {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// portUsedLocked names the server already listening on port/proto.
+func (h *Host) portUsedLocked(port int, proto string) string {
+	for _, m := range h.servers {
+		switch s := m.b.(type) {
+		case *Server:
+			if p, pr, ok := s.listen(); ok && p == port && pr == proto {
+				return s.name
+			}
+		case *WGServer:
+			if proto == "udp" && s.st.ListenPort == port {
+				return s.st.Name
+			}
+		}
+	}
+	return ""
 }
 
 func (h *Host) get(id string) (mounted, bool) {
@@ -127,8 +189,12 @@ func (h *Host) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &req) {
 		return
 	}
+	if req.Type == api.TypeOpenVPN {
+		h.createOpenVPN(w, r, req)
+		return
+	}
 	if req.Type != api.TypeWireGuard && req.Type != api.TypeAmneziaWG {
-		httpx.WriteError(w, http.StatusBadRequest, "type must be "+api.TypeWireGuard+" or "+api.TypeAmneziaWG)
+		httpx.WriteError(w, http.StatusBadRequest, "type must be "+api.TypeOpenVPN+", "+api.TypeWireGuard+" or "+api.TypeAmneziaWG)
 		return
 	}
 	h.mu.RLock()
@@ -152,21 +218,21 @@ func (h *Host) handleCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if o, ok := m.b.(*Server); ok {
-			if sc, err := o.serverConf(); err == nil && sc.Subnet.IsValid() && sc.Subnet.Overlaps(st.Address.Masked()) {
-				httpx.WriteError(w, http.StatusConflict, "subnet overlaps the OpenVPN server's "+sc.Subnet.String())
+			if sub := o.subnet(); sub.IsValid() && sub.Overlaps(st.Address.Masked()) {
+				httpx.WriteError(w, http.StatusConflict, "subnet overlaps "+o.name+" ("+sub.String()+")")
 				return
 			}
 		}
 		if o, ok := m.b.(*WGServer); ok {
-			if o.st.ListenPort == st.ListenPort {
-				httpx.WriteError(w, http.StatusConflict, "port "+strconv.Itoa(st.ListenPort)+" is used by "+o.st.Name)
-				return
-			}
 			if o.subnet().Overlaps(st.Address.Masked()) {
 				httpx.WriteError(w, http.StatusConflict, "subnet overlaps "+o.st.Name+" ("+o.subnet().String()+")")
 				return
 			}
 		}
+	}
+	if name := h.portUsedLocked(st.ListenPort, "udp"); name != "" {
+		httpx.WriteError(w, http.StatusConflict, "UDP port "+strconv.Itoa(st.ListenPort)+" is used by "+name)
+		return
 	}
 	if err := os.MkdirAll(wgDir(cfg, st.Type), 0o700); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
@@ -180,7 +246,7 @@ func (h *Host) handleCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	h.servers = append(h.servers, mounted{b: s, h: http.StripPrefix("/v1/servers/"+s.ID(), s.routes())})
+	h.mountLocked(s)
 	h.log.Info("WireGuard server created", "server", st.ID, "type", st.Type, "port", st.ListenPort, "subnet", st.Address.Masked())
 	httpx.WriteJSON(w, http.StatusCreated, s.Info(r.Context()))
 }
@@ -192,14 +258,25 @@ func (h *Host) handleRemove(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "no server "+id)
 		return
 	}
-	s, ok := m.b.(*WGServer)
-	if !ok {
-		httpx.WriteError(w, http.StatusConflict, "only WireGuard servers can be removed here")
-		return
-	}
-	if err := s.remove(r.Context()); err != nil {
-		httpx.WriteError(w, http.StatusBadGateway, err.Error())
-		return
+	kind := "WireGuard"
+	switch s := m.b.(type) {
+	case *WGServer:
+		if err := s.remove(r.Context()); err != nil {
+			httpx.WriteError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+	case *Server:
+		if s.extra == nil {
+			httpx.WriteError(w, http.StatusConflict, "the first OpenVPN server cannot be removed")
+			return
+		}
+		dst, err := s.remove(r.Context())
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		kind = "OpenVPN"
+		h.log.Info("OpenVPN server files kept", "server", id, "dir", dst)
 	}
 	h.mu.Lock()
 	for i, x := range h.servers {
@@ -209,8 +286,70 @@ func (h *Host) handleRemove(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.mu.Unlock()
-	h.log.Info("WireGuard server removed", "server", id)
+	h.log.Info(kind+" server removed", "server", id)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Host) createOpenVPN(w http.ResponseWriter, r *http.Request, req api.CreateServer) {
+	h.mu.RLock()
+	base := h.ovpn
+	h.mu.RUnlock()
+	if base == nil || base.OpenVPNServersDir == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "this agent cannot add OpenVPN servers (TD_OPENVPN_SERVERS_DIR)")
+		return
+	}
+	st, err := createOpenVPN(req)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	mgmtHost, _, _ := net.SplitHostPort(base.MgmtAddr)
+	if mgmtHost == "" {
+		mgmtHost = "127.0.0.1"
+	}
+	usedMgmt := map[int]bool{}
+	for _, m := range h.servers {
+		if m.b.ID() == st.ID {
+			httpx.WriteError(w, http.StatusConflict, "a server with id "+st.ID+" exists")
+			return
+		}
+		if s, ok := m.b.(*Server); ok {
+			usedMgmt[s.mgmtPort()] = true
+		}
+	}
+	if name := h.portUsedLocked(st.Port, st.Proto); name != "" {
+		httpx.WriteError(w, http.StatusConflict, strings.ToUpper(st.Proto)+" port "+strconv.Itoa(st.Port)+" is used by "+name)
+		return
+	}
+	_, p, _ := net.SplitHostPort(base.MgmtAddr)
+	port, _ := strconv.Atoi(p)
+	if port == 0 {
+		port = 2080
+	}
+	for usedMgmt[port] {
+		port++
+	}
+	st.Mgmt = net.JoinHostPort(mgmtHost, strconv.Itoa(port))
+	dir := filepath.Join(base.OpenVPNServersDir, st.ID)
+	if _, err := os.Stat(dir); err == nil {
+		httpx.WriteError(w, http.StatusConflict, dir+" exists; move it away or pick another id")
+		return
+	}
+	data, _ := json.MarshalIndent(st, "", "  ")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := writeAtomic(filepath.Join(dir, ovpnStateFile), append(data, '\n'), 0o600); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s := newOpenVPNServer(*base, h.log, st, nil)
+	h.mountLocked(s)
+	h.log.Info("OpenVPN server created", "server", st.ID, "port", st.Port, "proto", st.Proto, "mgmt", st.Mgmt)
+	httpx.WriteJSON(w, http.StatusCreated, s.Info(r.Context()))
 }
 
 func (h *Host) requireToken(next http.Handler) http.Handler {

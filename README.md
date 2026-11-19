@@ -36,6 +36,8 @@ same two-factor logins.
   all traffic through the VPN
 - **Access rules**: which client may reach which network or port; everything else allowed or
   blocked
+- **Several servers** on one host: more OpenVPN servers (e.g. TCP 443 next to UDP 1194),
+  WireGuard and AmneziaWG ([how](docs/guide.md#more-openvpn-servers))
 - **Server settings** in a form or as raw `server.conf`, checked by OpenVPN before saving,
   with a preview of the changes, backups and restart with automatic rollback
 - Light / dark / auto theme, works on phones
@@ -100,6 +102,10 @@ out) in the file. With **Caddy, nginx** or anything else, proxy to `WEB_BIND` an
 ```bash
 docker compose pull && docker compose up -d
 ```
+
+The `agent` container uses the network of the `openvpn` container. After restarting
+`openvpn` on its own, restart `agent` too (`docker compose restart agent`), otherwise the
+agent cannot reach OpenVPN; `docker compose up -d` handles this by itself.
 
 Images on GitHub Container Registry, `ghcr.io/shuricksumy/trapdoor` (amd64 and arm64):
 

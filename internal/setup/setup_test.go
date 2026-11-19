@@ -65,3 +65,14 @@ func TestRender(t *testing.T) {
 		}
 	}
 }
+
+func TestServerConfDev(t *testing.T) {
+	r := Request{PublicHost: "vpn.example.com"}
+	Defaults(&r)
+	if conf := ServerConf(r, Paths{}, time.Now()); !strings.Contains(conf, "\ndev tun\ntopology") {
+		t.Errorf("default device:\n%s", conf)
+	}
+	if conf := ServerConf(r, Paths{Dev: "ovpn-tcp"}, time.Now()); !strings.Contains(conf, "\ndev ovpn-tcp\ndev-type tun\n") {
+		t.Errorf("named device:\n%s", conf)
+	}
+}

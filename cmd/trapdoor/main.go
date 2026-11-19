@@ -110,6 +110,17 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 	srv := agent.New(cfg, log, p)
 	go srv.ApplyFirewallAtStart(ctx)
 	host := agent.NewHost(cfg.Token, log, srv)
+	extra, err := agent.LoadOpenVPN(cfg, log)
+	if err != nil {
+		return fmt.Errorf("OpenVPN servers: %w", err)
+	}
+	for _, s := range extra {
+		go s.ApplyFirewallAtStart(ctx)
+	}
+	host.EnableOpenVPN(cfg, extra)
+	if len(extra) > 0 {
+		log.Info("OpenVPN servers", "dir", cfg.OpenVPNServersDir, "added", len(extra))
+	}
 	if cfg.WireGuard != "off" {
 		wgs, err := agent.LoadWireGuard(ctx, cfg, log)
 		if err != nil {
