@@ -107,7 +107,7 @@ func (m *MultiAgent) remoteInfo(ctx context.Context) ([]api.HostStatus, []api.Se
 				res[i] = result{st: st}
 				return
 			}
-			st.Version, st.Hostname = info.Version, info.Hostname
+			st.Version, st.Hostname, st.Containers = info.Version, info.Hostname, info.Containers
 			for _, s := range info.Servers {
 				s.ID, s.Host = n+"."+s.ID, n
 				res[i].servers = append(res[i].servers, s)

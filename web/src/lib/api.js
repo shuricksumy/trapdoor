@@ -105,6 +105,6 @@ export function poll(fn, ms) {
 /** Fetch the server list again (after adding or removing a server). */
 export async function reloadServers() {
   const st = await api('/status');
-  setServers(st.agent?.servers ?? [], st.agent?.hosts ?? []);
+  setServers(st.agent?.servers ?? [], st.agent?.hosts ?? [], st.agent?.containers ?? null);
   return st;
 }

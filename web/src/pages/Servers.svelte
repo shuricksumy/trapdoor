@@ -3,12 +3,14 @@
   import { navigate, selectServer, servers, toast } from '../lib/state.svelte.js';
   import { bytes } from '../lib/format.js';
   import Dialog from '../lib/Dialog.svelte';
+  import { where } from '../lib/location.js';
 
   // Every server on every machine, with start / stop, autostart and remove.
   let list = $state(null);
   let loadError = $state('');
   let busy = $state({}); // id → true while an action runs
   let removing = $state({ open: false, sv: null, busy: false });
+  let stopping = $state({ open: false, sv: null });
 
   async function load() {
     try {
@@ -118,7 +120,7 @@
           <thead>
             <tr>
               <th>Server</th>
-              <th>Type</th>
+              <th>Type · runs in</th>
               <th>Port</th>
               <th>State</th>
               <th class="num">Clients</th>
@@ -136,8 +138,11 @@
                   <button class="link" onclick={() => open(s)}><strong>{s.name}</strong></button>
                   <span class="mono faint small id">{s.id}{s.subnet ? ` · ${s.subnet}` : ''}</span>
                 </td>
-                <td data-label="Type">{typeLabel(s)}</td>
-                <td data-label="Port" class="mono">{s.listen_port ? `${(s.proto || 'udp').toUpperCase()} ${s.listen_port}` : '–'}</td>
+                <td data-label="Type">
+                  {typeLabel(s)}
+                  {#if s.container}<span class="mono faint small block nowrap" title="The container that runs it">{s.container}</span>{/if}
+                </td>
+                <td data-label="Port" class="mono nowrap">{s.listen_port ? `${(s.proto || 'udp').toUpperCase()} ${s.listen_port}` : '–'}</td>
                 <td data-label="State">
                   <span class="pill {st.key}" title={st.why ?? ''}>{st.label}</span>
                   {#if st.why}<span class="faint small why">{st.why}</span>{/if}
@@ -155,7 +160,7 @@
                   {#if s.stopped}
                     <button class="btn small primary" disabled={busy[s.id]} onclick={() => act(s, 'start')}>{busy[s.id] ? 'Starting…' : 'Start'}</button>
                   {:else}
-                    <button class="btn small" disabled={busy[s.id]} onclick={() => act(s, 'stop')}>{busy[s.id] ? 'Stopping…' : 'Stop'}</button>
+                    <button class="btn small" disabled={busy[s.id]} onclick={() => (stopping = { open: true, sv: s })}>{busy[s.id] ? 'Stopping…' : 'Stop'}</button>
                   {/if}
                   <button class="btn small ghost" onclick={() => open(s, s.type === 'openvpn' ? '/server' : '/')} title="Backup is on the server's page">Backup</button>
                   {#if removable(s)}
@@ -176,7 +181,16 @@
   VPN container or the machine restarts.
 </p>
 
+<Dialog bind:open={stopping.open} title="Stop {stopping.sv?.name}?">
+  <p><strong>{stopping.sv?.name}</strong> ({typeLabel(stopping.sv ?? {})}, id <span class="mono">{stopping.sv?.id}</span>) on <strong>{where(stopping.sv)}</strong> stops: its clients are disconnected until you start it again.</p>
+  {#snippet actions()}
+    <button class="btn" onclick={() => (stopping.open = false)}>Cancel</button>
+    <button class="btn primary" onclick={() => { stopping.open = false; act(stopping.sv, 'stop'); }}>Stop server</button>
+  {/snippet}
+</Dialog>
+
 <Dialog bind:open={removing.open} title="Remove {removing.sv?.name}?">
+  <p><strong>{removing.sv?.name}</strong> ({typeLabel(removing.sv ?? {})}, id <span class="mono">{removing.sv?.id}</span>) on <strong>{where(removing.sv)}</strong>.</p>
   <p>
     {removing.sv?.type === 'openvpn'
       ? 'OpenVPN stops; its certificates and settings are kept in a .removed folder.'
@@ -197,6 +211,8 @@
   .bad { color: var(--bad); }
   .servers td { vertical-align: middle; }
   .servers .num { text-align: right; white-space: nowrap; }
+  .nowrap { white-space: nowrap; }
+  .block { display: block; }
   .id { display: block; }
   .why { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .link { background: none; border: 0; padding: 0; color: var(--ink); font: inherit; cursor: pointer; text-align: left; }

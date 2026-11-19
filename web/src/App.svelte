@@ -1,6 +1,10 @@
 <script>
   import { route, session, navigate, toasts, toast, settings, servers, setServers, selectServer, currentServer } from './lib/state.svelte.js';
   import { api, reloadServers } from './lib/api.js';
+  import { typeNames, where } from './lib/location.js';
+
+  // Pages that do not belong to the selected server.
+  const serverFree = ['/servers', '/servers/new', '/hosts', '/account'];
   import ThemeSwitch from './lib/ThemeSwitch.svelte';
   import Login from './pages/Login.svelte';
   import Dashboard from './pages/Dashboard.svelte';
@@ -89,7 +93,7 @@
     api('/status')
       .then((st) => {
         if (st.expiry_warn_days) settings.expiryWarnDays = st.expiry_warn_days;
-        setServers(st.agent?.servers ?? [], st.agent?.hosts ?? []);
+        setServers(st.agent?.servers ?? [], st.agent?.hosts ?? [], st.agent?.containers ?? null);
       })
       .catch(() => {});
   });
@@ -155,6 +159,7 @@
 
     <main>
       <div class="server-bar">
+        <div class="server-pick">
         {#if servers.list.length > 1}
           <label class="server-switch">
             <span>Server</span>
@@ -176,13 +181,21 @@
             </select>
           </label>
         {/if}
+        {#if currentServer() && !serverFree.includes(route.path)}
+          <!-- Which server the page acts on, and where it runs. -->
+          <span class="where-chip" title="The page changes this server">
+            <strong>{typeNames[currentServer().type] ?? currentServer().type}</strong>
+            <span>{where(currentServer())}</span>
+          </span>
+        {/if}
+        </div>
         <span class="bar-links small">
           {#if route.path !== '/servers'}<a class="add-server" href="/servers">Servers ({servers.list.length})</a>{/if}
           {#if route.path !== '/hosts'}<a class="add-server" href="/hosts">Hosts{servers.hosts.length ? ` (${servers.hosts.length + 1})` : ''}</a>{/if}
           {#if route.path !== '/servers/new'}<a class="add-server" href="/servers/new">Add a server</a>{/if}
         </span>
       </div>
-      {#if currentServer()?.stopped && !['/servers', '/servers/new', '/hosts', '/account'].includes(route.path)}
+      {#if currentServer()?.stopped && !serverFree.includes(route.path)}
         <div class="banner warn stopped-banner" role="status">
           <span><strong>{currentServer().name}</strong> is stopped: clients cannot connect.</span>
           <button class="btn small primary" disabled={starting} onclick={startCurrent}>{starting ? 'Starting…' : 'Start'}</button>
@@ -258,7 +271,15 @@
     gap: var(--space-3);
     margin-bottom: var(--space-4);
   }
-  .server-bar:not(:has(.server-switch)) { justify-content: flex-end; }
+  .server-bar:not(:has(.server-switch, .where-chip)) { justify-content: flex-end; }
+  .server-pick { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; min-width: 0; }
+  .where-chip {
+    display: inline-flex; align-items: center; gap: var(--space-2); padding: 3px 10px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+    font-size: var(--step--1); color: var(--ink-2); max-width: 100%;
+  }
+  .where-chip strong { color: var(--ink); font-weight: 600; }
+  .where-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .server-switch {
     display: inline-flex;
     align-items: center;

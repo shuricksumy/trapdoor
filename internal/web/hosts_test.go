@@ -98,6 +98,9 @@ func TestHosts(t *testing.T) {
 	if strings.Join(ids, ",") != "openvpn@,wg0@,vps.openvpn@vps,vps.wg0@vps" || len(all.Hosts) != 1 || all.Hosts[0].Error != "" {
 		t.Errorf("info = %v, hosts %+v", ids, all.Hosts)
 	}
+	if _, ok := all.Hosts[0].Containers[api.TypeWireGuard]; !ok {
+		t.Errorf("the host does not say what it runs: %+v", all.Hosts[0])
+	}
 	if si, err := m.Server("vps.wg0").ServerInfo(ctx); err != nil || si.Endpoint != "vps.example.com:51820" {
 		t.Errorf("vps.wg0 = %+v, %v", si, err)
 	}

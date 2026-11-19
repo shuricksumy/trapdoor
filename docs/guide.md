@@ -219,6 +219,15 @@ traffic of the gap is spread over its hours and flagged `estimated` instead of o
 grouped by machine: type, port, subnet, state, clients, connected now and today's traffic.
 From there a server is opened, started or stopped, backed up or removed.
 
+**Where a server runs** is shown everywhere: the Servers page has the container under each
+server's type, every server page has a chip next to the server switcher ("WireGuard ·
+vps · container vpn"), *Add a server* says before you press the button what will be created
+where ("Adds WireGuard wg1 on vps, in container vpn, UDP port 51821"), and the stop and remove
+dialogs name the server, its machine and its container. The container names come from the
+agent's `TD_CONTAINER_OPENVPN`, `TD_CONTAINER_WIREGUARD` and `TD_CONTAINER_AMNEZIAWG` (the
+compose files set them); a type a machine does not run (e.g. `TD_WIREGUARD=off`) cannot be
+picked for it.
+
 - **Stop**: the server stops until it is started again; its clients cannot connect, its
   settings and clients stay. A stopped server's pages show a banner with *Start*.
 - **Autostart** off: the server stays stopped when the VPN container (or the machine)

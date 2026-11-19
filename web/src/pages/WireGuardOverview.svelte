@@ -1,6 +1,7 @@
 <script>
   import ServerBackup from '../lib/ServerBackup.svelte';
   import ClientDefaults from '../lib/ClientDefaults.svelte';
+  import { where } from '../lib/location.js';
   import { onMount } from 'svelte';
   import { api, poll, reloadServers } from '../lib/api.js';
   import { bytes } from '../lib/format.js';
@@ -143,7 +144,7 @@
 </section>
 
 <Dialog bind:open={remove.open} title="Remove this server?">
-  <p><strong>{srv?.name}</strong> and its {peers.length} {peers.length === 1 ? 'client' : 'clients'} are deleted. Devices using it can no longer connect. This cannot be undone.</p>
+  <p><strong>{srv?.name}</strong> ({srv?.id}) on <strong>{where(srv)}</strong> and its {peers.length} {peers.length === 1 ? 'client' : 'clients'} are deleted. Devices using it can no longer connect. This cannot be undone.</p>
   {#snippet actions()}
     <button class="btn" onclick={() => (remove.open = false)}>Cancel</button>
     <button class="btn danger solid" disabled={remove.busy} onclick={doRemove}>{remove.busy ? 'Removing…' : 'Remove server'}</button>

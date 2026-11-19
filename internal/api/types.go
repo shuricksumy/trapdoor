@@ -29,6 +29,9 @@ type AgentInfo struct {
 	// Hosts are the other hosts the web process manages (web only); their
 	// servers are in Servers with ids "<host>.<id>".
 	Hosts []HostStatus `json:"hosts,omitempty"`
+	// Containers: where new servers of each type run on this machine
+	// (TypeOpenVPN etc. → container name); only the types it can run.
+	Containers map[string]string `json:"containers,omitempty"`
 }
 
 // ServerSummary is one row of GET /api/v1/servers (web): the server and
@@ -66,6 +69,8 @@ type HostStatus struct {
 	Version  string `json:"version,omitempty"`
 	Hostname string `json:"hostname,omitempty"`
 	Error    string `json:"error,omitempty"`
+	// Containers as in AgentInfo, for that host.
+	Containers map[string]string `json:"containers,omitempty"`
 }
 
 // ServerInfo describes one VPN server (GET /v1/servers/{id}/info).
@@ -77,6 +82,8 @@ type ServerInfo struct {
 	// Host is the host the server runs on; empty for the web process's own
 	// agent (web only).
 	Host string `json:"host,omitempty"`
+	// Container the server runs in (TD_CONTAINER_*); empty = not in a container.
+	Container string `json:"container,omitempty"`
 	// Stopped: stopped in trapdoor (not an error). Autostart: started again
 	// when the VPN container (or machine) starts.
 	Stopped   bool `json:"stopped"`
