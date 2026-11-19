@@ -80,14 +80,15 @@ type WGServer struct {
 	run  wgRunner
 	now  func() time.Time
 
-	mu       sync.Mutex
-	st       wgState
-	applied  netip.Prefix // address the interface was brought up with
-	fw       *fwTarget    // access rules: chain TD-<id> for the interface
-	applyErr string
-	sess     map[string]*wgSession // by public key, while connected
-	last     map[string][2]int64   // last rx/tx seen per public key
-	expired  string                // expiredKey() when the config was last written
+	mu          sync.Mutex
+	st          wgState
+	applied     netip.Prefix // address the interface was brought up with
+	fw          *fwTarget    // access rules: chain TD-<id> for the interface
+	applyErr    string
+	sess        map[string]*wgSession // by public key, while connected
+	last        map[string][2]int64   // last rx/tx seen per public key
+	expired     string                // expiredKey() when the config was last written
+	scriptsEdit bool                  // TD_SCRIPTS=on
 }
 
 type wgSession struct {
@@ -121,7 +122,8 @@ func newWGServer(cfg config.Agent, log *slog.Logger, st wgState) *WGServer {
 	}
 	dir := wgDir(cfg, st.Type)
 	s := &WGServer{dir: dir, mode: cfg.WireGuard, log: log.With("server", st.ID), st: st,
-		now: time.Now, sess: map[string]*wgSession{}, last: map[string][2]int64{}, box: cfg.ContainerWireGuard}
+		now: time.Now, sess: map[string]*wgSession{}, last: map[string][2]int64{}, box: cfg.ContainerWireGuard,
+		scriptsEdit: cfg.Scripts}
 	if st.Type == api.TypeAmneziaWG {
 		s.box = cfg.ContainerAmneziaWG
 	}
@@ -406,6 +408,7 @@ func (s *WGServer) remove(ctx context.Context) error {
 		return err
 	}
 	s.fw.remove(ctx)
+	s.scripts().remove()
 	for _, ext := range []string{".conf", ".json", ".dump", ".error", ".sync"} {
 		if err := os.Remove(wgPath(s.dir, s.st.ID, ext)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
@@ -442,6 +445,7 @@ func (s *WGServer) routes() http.Handler {
 	mux.HandleFunc("PUT /peers/{name}", s.handleUpdatePeer)
 	mux.HandleFunc("DELETE /peers/{name}", s.handleRemovePeer)
 	mux.HandleFunc("GET /peers/{name}/conf", s.handlePeerConf)
+	registerScripts(mux, s.scripts)
 	mux.HandleFunc("GET /firewall", s.handleGetFirewall)
 	mux.HandleFunc("PUT /firewall", s.handleSetFirewall)
 	mux.HandleFunc("POST /firewall/addresses", s.handleAssignAddresses)
@@ -830,3 +834,10 @@ func (s *WGServer) handlePeerConf(w http.ResponseWriter, r *http.Request) {
 
 // container is where the server runs (TD_CONTAINER_WIREGUARD / _AMNEZIAWG).
 func (s *WGServer) container() string { return s.box }
+
+// scripts are the server's presets and own start / stop scripts, run by the
+// vpn container (file mode) when the interface is up.
+func (s *WGServer) scripts() scripts {
+	return scripts{dir: s.dir, prefix: s.st.ID + ".", id: s.st.ID, typ: s.st.Type, iface: s.st.ID,
+		editable: s.scriptsEdit, supported: s.mode == "file"}
+}

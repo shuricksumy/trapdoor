@@ -15,6 +15,9 @@
 #   through the management interface, or it crashes) it is started again in
 #   this container, so the agent sharing this network namespace keeps working.
 #   docker stop still stops everything.
+# - scripts of each server (presets and own start / stop scripts, see
+#   internal/agent/scripts.go): run as root while the server's interface is
+#   up; a change runs the old stop scripts, then the new start scripts.
 set -eu
 
 CONF=${OPENVPN_CONFIG:-/etc/openvpn/server.conf}
@@ -185,10 +188,100 @@ wg_sync() { # <dir> <wg tool> <wg-quick tool>: WireGuard or AmneziaWG
 	done
 }
 
+# Scripts of each server: <base>scripts-up.sh (presets) and <base>up.sh (own)
+# while the interface named in <base>scripts.env is up; <base>down.sh and
+# <base>scripts-down.sh when it goes down, the files change, the server is
+# removed or this container stops. <base> is <dir>/trapdoor- (OpenVPN) or
+# <dir>/<id>. (WireGuard, AmneziaWG). Answer in <base>scripts.status.
+SC_STATE=/run/trapdoor-scripts
+rm -rf "$SC_STATE"
+mkdir -p "$SC_STATE"
+sc_dev() { # <iface>: the device ("tun+" = the first tun<N> there is)
+	case $1 in
+	*+) ip -o link show | awk -F': ' '{ split($2, a, "@"); print a[1] }' | grep -E "^${1%+}[0-9]+\$" | head -1 ;;
+	*) ip link show "$1" >/dev/null 2>&1 && echo "$1" ;;
+	esac
+}
+sc_exec() { # <env file> <script>: runs it with the server's variables, 30 s at most
+	(
+		SERVER_ID=$(sed -n 's/^SERVER_ID=//p' "$1")
+		TYPE=$(sed -n 's/^TYPE=//p' "$1")
+		IFACE=$(sed -n 's/^IFACE=//p' "$1")
+		dev=$(sc_dev "$IFACE")
+		SUBNET=$(ip -4 route show dev "${dev:-none}" proto kernel scope link 2>/dev/null | awk 'NR == 1 { print $1 }')
+		NAT_IFACE=${VPN_NAT_IFACE:-$(wg_iface)}
+		export SERVER_ID TYPE IFACE SUBNET NAT_IFACE
+		cd "$(dirname "$2")"
+		timeout 30 sh "$2"
+	) 2>&1
+}
+sc_down() { # <state dir>: the stop scripts saved when the start scripts ran
+	[ -f "$1/env" ] || return 0
+	for f in down.sh scripts-down.sh; do
+		[ -f "$1/$f" ] || continue
+		o=$(sc_exec "$1/env" "$1/$f") || echo "$(basename "$1"): $f failed: $(echo "$o" | tail -2 | tr '\n' ' ')"
+	done
+	rm -f "$1/down.sh" "$1/scripts-down.sh" "$1/sum"
+}
+sc_status() { # <base> <line>: written only when it changes
+	[ "$(cat "${1}scripts.status" 2>/dev/null)" = "$2" ] && return 0
+	echo "$2" >"${1}scripts.status.tmp" && mv "${1}scripts.status.tmp" "${1}scripts.status"
+}
+scripts_sync() {
+	for env in "$(dirname "$CONF")/trapdoor-scripts.env" "$OVPN_SERVERS_DIR"/*/trapdoor-scripts.env "$WG_DIR"/*.scripts.env "$AWG_DIR"/*.scripts.env; do
+		[ -f "$env" ] || continue
+		base=${env%scripts.env}
+		sid=$(sed -n 's/^SERVER_ID=//p' "$env")
+		[ -n "$sid" ] || continue
+		st=$SC_STATE/$sid
+		mkdir -p "$st"
+		echo "$base" >"$st/base"
+		sum=$(cat "${base}scripts-up.sh" "${base}scripts-down.sh" "${base}up.sh" "${base}down.sh" "$env" 2>/dev/null | sha256sum | cut -d' ' -f1)
+		if [ -n "$(sc_dev "$(sed -n 's/^IFACE=//p' "$env")")" ]; then
+			[ "$sum" = "$(cat "$st/sum" 2>/dev/null)" ] && continue
+			sc_down "$st"
+			cp "$env" "$st/env"
+			for f in scripts-down.sh down.sh; do
+				if [ -f "${base}$f" ]; then cp "${base}$f" "$st/$f"; fi
+			done
+			err=
+			for f in scripts-up.sh up.sh; do
+				[ -f "${base}$f" ] || continue
+				if ! o=$(sc_exec "$st/env" "${base}$f"); then
+					err="$f: $(echo "$o" | tail -3 | tr '\n' ' ')"
+					break
+				fi
+			done
+			if [ -z "$err" ]; then
+				sc_status "$base" "ok $sum"
+				echo "$sid: scripts applied"
+			else
+				sc_status "$base" "error $sum $err"
+				echo "$sid: scripts failed: $err"
+			fi
+			echo "$sum" >"$st/sum"
+		else
+			if [ -f "$st/sum" ]; then
+				sc_down "$st"
+				echo "$sid: scripts stopped (interface down)"
+			fi
+			sc_status "$base" inactive
+		fi
+	done
+	# Servers whose scripts are gone (removed, or every script cleared): stop once.
+	for st in "$SC_STATE"/*; do
+		[ -f "$st/base" ] || continue
+		[ -f "$(cat "$st/base")scripts.env" ] && continue
+		sc_down "$st"
+		rm -rf "$st"
+	done
+}
+
 (while :; do
 	[ -f "$FW_RULES" ] && fw_apply
 	wg_sync "$WG_DIR" wg wg-quick
 	wg_sync "$AWG_DIR" awg awg-quick
+	scripts_sync
 	sleep 1
 done) &
 WG_LOOP=$!
@@ -337,6 +430,11 @@ for f in "$OVPN_STATE"/*.pid; do
 	[ -f "$f" ] || continue
 	p=$(cat "$f")
 	while kill -0 "$p" 2>/dev/null; do wait "$p" 2>/dev/null || sleep 0.2; done
+done
+# The servers' stop scripts (their rules would outlive the container on the
+# host's network).
+for st in "$SC_STATE"/*; do
+	[ -d "$st" ] && sc_down "$st"
 done
 # Take down the WireGuard / AmneziaWG interfaces brought up here, with their NAT and
 # rules: on the host's network (network_mode: host) they would outlive the container.

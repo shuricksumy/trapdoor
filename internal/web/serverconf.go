@@ -20,6 +20,8 @@ func (s *Server) registerServerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/servers/{server}/setup", s.handleSetup)
 	mux.HandleFunc("GET /api/v1/servers/{server}/firewall", s.handleGetFirewall)
 	mux.HandleFunc("PUT /api/v1/servers/{server}/firewall", s.handleSetFirewall)
+	mux.HandleFunc("GET /api/v1/servers/{server}/scripts", s.handleScripts)
+	mux.HandleFunc("PUT /api/v1/servers/{server}/scripts", s.handleSetScripts)
 	mux.HandleFunc("POST /api/v1/servers/{server}/firewall/addresses", s.handleAssignAddresses)
 }
 
@@ -168,5 +170,28 @@ func (s *Server) handleAssignAddresses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "firewall.addresses", strings.Join(req.Names, ","))
+	httpx.WriteJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleScripts(w http.ResponseWriter, r *http.Request) {
+	st, err := s.agent(r).Scripts(r.Context())
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleSetScripts(w http.ResponseWriter, r *http.Request) {
+	var in api.Scripts
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	st, err := s.agent(r).SetScripts(r.Context(), in)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	s.audit(r, "scripts.save", fmt.Sprintf("dns=%s dot=%t isolate=%t up=%dB down=%dB", in.DNSRedirect, in.BlockDoT, in.Isolate, len(in.Up), len(in.Down)))
 	httpx.WriteJSON(w, http.StatusOK, st)
 }

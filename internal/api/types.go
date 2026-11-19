@@ -310,6 +310,43 @@ type WGSettings struct {
 	PSK        bool     `json:"psk"`       // new clients get a preshared key
 }
 
+// HookPresets are a server's built-in extra rules, run by the vpn container
+// when the server's interface is up (GET / PUT /v1/servers/{id}/scripts).
+type HookPresets struct {
+	// DNSRedirect sends the clients' plain DNS (port 53) to this address,
+	// e.g. an AdGuard or Pi-hole; empty = off.
+	DNSRedirect string `json:"dns_redirect,omitempty"`
+	// BlockDoT refuses DNS-over-TLS / DNS-over-QUIC (port 853), so apps fall
+	// back to plain DNS (and its redirect).
+	BlockDoT bool `json:"block_dot"`
+	// Isolate: clients cannot reach each other through the server.
+	Isolate bool `json:"isolate"`
+}
+
+// Scripts are a server's presets and own start / stop scripts.
+type Scripts struct {
+	HookPresets
+	// Up and Down are sh scripts run as root in the vpn container after the
+	// interface is up / when it goes down, with IFACE, SUBNET, SERVER_ID,
+	// TYPE and NAT_IFACE set.
+	Up   string `json:"up"`
+	Down string `json:"down"`
+	// Editable: the agent allows the web UI to change Up and Down
+	// (TD_SCRIPTS=on); otherwise they are files on the host (Files).
+	Editable bool `json:"editable"`
+	// Supported: a vpn container runs them (TD_FIREWALL / TD_WIREGUARD=file).
+	Supported bool `json:"supported"`
+	// Iface is the interface the rules apply to (tun+ for the first OpenVPN
+	// server).
+	Iface string `json:"iface"`
+	// Files are the script files on the host (in the server's folder).
+	Files []string `json:"files,omitempty"`
+	// State is what the vpn container reported: "ok", "error", "inactive"
+	// (the interface is down) or "pending" (not applied yet).
+	State   string `json:"state"`
+	Message string `json:"message,omitempty"`
+}
+
 // PeerUpdate is the body of PUT /v1/servers/{id}/peers/{name}.
 type PeerUpdate struct {
 	Disabled *bool    `json:"disabled,omitempty"`

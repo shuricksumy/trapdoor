@@ -49,6 +49,7 @@ TD_IMAGE=$IMAGE
 TD_AGENT_TOKEN=$(openssl rand -hex 16)
 TD_WEB_API_TOKEN=$TOKEN
 TD_BACKUP_PASSPHRASE=smoke scheduled pass
+TD_SCRIPTS=on
 TD_COOKIE_SECURE=false
 TD_TZ=Europe/Dublin
 OPENVPN_DIR=$WORK/openvpn
@@ -182,6 +183,20 @@ api -X PUT -H "Content-Type: application/json" -m 30 -d '{"enabled":true,"defaul
 	"$WEB/api/v1/servers/wg0/firewall" | grep -q '"applied":true' || fail "allow rule not applied"
 for _ in $(seq 5); do wgping && break; sleep 1; done
 wgping || fail "allowed ping blocked"
+# Own scripts (TD_SCRIPTS=on): run by the vpn container while wg0 is up, undone when cleared.
+api -X PUT -H "Content-Type: application/json" \
+	-d '{"isolate":true,"up":"#!/bin/sh\niptables -I INPUT 1 -i \"$IFACE\" -p icmp -j REJECT\n","down":"#!/bin/sh\niptables -D INPUT -i \"$IFACE\" -p icmp -j REJECT\n"}' \
+	"$WEB/api/v1/servers/wg0/scripts" >"$WORK/scripts.json" || fail "save scripts: $(cat "$WORK/scripts.json")"
+scriptsok() { api "$WEB/api/v1/servers/wg0/scripts" | grep -q '"state":"ok"'; }
+for _ in $(seq 10); do scriptsok && break; sleep 1; done
+scriptsok || fail "scripts not applied: $(api "$WEB/api/v1/servers/wg0/scripts"; vpnlog scripts)"
+dc exec -T vpn iptables -S FORWARD | grep -q -- "-A FORWARD -i wg0 -j TDH-wg0" || fail "no TDH-wg0 chain for the isolation preset"
+! wgping || fail "ping passes although the start script rejects it"
+api -X PUT -H "Content-Type: application/json" -d '{}' "$WEB/api/v1/servers/wg0/scripts" >/dev/null || fail "clear scripts"
+for _ in $(seq 10); do wgping && break; sleep 1; done
+wgping || fail "ping still blocked after the scripts were cleared"
+! dc exec -T vpn sh -c 'iptables -S; iptables -t nat -S' | grep -q TDH || fail "TDH rules left after the scripts were cleared"
+log "WireGuard scripts: presets and an own start script applied, undone when cleared"
 api -X PUT -H "Content-Type: application/json" -d '{"disabled":true}' "$WEB/api/v1/servers/wg0/peers/wgsmoke" >/dev/null
 for _ in $(seq 10); do vpnlog "wireguard wg0: peers updated" && break; sleep 1; done
 sleep 1

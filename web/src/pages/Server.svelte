@@ -6,6 +6,7 @@
   import { lineDiff } from '../lib/diff.js';
   import Dialog from '../lib/Dialog.svelte';
   import ServerBackup from '../lib/ServerBackup.svelte';
+  import ServerScripts from '../lib/ServerScripts.svelte';
   import { where } from '../lib/location.js';
 
   let cfg = $state(null); // last loaded server config
@@ -309,6 +310,8 @@
     {/if}
   </section>
 {/if}
+
+<ServerScripts />
 
 <ServerBackup />
 

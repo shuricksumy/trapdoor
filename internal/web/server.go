@@ -72,6 +72,8 @@ type AgentClient interface {
 	Setup(ctx context.Context, req api.SetupRequest) (api.SetupResult, error)
 	Firewall(ctx context.Context) (api.Firewall, error)
 	SetFirewall(ctx context.Context, p api.FirewallPolicy) (api.Firewall, error)
+	Scripts(ctx context.Context) (api.Scripts, error)
+	SetScripts(ctx context.Context, in api.Scripts) (api.Scripts, error)
 	AssignAddresses(ctx context.Context, names []string) (api.Firewall, error)
 
 	// WireGuard servers.

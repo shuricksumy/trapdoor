@@ -106,6 +106,7 @@ func (s *Server) routes() http.Handler {
 	s.registerSetupRoutes(mux)
 	s.registerFirewallRoutes(mux)
 	s.registerControlRoutes(mux)
+	registerScripts(mux, s.scripts)
 	return mux
 }
 
@@ -157,4 +158,15 @@ func (s *Server) setPKI(p pki.PKI) {
 	s.pkiMu.Lock()
 	s.pkiv = p
 	s.pkiMu.Unlock()
+}
+
+// scripts are the server's presets and own start / stop scripts, run by the
+// vpn container (TD_FIREWALL=file) while its tun device is up.
+func (s *Server) scripts() scripts {
+	iface := s.fwIface
+	if iface == "" {
+		iface = "tun+"
+	}
+	return scripts{dir: s.cfg.OpenVPNDir, prefix: "trapdoor-", id: s.id, typ: api.TypeOpenVPN, iface: iface,
+		editable: s.cfg.Scripts, supported: s.cfg.Firewall == FirewallFile}
 }

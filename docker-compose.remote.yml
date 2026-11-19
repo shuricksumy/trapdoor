@@ -62,6 +62,7 @@ services:
       TD_OPENVPN_MGMT: ${TD_OPENVPN_MGMT:-127.0.0.1:2080}
       TD_OPENVPN_RESTART: SIGTERM # the vpn service starts OpenVPN again
       TD_FIREWALL: file # access rules are applied by the vpn service
+      TD_SCRIPTS: ${TD_SCRIPTS:-off} # on: own start / stop scripts editable in the web UI (run as root in the vpn container)
       TD_WIREGUARD: file # WireGuard and AmneziaWG interfaces are run by the vpn service
       # Shown in the UI: the container that runs each type of server
       TD_CONTAINER_OPENVPN: vpn
