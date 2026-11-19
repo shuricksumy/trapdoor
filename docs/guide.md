@@ -141,6 +141,24 @@ clients' static addresses. A LAN behind a client also needs `route <net> <mask>`
 `client-config-dir ccd`. Changes apply when the client reconnects (the UI offers to reconnect
 it). The 2FA lines and any other lines in the file are kept; openvpn-ui's files are read as they are.
 
+### Named networks
+
+A named network is a set of networks with a name, like openvpn-ui's routes: e.g.
+"Office LAN" = `192.168.50.0/24`, behind the client `office-gw`, reachable for `laptop`
+and `phone`. Manage them under Clients → Named networks, or with
+`PUT /api/v1/servers/{server}/named-networks/{name}`.
+
+- They are kept in `trapdoor-networks.json` next to `server.conf`. Their routes are
+  written into the ccd files like the client's own: `push "route …"` for the clients that
+  reach them, `iroute …` for the client they are behind. Nothing changes for OpenVPN.
+- Changing or removing a network updates every client that has it; each client's own
+  routes stay. A change that would make any client's file invalid (e.g. a network inside the
+  VPN subnet behind a client) is refused as a whole.
+- A client's Network dialog shows its own routes and lists the named networks it is part
+  of; those are changed on the network, not on the client.
+- Behind a client, the server needs a `route` line for the networks, as for a LAN set on
+  the client: trapdoor warns with the line to add.
+
 ## Access rules
 
 The Access page decides which networks VPN clients can reach: rules from a client (or all

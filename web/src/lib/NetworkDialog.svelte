@@ -8,6 +8,7 @@
   let server = $state(null);
   let form = $state(null);
   let warnings = $state([]);
+  let named = $state([]);
   let error = $state('');
   let busy = $state(false);
   let saved = $state(false);
@@ -26,6 +27,7 @@
         server = srv;
         form = { static_ip: net.static_ip ?? '', full_tunnel: net.full_tunnel, routes: [...net.routes], lan: [...net.lan] };
         warnings = net.warnings ?? [];
+        named = net.named ?? [];
       })
       .catch((e) => (error = e.message));
   });
@@ -56,6 +58,7 @@
     try {
       const r = await api(`/certs/${name}/network`, { method: 'PUT', body: form });
       warnings = r.warnings ?? [];
+      named = r.named ?? [];
       form = { static_ip: r.static_ip ?? '', full_tunnel: r.full_tunnel, routes: r.routes, lan: r.lan };
       saved = true;
       onsaved?.();
@@ -131,6 +134,14 @@
           <button type="button" class="btn small" onclick={() => add('lan', newLan, () => (newLan = ''))}>Add</button>
         </div>
       </fieldset>
+
+      {#if named.length}
+        <p class="hint">
+          Also from named networks:
+          {named.map((n) => `${n.name} (${n.as === 'lan' ? 'behind this client' : 'can reach'})`).join(', ')}.
+          Change them with "Named networks" on the Clients page.
+        </p>
+      {/if}
 
       {#if warnings.length}
         <div class="banner warn" role="status">

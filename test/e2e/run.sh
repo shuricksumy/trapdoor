@@ -199,6 +199,17 @@ code=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" -H "Origin: $WEB" -H "Co
 [[ $code == 400 ]] || fail "duplicate static address accepted ($code)"
 log "alice got 10.99.0.50 and the route; the same address for carol was refused"
 
+log "named network: a route given to alice through a named network (web API)"
+curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT \
+	-d '{"networks":["192.168.124.0/24"],"clients":["alice"]}' \
+	"$WEB/api/v1/servers/openvpn/named-networks/Lab" >"$WORK/named.json" || fail "save named network"
+connect "$WORK/alice.ovpn" "$WORK/client-named.log" || fail "alice could not connect with a named network"
+grep -q "192.168.124.0" "$WORK/client-named.log" || fail "alice did not get the named network's route"
+grep -q "192.168.123.0" "$WORK/client-named.log" || fail "alice lost her own route"
+curl -fsS -b "$JAR" -H "Origin: $WEB" -X DELETE "$WEB/api/v1/servers/openvpn/named-networks/Lab" >/dev/null || fail "remove named network"
+! grep -q "192.168.124.0" "$WORK/ccd/alice" || fail "named route left in ccd/alice"
+log "alice got the named network's route next to her own; removing it takes it off"
+
 log "access rules: alice in her own network namespace, filtered by real iptables (direct mode)"
 ip netns add twc
 ip link add twh type veth peer name twn

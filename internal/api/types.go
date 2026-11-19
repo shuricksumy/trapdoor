@@ -271,6 +271,41 @@ type ClientNetwork struct {
 	Routes     []string `json:"routes"`              // CIDRs pushed to the client
 	LAN        []string `json:"lan"`                 // CIDRs behind the client (iroute)
 	Warnings   []string `json:"warnings,omitempty"`  // response only
+	// Named are the named networks the client is part of (response only;
+	// their networks are not in Routes / LAN, change them on the network).
+	Named []NamedUse `json:"named,omitempty"`
+}
+
+// NamedUse is a client's part in a named network.
+type NamedUse struct {
+	Name string `json:"name"`
+	As   string `json:"as"` // NamedRoute or NamedLAN
+}
+
+// How a client is part of a named network.
+const (
+	NamedRoute = "route" // gets a route to the networks
+	NamedLAN   = "lan"   // the networks are behind it (site-to-site)
+)
+
+// NamedNetwork is a set of networks with a name that several clients
+// share (openvpn-ui "routes"). trapdoor writes its routes into the ccd
+// file of every client it is given to.
+type NamedNetwork struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Networks    []string `json:"networks"` // CIDRs
+	// Via is the client the networks are behind (site-to-site, iroute);
+	// empty when they are reached through the server (e.g. its LAN).
+	Via string `json:"via,omitempty"`
+	// Clients get a route to the networks.
+	Clients []string `json:"clients"`
+}
+
+// NamedNetworks is the answer of GET /named-networks and of changes to it.
+type NamedNetworks struct {
+	Networks []NamedNetwork `json:"networks"`
+	Warnings []string       `json:"warnings"`
 }
 
 // ServerNetwork is the VPN network as configured in server.conf (GET /v1/network).

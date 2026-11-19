@@ -106,7 +106,13 @@ func (s *Server) handleGetClientNetwork(w http.ResponseWriter, r *http.Request) 
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "ccd/"+name+": "+err.Error())
 		return
 	}
-	out := toClientNetwork(n)
+	nets, err := s.loadNamed()
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := toClientNetwork(ownNet(n, nets, name))
+	_, _, out.Named = namedFor(nets, name)
 	if srv, err := s.serverConf(); err == nil {
 		ips, _ := s.staticIPs()
 		out.Warnings, _ = ccdnet.Validate(name, n, srv, ips)
@@ -147,6 +153,14 @@ func (s *Server) handleSetClientNetwork(w http.ResponseWriter, r *http.Request) 
 	}
 	s.netMu.Lock()
 	defer s.netMu.Unlock()
+	// The named networks' routes stay: req has only the client's own.
+	nets, err := s.loadNamed()
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	own := n
+	n = withNamed(own, nets, name)
 	warnings, err := ccdnet.Validate(name, n, srv, ips)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
@@ -160,7 +174,8 @@ func (s *Server) handleSetClientNetwork(w http.ResponseWriter, r *http.Request) 
 	}
 	s.log.Info("client network updated", "name", name, "static_ip", req.StaticIP, "routes", len(n.Routes), "lan", len(n.LAN))
 	s.refreshFirewall(r.Context())
-	out := toClientNetwork(n)
+	out := toClientNetwork(own)
+	_, _, out.Named = namedFor(nets, name)
 	out.Warnings = warnings
 	httpx.WriteJSON(w, http.StatusOK, out)
 }

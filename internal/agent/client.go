@@ -189,6 +189,28 @@ func (c *Client) SetClientNetwork(ctx context.Context, name string, n api.Client
 	return out, err
 }
 
+// NamedNetworks lists the named networks.
+func (c *Client) NamedNetworks(ctx context.Context) (api.NamedNetworks, error) {
+	var out api.NamedNetworks
+	err := c.doJSON(ctx, http.MethodGet, c.path("/named-networks"), nil, &out)
+	return out, err
+}
+
+// SetNamedNetwork creates the named network, or replaces the one called
+// name (n.Name may rename it).
+func (c *Client) SetNamedNetwork(ctx context.Context, name string, n api.NamedNetwork) (api.NamedNetworks, error) {
+	var out api.NamedNetworks
+	err := c.doJSON(ctx, http.MethodPut, c.path("/named-networks/"+url.PathEscape(name)), n, &out)
+	return out, err
+}
+
+// RemoveNamedNetwork removes a named network and its routes from its clients.
+func (c *Client) RemoveNamedNetwork(ctx context.Context, name string) (api.NamedNetworks, error) {
+	var out api.NamedNetworks
+	err := c.doJSON(ctx, http.MethodDelete, c.path("/named-networks/"+url.PathEscape(name)), nil, &out)
+	return out, err
+}
+
 // ServerConfig returns server.conf as text and settings.
 func (c *Client) ServerConfig(ctx context.Context) (api.ServerConfig, error) {
 	var out api.ServerConfig

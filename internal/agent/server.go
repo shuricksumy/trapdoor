@@ -100,6 +100,7 @@ func (s *Server) routes() http.Handler {
 	s.registerSessionRoutes(mux)
 	s.registerAuthRoutes(mux)
 	s.registerNetworkRoutes(mux)
+	s.registerNamedRoutes(mux)
 	s.registerServerConfigRoutes(mux)
 	s.registerSetupRoutes(mux)
 	s.registerFirewallRoutes(mux)

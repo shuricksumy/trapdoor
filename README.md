@@ -33,7 +33,7 @@ same two-factor logins.
 - **Traffic history** per client and for the whole server: any date range, by day, month or
   year, CSV export
 - **Network per client**: fixed VPN address, routes, networks behind a client (site-to-site),
-  all traffic through the VPN
+  all traffic through the VPN; named networks (e.g. "Office LAN") given to several clients at once
 - **Access rules**: which client may reach which network or port; everything else allowed or
   blocked
 - **Several servers** on one host: more OpenVPN servers (e.g. TCP 443 next to UDP 1194),
