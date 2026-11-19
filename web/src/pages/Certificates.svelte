@@ -291,6 +291,11 @@
                   {#if c.st.key === 'valid' || c.st.key === 'expiring'}
                     <a class="btn small" href={apiURL(`/certs/${encodeURIComponent(c.name)}/ovpn`)} download="{c.name}.ovpn">Download profile</a>
                   {/if}
+                  {#if c.status !== 'revoked'}
+                    <button class="btn small ghost warn-btn" onclick={() => ask('revoke', c.name)}>Revoke</button>
+                  {:else}
+                    <button class="btn small ghost" onclick={() => act('unrevoke', c.name)}>Restore</button>
+                  {/if}
                   <details class="menu" ontoggle={placeMenu}>
                     <summary class="btn small ghost" aria-label="More actions for {c.name}">More</summary>
                     <div class="menu-list">
@@ -304,9 +309,6 @@
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; network = { open: true, name: c.name }; }}>Network</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; twoFactor = { open: true, name: c.name }; }}>Two-factor login</button>
                         <button onclick={() => ask('renew', c.name)}>Renew</button>
-                        <button class="danger" onclick={() => ask('revoke', c.name)}>Revoke</button>
-                      {:else}
-                        <button onclick={() => act('unrevoke', c.name)}>Restore</button>
                       {/if}
                       <button class="danger" onclick={() => ask('delete', c.name)}>Delete</button>
                     </div>
@@ -459,32 +461,6 @@
   td.actions { text-align: right; white-space: nowrap; }
   td.actions > * { vertical-align: middle; }
 
-  .menu { position: relative; display: inline-block; margin-left: var(--space-1); }
-  .menu summary { list-style: none; }
-  .menu summary::-webkit-details-marker { display: none; }
-  .menu-list {
-    position: fixed; /* placed by placeMenu: outside the scrolling table */
-    z-index: 50;
-    min-width: 160px;
-    display: grid;
-    padding: 4px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-s);
-    box-shadow: var(--shadow);
-  }
-  .menu-list button {
-    padding: 8px var(--space-3);
-    border: 0;
-    border-radius: 3px;
-    background: none;
-    color: var(--ink);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-  .menu-list button:hover { background: var(--sunken); }
-  .menu-list button.danger { color: var(--bad); }
 
   .history { display: inline-flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); color: var(--ink-2); font-size: var(--step--1); }
   .history input { height: auto; }

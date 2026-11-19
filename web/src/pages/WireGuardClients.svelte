@@ -5,6 +5,7 @@
   import { bytes, relative } from '../lib/format.js';
   import { toast, currentServer } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
+  import { placeMenu } from '../lib/menu.js';
   import SendProfile from '../lib/SendProfile.svelte';
 
   const app = currentServer()?.type === 'amneziawg' ? 'AmneziaWG' : 'WireGuard';
@@ -239,9 +240,9 @@
             <tr class:old={p.disabled}>
               <td class="c-name">
                 <div class="nm">
-                  <span class="name">{p.name}</span>
+                  <span class="name">{p.name}{#if emails[p.name]}<span class="faint small email">{emails[p.name]}</span>{/if}</span>
                   {#if p.notes}<span class="faint small">{p.notes}</span>{/if}
-                  {#if emails[p.name]}<span class="faint small">{emails[p.name]}</span>{/if}
+
                   {#if p.lan?.length}<span class="faint small mono">LAN {p.lan.join(', ')}</span>{/if}
                 </div>
               </td>
@@ -257,10 +258,18 @@
               </td>
               <td class="actions">
                 {#if !p.disabled}<button class="btn small" onclick={() => showConfig(p.name)}>Show config</button>{/if}
-                {#if !p.disabled && !p.own_key}<button class="btn small ghost" onclick={() => emailConfig(p.name)}>Email</button>{/if}
-                <button class="btn small ghost" onclick={() => openEdit(p)}>Edit</button>
-                <button class="btn small ghost" onclick={() => setDisabled(p, !p.disabled)}>{p.disabled ? 'Enable' : 'Disable'}</button>
-                <button class="btn small ghost danger" onclick={() => (confirm = { open: true, name: p.name })}>Delete</button>
+                <button class="btn small ghost" class:warn-btn={!p.disabled} onclick={() => setDisabled(p, !p.disabled)}>{p.disabled ? 'Enable' : 'Disable'}</button>
+                <details class="menu" ontoggle={placeMenu}>
+                  <summary class="btn small ghost" aria-label="More actions for {p.name}">More</summary>
+                  <div class="menu-list">
+                    {#if !p.disabled}
+                      <a class="menu-item" href={apiURL(`/peers/${encodeURIComponent(p.name)}/conf`)} download="{p.name}.conf">Download config</a>
+                      {#if !p.own_key}<button onclick={(e) => { e.currentTarget.closest('details').open = false; emailConfig(p.name); }}>Email the config</button>{/if}
+                    {/if}
+                    <button onclick={(e) => { e.currentTarget.closest('details').open = false; openEdit(p); }}>Edit</button>
+                    <button class="danger" onclick={(e) => { e.currentTarget.closest('details').open = false; confirm = { open: true, name: p.name }; }}>Delete</button>
+                  </div>
+                </details>
               </td>
             </tr>
           {/each}
@@ -414,6 +423,7 @@
   .head p { margin-top: var(--space-1); }
   .banner { margin-bottom: var(--space-3); }
   .name { font-weight: 500; }
+  .email { font-weight: 400; margin-left: var(--space-2); }
   .nm { display: grid; gap: 2px; }
   .c-traffic span + span { margin-left: var(--space-3); }
   tr.old td { color: var(--ink-3); }

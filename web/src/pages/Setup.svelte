@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
-  import { navigate, settings, toast, servers } from '../lib/state.svelte.js';
+  import { navigate, settings, toast, servers, currentServer } from '../lib/state.svelte.js';
+  import { nodeTitle } from '../lib/location.js';
 
   let status = $state(null);
   let loadError = $state('');
@@ -89,7 +90,8 @@
 </script>
 
 <header class="head">
-  <h1>Set up the VPN server</h1>
+  <h1>Set up {currentServer()?.name ?? 'the VPN server'}</h1>
+  {#if currentServer()}<p class="where">OpenVPN <span class="mono">{currentServer().id}</span> on {nodeTitle(currentServer())} is not set up yet.</p>{/if}
   <p class="muted">Answer three questions. trapdoor creates the certificate authority, the server certificate and keys, <code>server.conf</code> and the client profile template, then starts OpenVPN.</p>
 </header>
 
@@ -251,6 +253,7 @@ proto {f.proto}{f.two_factor ? '\nauth-user-pass' : ''}</pre>
 <style>
   .head { margin-bottom: var(--space-5); max-width: 68ch; }
   .head p { margin-top: var(--space-1); }
+  .where { font-weight: 500; }
   .layout { display: grid; grid-template-columns: minmax(0, 680px) 300px; gap: var(--space-5); align-items: start; }
   .steps { display: grid; gap: var(--space-4); max-width: 680px; }
   .step { display: grid; gap: var(--space-3); padding: var(--space-5); }

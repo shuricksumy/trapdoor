@@ -110,7 +110,7 @@
       .then((st) => {
         if (servers.current !== id) return; // another server was picked meanwhile
         settings.setupNeeded = st.needed;
-        if (st.needed && route.path === '/') navigate('/setup', { replace: true });
+        if (st.needed && (route.path === '/' || route.path === '/statistics')) navigate('/setup', { replace: true });
       })
       .catch(() => {});
   });
@@ -163,13 +163,13 @@
         {#if servers.list.length > 1}
           <label class="server-switch">
             <span>Server</span>
-            <select value={servers.current} onchange={(e) => { selectServer(e.currentTarget.value); navigate('/'); }}>
+            <select value={servers.current} onchange={(e) => { selectServer(e.currentTarget.value); navigate('/statistics'); }}>
               {#if servers.hosts.length}
                 {#each machines().flatMap((m) => m.nodes) as g (g.key)}
                   {@const list = servers.list.filter((sv) => (sv.host ?? '') === g.key)}
                   {#if list.length}
                     <optgroup label="{g.machine} › node {g.name}">
-                      {#each list as sv (sv.id)}<option value={sv.id}>{sv.name}</option>{/each}
+                      {#each list as sv (sv.id)}<option value={sv.id}>{sv.name} · {g.name}</option>{/each}
                     </optgroup>
                   {/if}
                 {/each}

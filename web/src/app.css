@@ -215,3 +215,37 @@ td.num, th.num { text-align: right; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* Row menus ("More"): <details class="menu"> with placeMenu from lib/menu.js */
+.menu { position: relative; display: inline-block; margin-left: var(--space-1); }
+.menu summary { list-style: none; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu-list {
+  position: fixed; /* placed by placeMenu: outside the scrolling table */
+  z-index: 50;
+  min-width: 160px;
+  display: grid;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow);
+}
+.menu-list button,
+.menu-list a {
+  padding: 8px var(--space-3);
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-list a { text-decoration: none; }
+.menu-list button:hover,
+.menu-list a:hover { background: var(--sunken); }
+.menu-list button.danger { color: var(--bad); }
+
+/* An on/off action in a table row (Disable, Revoke) */
+.btn.warn-btn { color: var(--warn); }
