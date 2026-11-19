@@ -102,13 +102,25 @@
   <section class="panel">
     <div class="panel-head"><h2>Hiding</h2><span class="small muted">AmneziaWG {o.level}</span></div>
     <p class="panel-body muted small obf-note">
-      {o.level === '2.0' ? 'Strongest hiding: needs an up-to-date AmneziaWG app on every device.' : 'Most compatible: works with older AmneziaWG apps too.'}
+      {o.level === '3.1'
+        ? 'Newest (3.1): also hides packet headers and sizes. Every device needs an AmneziaWG app that supports 3.1.'
+        : o.level === '2.0'
+          ? 'Strongest hiding: needs an up-to-date AmneziaWG app on every device.'
+          : 'Most compatible: works with older AmneziaWG apps too.'}
       Every client config carries these values; they cannot change without new configs for all clients.
     </p>
     <dl class="info">
       <div><dt>Junk packets (Jc, Jmin–Jmax)</dt><dd class="mono">{o.jc} × {o.jmin}–{o.jmax} bytes</dd></div>
       <div><dt>Padding (S1, S2{o.s3 || o.s4 ? ', S3, S4' : ''})</dt><dd class="mono">{[o.s1, o.s2, o.s3, o.s4].filter((v, i) => i < 2 || v).join(', ')}</dd></div>
       <div><dt>Header values (H1–H4)</dt><dd class="mono hs">{o.h1}<br />{o.h2}<br />{o.h3}<br />{o.h4}</dd></div>
+      {#if o.level === '3.1'}
+        <div><dt>Header protection</dt><dd>{o.header_protection_key ? 'On (key in every client config)' : 'Off'}</dd></div>
+        <div><dt>Random packet sizes</dt><dd>{o.random_trailers ? 'On' : 'Off'}{o.content_padding ? `, data padding ${o.content_padding} bytes` : ''}</dd></div>
+        <div><dt>Cookie replies</dt><dd>{o.disable_cookies ? 'Off (harder to probe, no handshake flood protection)' : 'On'}</dd></div>
+        {#if o.rekey_after_time || o.keepalive_timeout}
+          <div><dt>Client timings (seconds)</dt><dd class="mono">rekey {o.rekey_after_time || '120'}, reject {o.reject_after_time || '180'}, retry {o.rekey_timeout || '5'}, keepalive {o.keepalive_timeout || '10'}</dd></div>
+        {/if}
+      {/if}
       {#each ['i1', 'i2', 'i3', 'i4', 'i5'].filter((k) => o[k]) as k (k)}
         <div><dt>Imitation packet {k.toUpperCase()}</dt><dd><code class="mono">{o[k]}</code></dd></div>
       {/each}

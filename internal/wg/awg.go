@@ -26,6 +26,9 @@ const (
 	maxH     = 1<<31 - 1
 	maxTag   = 1000 // <r N>, <rc N>, <rd N>
 	s1s2Diff = 56   // S1 + 56 must not equal S2 (init and response would look alike)
+	minSHP   = 12   // header protection uses S1-S4 as nonce: at least 12 each
+	maxPad   = 256  // content padding, kept small: it comes off the MTU
+	maxTime  = 3600 // client timings, seconds
 )
 
 // randInt returns a uniform number in [lo, hi].
@@ -41,7 +44,7 @@ func randInt(lo, hi int) int {
 // documented limits. I1-I5 stay empty: a believable imitation depends on
 // the network and is up to the admin.
 func GenerateObfuscation(level string) api.Obfuscation {
-	if level != api.AWGLevel15 {
+	if level != api.AWGLevel15 && level != api.AWGLevel31 {
 		level = api.AWGLevel20
 	}
 	o := api.Obfuscation{Level: level, Jc: randInt(4, 12), Jmin: randInt(40, 80)}
@@ -62,6 +65,19 @@ func GenerateObfuscation(level string) api.Obfuscation {
 		}
 	} else {
 		o.S3, o.S4 = randInt(15, 150), randInt(8, 32)
+		if level == api.AWGLevel31 {
+			// Header protection needs S4 >= 12 too; trailers, no cookie
+			// replies and timings around WireGuard's own (120 / 180 / 5 / 10 s).
+			o.S4 = randInt(minSHP, 32)
+			k, err := GeneratePSK() // 32 random bytes, like `awg genkey`
+			if err != nil {
+				panic(err) // crypto/rand does not fail on supported systems
+			}
+			o.HeaderProtectionKey = k
+			o.RandomTrailers, o.DisableCookies = true, true
+			o.RekeyAfterTime, o.RejectAfterTime = "100-140", "180-200"
+			o.RekeyTimeout, o.KeepaliveTimeout = "4-6", "8-12"
+		}
 		// One range in each quarter of the value space, in random order.
 		band := (maxH - minH) / 4
 		order := []int{0, 1, 2, 3}
@@ -101,11 +117,24 @@ func parseH(s string, ranges bool) (lo, hi uint64, err error) {
 	return lo, hi, nil
 }
 
+// parseRange reads "a" or "a-b" (a <= b <= max).
+func parseRange(s string, max uint64) (lo, hi uint64, err error) {
+	lo, hi, err = parseH(s, true)
+	if err == nil && hi > max {
+		err = fmt.Errorf("at most %d", max)
+	}
+	return lo, hi, err
+}
+
 // ValidateObfuscation checks settings entered by an admin.
 func ValidateObfuscation(o api.Obfuscation) error {
-	ranges := o.Level == api.AWGLevel20
+	v31 := o.Level == api.AWGLevel31
+	ranges := o.Level == api.AWGLevel20 || v31
 	if o.Level != api.AWGLevel15 && !ranges {
-		return errors.New("level must be 1.5 or 2.0")
+		return errors.New("level must be 1.5, 2.0 or 3.1")
+	}
+	if err := validate31(o, v31); err != nil {
+		return err
 	}
 	if o.Jc < 0 || o.Jc > maxJc {
 		return fmt.Errorf("jc must be 0-%d (recommended 4-12)", maxJc)
@@ -155,6 +184,62 @@ func ValidateObfuscation(o api.Obfuscation) error {
 	return nil
 }
 
+// validate31 checks the AmneziaWG 3.1 settings (only allowed at 3.1).
+func validate31(o api.Obfuscation, v31 bool) error {
+	used := o.HeaderProtectionKey != "" || o.RandomTrailers || o.ContentPadding != "" || o.DisableCookies ||
+		o.RekeyAfterTime != "" || o.RejectAfterTime != "" || o.RekeyTimeout != "" || o.KeepaliveTimeout != ""
+	if !v31 {
+		if used {
+			return errors.New("header protection, random trailers, content padding, cookies and timings need level 3.1")
+		}
+		return nil
+	}
+	if o.HeaderProtectionKey != "" {
+		if !ValidKey(o.HeaderProtectionKey) {
+			return errors.New("header_protection_key must be a key like `awg genkey` prints")
+		}
+		if o.S1 < minSHP || o.S2 < minSHP || o.S3 < minSHP || o.S4 < minSHP {
+			return fmt.Errorf("header protection needs s1-s4 of at least %d", minSHP)
+		}
+	}
+	if o.ContentPadding != "" {
+		if _, _, err := parseRange(o.ContentPadding, maxPad); err != nil {
+			return fmt.Errorf("content_padding: %w", err)
+		}
+	}
+	for _, t := range []struct{ name, v string }{
+		{"rekey_after_time", o.RekeyAfterTime}, {"reject_after_time", o.RejectAfterTime},
+		{"rekey_timeout", o.RekeyTimeout}, {"keepalive_timeout", o.KeepaliveTimeout},
+	} {
+		if t.v == "" {
+			continue
+		}
+		if lo, _, err := parseRange(t.v, maxTime); err != nil || lo == 0 {
+			return fmt.Errorf("%s: seconds as a or a-b, 1-%d", t.name, maxTime)
+		}
+	}
+	if o.RekeyAfterTime != "" && o.RejectAfterTime != "" {
+		_, rekey, _ := parseRange(o.RekeyAfterTime, maxTime)
+		reject, _, _ := parseRange(o.RejectAfterTime, maxTime)
+		if rekey >= reject {
+			return errors.New("rekey_after_time must end before reject_after_time starts")
+		}
+	}
+	return nil
+}
+
+// PaddingMax is the most bytes content padding adds (comes off the MTU).
+func PaddingMax(o api.Obfuscation) int {
+	if o.ContentPadding == "" {
+		return 0
+	}
+	_, hi, err := parseRange(o.ContentPadding, maxPad)
+	if err != nil || hi > maxPad {
+		return 0
+	}
+	return int(hi)
+}
+
 // ObfuscationSettings are the [Interface] lines for o. The client also
 // gets I1-I5: it sends them before its handshake.
 func ObfuscationSettings(o api.Obfuscation, client bool) []Setting {
@@ -182,7 +267,23 @@ func ObfuscationSettings(o api.Obfuscation, client bool) []Setting {
 	str("H2", o.H2)
 	str("H3", o.H3)
 	str("H4", o.H4)
+	on := func(k string, v bool) {
+		if v {
+			out = append(out, Setting{k, "on"})
+		}
+	}
+	// 3.1: the same on both sides, except cookies (server) and timings (client).
+	str("HeaderProtectionKey", o.HeaderProtectionKey)
+	on("RandomTrailers", o.RandomTrailers)
+	str("ContentPaddingAddition", o.ContentPadding)
+	if !client {
+		on("DisableCookies", o.DisableCookies)
+	}
 	if client {
+		str("RekeyAfterTime", o.RekeyAfterTime)
+		str("RejectAfterTime", o.RejectAfterTime)
+		str("RekeyTimeout", o.RekeyTimeout)
+		str("KeepaliveTimeout", o.KeepaliveTimeout)
 		str("I1", o.I1)
 		str("I2", o.I2)
 		str("I3", o.I3)

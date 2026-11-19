@@ -8,7 +8,7 @@ import (
 )
 
 func TestGenerateObfuscation(t *testing.T) {
-	for _, level := range []string{api.AWGLevel15, api.AWGLevel20} {
+	for _, level := range []string{api.AWGLevel15, api.AWGLevel20, api.AWGLevel31} {
 		for range 500 {
 			o := GenerateObfuscation(level)
 			if err := ValidateObfuscation(o); err != nil {
@@ -18,8 +18,14 @@ func TestGenerateObfuscation(t *testing.T) {
 				t.Fatalf("outside the recommended ranges: %+v", o)
 			}
 			ranged := strings.Contains(o.H1, "-")
-			if (level == api.AWGLevel20) != ranged || (level == api.AWGLevel15) != (o.S3 == 0 && o.S4 == 0) {
+			if (level != api.AWGLevel15) != ranged || (level == api.AWGLevel15) != (o.S3 == 0 && o.S4 == 0) {
 				t.Fatalf("%s: wrong shape %+v", level, o)
+			}
+			if v31 := level == api.AWGLevel31; v31 != (o.HeaderProtectionKey != "") || v31 != o.RandomTrailers || v31 != (o.RekeyAfterTime != "") {
+				t.Fatalf("%s: 3.1 settings %+v", level, o)
+			}
+			if level == api.AWGLevel31 && (o.S4 < 12 || !ValidKey(o.HeaderProtectionKey)) {
+				t.Fatalf("3.1: header protection needs S4 >= 12 and a key: %+v", o)
 			}
 		}
 	}
@@ -91,5 +97,60 @@ func TestObfuscationSettings(t *testing.T) {
 	plain := ObfuscationSettings(api.Obfuscation{H1: "1"}, true)
 	if len(plain) != 1 {
 		t.Errorf("zero values not left out: %+v", plain)
+	}
+}
+
+func TestObfuscation31(t *testing.T) {
+	o := GenerateObfuscation(api.AWGLevel31)
+	o.ContentPadding = "10-40"
+	if err := ValidateObfuscation(o); err != nil {
+		t.Fatal(err)
+	}
+	if PaddingMax(o) != 40 {
+		t.Errorf("padding max = %d", PaddingMax(o))
+	}
+	for name, change := range map[string]func(*api.Obfuscation){
+		"bad key":            func(o *api.Obfuscation) { o.HeaderProtectionKey = "nope" },
+		"small s1":           func(o *api.Obfuscation) { o.S1 = 11 },
+		"padding too big":    func(o *api.Obfuscation) { o.ContentPadding = "10-5000" },
+		"padding reversed":   func(o *api.Obfuscation) { o.ContentPadding = "40-10" },
+		"zero timing":        func(o *api.Obfuscation) { o.RekeyTimeout = "0-5" },
+		"rekey after reject": func(o *api.Obfuscation) { o.RekeyAfterTime = "150-190" },
+		"timing not number":  func(o *api.Obfuscation) { o.KeepaliveTimeout = "soon" },
+	} {
+		x := o
+		change(&x)
+		if ValidateObfuscation(x) == nil {
+			t.Errorf("%s: accepted %+v", name, x)
+		}
+	}
+	// Small S values are fine without header protection.
+	x := o
+	x.HeaderProtectionKey, x.S1 = "", 5
+	if err := ValidateObfuscation(x); err != nil {
+		t.Errorf("no header protection: %v", err)
+	}
+	// 3.1 settings need level 3.1.
+	x = o
+	x.Level = api.AWGLevel20
+	if ValidateObfuscation(x) == nil {
+		t.Error("3.1 settings accepted at 2.0")
+	}
+
+	srv := ServerConfig(Server{PrivateKey: "K", Extra: ObfuscationSettings(o, false)}, nil)
+	cli := ClientConfig(Client{PrivateKey: "C", Extra: ObfuscationSettings(o, true)})
+	both := []string{"HeaderProtectionKey = " + o.HeaderProtectionKey + "\n", "RandomTrailers = on\n", "ContentPaddingAddition = 10-40\n"}
+	for _, want := range append(both, "DisableCookies = on\n") {
+		if !strings.Contains(srv, want) {
+			t.Errorf("server config lacks %q:\n%s", want, srv)
+		}
+	}
+	for _, want := range append(both, "RekeyAfterTime = 100-140\n", "RejectAfterTime = 180-200\n", "RekeyTimeout = 4-6\n", "KeepaliveTimeout = 8-12\n") {
+		if !strings.Contains(cli, want) {
+			t.Errorf("client config lacks %q:\n%s", want, cli)
+		}
+	}
+	if strings.Contains(srv, "RekeyAfterTime") || strings.Contains(cli, "DisableCookies") {
+		t.Errorf("one-sided settings on the wrong side:\nserver:\n%s\nclient:\n%s", srv, cli)
 	}
 }

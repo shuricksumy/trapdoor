@@ -290,6 +290,18 @@ AmneziaWG in *Add a server*.
 - **Strongest** (AmneziaWG 2.0, the default) adds `S3`/`S4` and `H1`–`H4` ranges; every
   device needs a current AmneziaWG app. **Most compatible** (1.5) leaves those out and
   also works with older apps and the kernel module.
+- **Newest** (AmneziaWG 3.1) is 2.0 plus:
+  - header protection: a random `HeaderProtectionKey` encrypts the header fields
+    (needs `S1`–`S4` of at least 12, so `S4` is 12–32);
+  - `RandomTrailers = on`: random bytes after every packet;
+  - `DisableCookies = on` on the server: no cookie replies, which active probing can
+    recognise (it also drops WireGuard's protection against handshake floods);
+  - random client timings around WireGuard's own: `RekeyAfterTime` 100–140 s,
+    `RejectAfterTime` 180–200 s, `RekeyTimeout` 4–6 s, `KeepaliveTimeout` 8–12 s.
+
+  Header key, trailers and the optional `ContentPaddingAddition` (API only, up to 256
+  bytes, taken off the MTU) must match on both sides and are in every client config.
+  Every device needs an AmneziaWG app that supports 3.1.
 - *Imitation packets* `I1`–`I5` are optional: packets the client sends before connecting
   (tags `<b 0xHEX>`, `<r N>`, `<rc N>`, `<rd N>`, `<t>`). With `S4`, the MTU is lowered
   by `S4` bytes unless one is set.
