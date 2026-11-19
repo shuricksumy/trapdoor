@@ -36,6 +36,8 @@ same two-factor logins.
   all traffic through the VPN; named networks (e.g. "Office LAN") given to several clients at once
 - **Access rules**: which client may reach which network or port; everything else allowed or
   blocked
+- **Servers page**: every server on every machine with its state and numbers; start, stop,
+  autostart on / off
 - **Several servers** on one host: more OpenVPN servers (e.g. TCP 443 next to UDP 1194),
   WireGuard and AmneziaWG ([how](docs/guide.md#more-openvpn-servers)), and on several hosts
   from one web UI ([how](docs/guide.md#several-hosts))

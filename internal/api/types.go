@@ -31,6 +31,22 @@ type AgentInfo struct {
 	Hosts []HostStatus `json:"hosts,omitempty"`
 }
 
+// ServerSummary is one row of GET /api/v1/servers (web): the server and
+// its numbers.
+type ServerSummary struct {
+	ServerInfo
+	Clients      int    `json:"clients"`   // usable clients (valid certificates / enabled peers)
+	Connected    int    `json:"connected"` // connected now
+	TodayIn      int64  `json:"today_in"`  // bytes since midnight (TD_TZ)
+	TodayOut     int64  `json:"today_out"`
+	SummaryError string `json:"summary_error,omitempty"` // numbers that could not be read
+}
+
+// Autostart is the body of PUT /v1/servers/{id}/autostart.
+type Autostart struct {
+	Autostart bool `json:"autostart"`
+}
+
 // Host is another machine with a trapdoor agent, added in the web UI.
 type Host struct {
 	Name string `json:"name"` // lower-case letters, digits, dashes
@@ -61,6 +77,12 @@ type ServerInfo struct {
 	// Host is the host the server runs on; empty for the web process's own
 	// agent (web only).
 	Host string `json:"host,omitempty"`
+	// Stopped: stopped in trapdoor (not an error). Autostart: started again
+	// when the VPN container (or machine) starts.
+	Stopped   bool `json:"stopped"`
+	Autostart bool `json:"autostart"`
+	// Note explains the result of a start or stop (e.g. what to do next).
+	Note string `json:"note,omitempty"`
 
 	OpenVPNDir string `json:"openvpn_dir,omitempty"`
 	PKIDir     string `json:"pki_dir,omitempty"`

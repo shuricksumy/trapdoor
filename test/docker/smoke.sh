@@ -355,6 +355,39 @@ rm -f "$JAR"
 curl -fsS -c "$JAR" -H "Content-Type: application/json" -d '{"username":"admin","password":"smoke-admin-password"}' "$WEB/api/v1/auth/login" >/dev/null || fail "admin login after restore"
 log "backup restored: same CA and clients, OpenVPN running, admin can log in"
 
+log "start / stop: a WireGuard server and the first OpenVPN server; autostart off survives a container restart"
+J=(-H "Content-Type: application/json")
+api "${J[@]}" -d '{"type":"wireguard","id":"wg9","port":15182,"public_host":"127.0.0.1","subnet":"10.82.0.0/24"}' "$WEB/api/v1/servers" >/dev/null || fail "create wg9"
+wgup() { dc exec -T vpn ip link show wg9 >/dev/null 2>&1; }
+for _ in $(seq 20); do wgup && break; sleep 1; done
+wgup || fail "wg9 not up"
+api -X POST "$WEB/api/v1/servers/wg9/stop" | grep -q '"stopped":true' || fail "stop wg9"
+for _ in $(seq 15); do wgup || break; sleep 1; done
+! wgup || fail "wg9 still up after stop"
+api -X POST "$WEB/api/v1/servers/wg9/start" | grep -q '"stopped":false' || fail "start wg9"
+for _ in $(seq 15); do wgup && break; sleep 1; done
+wgup || fail "wg9 not up after start"
+api "${J[@]}" -X PUT -d '{"autostart":false}' "$WEB/api/v1/servers/wg9/autostart" | grep -q '"autostart":false' || fail "autostart off"
+api -X POST "$WEB/api/v1/servers/openvpn/stop" | grep -q '"stopped":true' || fail "stop OpenVPN"
+mgmtup() { dc exec -T vpn sh -c 'netstat -ltn 2>/dev/null || ss -ltn' | grep -q '127.0.0.1:2080'; }
+for _ in $(seq 15); do mgmtup || break; sleep 1; done
+! mgmtup || fail "OpenVPN still running after stop: $(dc logs --tail 10 vpn)"
+for _ in $(seq 10); do vpnlog "openvpn: stopped" && break; sleep 1; done
+vpnlog "openvpn: stopped" || fail "no stop log for OpenVPN"
+api -X POST -m 60 "$WEB/api/v1/servers/openvpn/start" >"$WORK/ovpn-start.json" || fail "start OpenVPN"
+grep -q '"openvpn_version":"OpenVPN' "$WORK/ovpn-start.json" || fail "OpenVPN not running after start: $(cat "$WORK/ovpn-start.json")"
+# The VPN container restarts: wg9 (autostart off) stays stopped, OpenVPN runs.
+dc restart vpn >/dev/null 2>&1
+dc restart agent >/dev/null 2>&1 # it shares the vpn container's network
+for _ in $(seq 60); do api "$WEB/api/v1/status" 2>/dev/null | grep -q '"openvpn_version":"OpenVPN' && break; sleep 1; done
+api "$WEB/api/v1/status" | grep -q '"openvpn_version":"OpenVPN' || fail "OpenVPN not back after the restart"
+api "$WEB/api/v1/status" | grep -q '"id":"wg9"[^}]*"stopped":true' || fail "wg9 started although autostart is off: $(api "$WEB/api/v1/status")"
+sleep 3
+! wgup || fail "wg9 interface up although autostart is off"
+api "$WEB/api/v1/servers" | grep -q '"id":"wg9"' || fail "servers overview"
+api -X DELETE "$WEB/api/v1/servers/wg9" || fail "remove wg9"
+log "stop / start work; autostart off keeps a server stopped after a restart"
+
 log "web container is locked down"
 [[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' tdsmoke-web-1) == true ]] || fail "web rootfs not read-only"
 [[ $(dc exec -T web id -u) == 10001 ]] || fail "web not running as uid 10001"

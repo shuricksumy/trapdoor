@@ -178,6 +178,11 @@ func loadWGDir(ctx context.Context, cfg config.Agent, log *slog.Logger, dir, typ
 			continue
 		}
 		s := newWGServer(cfg, log, st)
+		// Autostart off: stays stopped after the agent starts (direct
+		// mode; in file mode the VPN container does the same at its start).
+		if cfg.WireGuard == "direct" && !s.autostart() {
+			_ = setMarker(s.marker("stopped"), true)
+		}
 		s.mu.Lock()
 		s.applyLocked(ctx, false)
 		s.refreshFirewallLocked(ctx) // the kernel forgets the rules on reboot
@@ -316,8 +321,10 @@ func (s *WGServer) Info(ctx context.Context) api.ServerInfo {
 	pub, _ := wg.PublicKey(s.st.PrivateKey)
 	info := api.ServerInfo{ID: s.st.ID, Type: s.st.Type, Name: s.st.Name, PublicKey: pub,
 		ListenPort: s.st.ListenPort, Subnet: s.subnet().String(), Endpoint: s.endpoint(), Error: s.applyErr,
-		Obfuscation: s.st.Obfuscation}
-	if _, err := s.run.Dump(ctx, s.st.ID); err == nil {
+		Obfuscation: s.st.Obfuscation, Stopped: s.stopped(), Autostart: s.autostart()}
+	if info.Stopped {
+		info.Error = ""
+	} else if _, err := s.run.Dump(ctx, s.st.ID); err == nil {
 		info.Running = true
 	} else if info.Error == "" {
 		info.Error = err.Error()
@@ -363,6 +370,9 @@ func (s *WGServer) applyLocked(ctx context.Context, restart bool) {
 		s.applyErr = err.Error()
 		return
 	}
+	if s.stopped() {
+		return // the configuration is written; it applies when started
+	}
 	restart = restart || (s.applied.IsValid() && s.applied != s.st.Address)
 	if err := s.run.Apply(ctx, s.st.ID, s.confPath(), s.subnet(), s.applied.Masked(), restart); err != nil {
 		s.applyErr = err.Error()
@@ -403,6 +413,7 @@ func (s *WGServer) routes() http.Handler {
 	})
 	mux.HandleFunc("GET /sessions", s.handleSessions)
 	mux.HandleFunc("GET /backup", s.handleBackup)
+	controlRoutes(mux, s.start, s.stop, s.setAutostart, s.Info)
 	mux.HandleFunc("DELETE /sessions/{id}", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteError(w, http.StatusConflict, "WireGuard has no sessions to end; disable the client instead")
 	})
@@ -469,6 +480,10 @@ func sessionID(pub string) int64 {
 func (s *WGServer) handleSessions(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.stopped() {
+		httpx.WriteJSON(w, http.StatusOK, api.Sessions{Time: s.now().UTC(), Sessions: []api.Session{}})
+		return
+	}
 	live, err := s.live(r.Context())
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadGateway, err.Error())

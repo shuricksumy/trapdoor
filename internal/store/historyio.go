@@ -114,3 +114,23 @@ func (db *DB) ImportHistory(ctx context.Context, key string, r io.Reader) (int, 
 	}
 	return n, tx.Commit()
 }
+
+// TrafficSince sums the traffic of every server since a time (unix
+// seconds, the start of an hour): history key → [in, out].
+func (db *DB) TrafficSince(ctx context.Context, since int64) (map[string][2]int64, error) {
+	rows, err := db.QueryContext(ctx, `SELECT agent, SUM(bytes_in), SUM(bytes_out) FROM traffic_hourly WHERE hour >= ? GROUP BY agent`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string][2]int64{}
+	for rows.Next() {
+		var k string
+		var in, o int64
+		if err := rows.Scan(&k, &in, &o); err != nil {
+			return nil, err
+		}
+		out[k] = [2]int64{in, o}
+	}
+	return out, rows.Err()
+}

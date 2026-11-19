@@ -130,6 +130,10 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength != 0 && !decodeBody(w, r, &req) {
 		return
 	}
+	if s.stopped() {
+		httpx.WriteError(w, http.StatusConflict, errStopped.Error())
+		return
+	}
 	s.restartMu.Lock()
 	defer s.restartMu.Unlock()
 

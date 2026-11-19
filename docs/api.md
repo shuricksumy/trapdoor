@@ -47,6 +47,9 @@ server). Below, `…` stands for that prefix.
 | POST | `/api/v1/servers/{server}/backup` | `{"passphrase"}` → one server's backup (its files and traffic history) |
 | POST | `/api/v1/servers/restore` | form upload: `file`, `passphrase`, `host` (empty: this machine), `replace` (`1`) → 201 the restored server; 409 when its id or port is taken |
 | POST | `/api/v1/backup` | `{"passphrase"}` → a backup file (`.tdbackup` encrypted, or `.tar.gz` without a passphrase); see the guide |
+| GET | `/api/v1/servers` | every server with `clients`, `connected`, `today_in`, `today_out` (bytes since midnight in `TD_TZ`), `stopped`, `autostart` |
+| POST | `/api/v1/servers/{server}/start`, `…/stop` | start / stop a server (answer: its info, `note` when there is something to do, e.g. start OpenVPN with systemd) |
+| PUT | `/api/v1/servers/{server}/autostart` | `{"autostart": true\|false}` |
 | GET | `/api/v1/hosts` | other machines: `[{"name","url","version","hostname","error"}]` (asks each one) |
 | POST | `/api/v1/hosts` | `{"name":"vps","url":"https://203.0.113.5:9443","token","fingerprint":"sha256:…"}`: connects once, then saves (same name: replaced); 400 when the agent does not answer, the token or the certificate is wrong |
 | DELETE | `/api/v1/hosts/{name}` | forget a host (its servers keep running there) |
@@ -82,6 +85,8 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 |---|---|---|---|
 | GET | `/healthz` | – | `{"status":"ok"}` (no token) |
 | GET | `/v1/info` | – | version, hostname, `servers` (as `…/info`) |
+| POST | `/v1/servers/{id}/start`, `/v1/servers/{id}/stop` | – | server info with `stopped`; restart of a stopped OpenVPN server: 409 |
+| PUT | `/v1/servers/{id}/autostart` | `{"autostart"}` | server info |
 | GET | `/v1/servers/{id}/backup` | – | tar of one server: `server.json`, then `state.json` (WireGuard) or `files/…` (OpenVPN; `pki/`, `ccd/` when elsewhere) |
 | POST | `/v1/servers/restore[?replace=1]` | that tar | 201 server info; 409 for a used id or port |
 | GET | `/v1/backup` | – | tar of the agent's directories (`openvpn/`, `wireguard/`, `amneziawg/`, and `pki/`, `ccd/`, `openvpn-servers/` when they are elsewhere) |

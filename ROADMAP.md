@@ -80,6 +80,7 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
   - [x] Container renamed `vpn`; the old entrypoint name still works
   - [x] WireGuard in the same container (`TD_WIREGUARD=file`), `WG_PORT`, smoke-tested with a real client
   - [x] AmneziaWG in the same container (userspace `amneziawg-go`), `AWG_PORT`, smoke-tested
+- [x] Servers page: all servers on all machines, start / stop, autostart on / off
 - [x] One UI for several hosts: `docker-compose.remote.yml` (vpn + agent with TLS), hosts added in
       the UI with the agent's pinned certificate fingerprint; servers `<host>.<id>`
 

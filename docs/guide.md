@@ -207,6 +207,26 @@ session count and online time. Upload/download are from the user's point of view
 Traffic is stored per user per hour. If polls were missed (web down, agent unreachable) the
 traffic of the gap is spread over its hours and flagged `estimated` instead of one spike.
 
+## Servers page: start, stop, autostart
+
+*Servers* (link above every page) lists every server on this machine and the other hosts,
+grouped by machine: type, port, subnet, state, clients, connected now and today's traffic.
+From there a server is opened, started or stopped, backed up or removed.
+
+- **Stop**: the server stops until it is started again; its clients cannot connect, its
+  settings and clients stay. A stopped server's pages show a banner with *Start*.
+- **Autostart** off: the server stays stopped when the VPN container (or the machine)
+  starts again, until it is started in trapdoor. On (default): it runs after a restart even
+  if it was stopped.
+- The state is two marker files next to the server: `trapdoor.stopped` /
+  `trapdoor.noautostart` in an OpenVPN server's directory, `<id>.stopped` /
+  `<id>.noautostart` next to a WireGuard server's `<id>.conf`. In Docker the `vpn` container
+  follows them (stops OpenVPN, takes the interface down; at its start it marks servers with
+  autostart off as stopped). Without Docker the agent stops OpenVPN through the management
+  interface and runs `wg-quick` itself; starting OpenVPN again is then up to systemd.
+- While stopped, changes (new clients, rules) are saved and apply when it starts; a restart
+  of a stopped OpenVPN server is refused. The traffic history has a gap, not estimates.
+
 ## More OpenVPN servers
 
 The first OpenVPN server is the one in `TD_OPENVPN_DIR` (an existing openvpn-ui

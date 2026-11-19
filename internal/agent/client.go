@@ -332,6 +332,27 @@ func (c *Client) Info(ctx context.Context) (api.AgentInfo, error) {
 	return out, err
 }
 
+// StartServer starts the client's server (stopped in trapdoor before).
+func (c *Client) StartServer(ctx context.Context) (api.ServerInfo, error) {
+	var out api.ServerInfo
+	err := c.do(ctx, c.slow, http.MethodPost, c.path("/start"), nil, &out)
+	return out, err
+}
+
+// StopServer stops the client's server until it is started again.
+func (c *Client) StopServer(ctx context.Context) (api.ServerInfo, error) {
+	var out api.ServerInfo
+	err := c.doJSON(ctx, http.MethodPost, c.path("/stop"), nil, &out)
+	return out, err
+}
+
+// SetAutostart sets whether the server starts with the VPN container.
+func (c *Client) SetAutostart(ctx context.Context, on bool) (api.ServerInfo, error) {
+	var out api.ServerInfo
+	err := c.doJSON(ctx, http.MethodPut, c.path("/autostart"), api.Autostart{Autostart: on}, &out)
+	return out, err
+}
+
 // Backup streams the agent's directories as a tar (see Host.handleBackup).
 // The caller closes it; a cut stream shows up as a tar error.
 func (c *Client) Backup(ctx context.Context) (io.ReadCloser, error) {
