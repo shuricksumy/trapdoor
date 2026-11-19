@@ -69,4 +69,11 @@ Actions → Release → Run workflow on `main` → version, e.g. `1.0.0`. Releas
 - **AmneziaWG** (`amneziawg-go`, `amneziawg-tools`) is pinned in the Dockerfile
   (`AMNEZIAWG_*_VERSION`, marked `# renovate:`). Renovate opens a PR for each new release
   and merges it when CI is green; the push to `main` publishes `:latest`.
+- **A new Alpine release** (e.g. 3.24 → 3.25, usually with a newer OpenVPN) is the
+  `FROM alpine:` tag. Renovate opens a PR labelled `alpine` and merges it when every
+  check is green, the smoke test included; the push to `main` publishes `:latest`. When
+  the smoke test fails (e.g. a new OpenVPN changes a default), the PR stays open for a
+  fix, as for OpenVPN 2.7 in #32.
+- Renovate merges these itself after it sees all checks green (`platformAutomerge`
+  off): `main` has no required checks that GitHub's auto-merge could wait for.
 - Released images (`X.Y.Z`, `X.Y`) are not rebuilt; a new release picks everything up.

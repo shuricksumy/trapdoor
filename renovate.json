@@ -18,7 +18,7 @@
   ],
   "packageRules": [
     {
-      "description": "AmneziaWG releases merge themselves once CI is green (the smoke test connects a real AmneziaWG client), so :latest follows them",
+      "description": "AmneziaWG releases merge themselves once every check is green (the smoke test connects a real AmneziaWG client), so :latest follows them. Renovate checks the status itself: main has no required checks for GitHub's auto-merge to wait for",
       "matchDepNames": [
         "amnezia-vpn/amneziawg-go",
         "amnezia-vpn/amneziawg-tools"
@@ -26,7 +26,29 @@
       "labels": [
         "amneziawg"
       ],
-      "automerge": true
+      "automerge": true,
+      "platformAutomerge": false
+    },
+    {
+      "description": "Alpine base image (new Alpine = new OpenVPN, WireGuard tools, iptables): merges itself once every check is green, including the smoke test with real OpenVPN, WireGuard and AmneziaWG clients; the merge then publishes :latest",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchPackageNames": [
+        "alpine"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "labels": [
+        "alpine"
+      ],
+      "automerge": true,
+      "platformAutomerge": false
     }
   ]
 }
