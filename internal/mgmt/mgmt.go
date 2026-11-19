@@ -282,6 +282,11 @@ func parseStatus(lines []string) (Status, error) {
 			if s.Username == "UNDEF" {
 				s.Username = ""
 			}
+			// "UNDEF" (or empty): still in the TLS handshake or its login
+			// failed - no client yet, so not a session.
+			if s.Name == "UNDEF" || s.Name == "" {
+				continue
+			}
 			st.Sessions = append(st.Sessions, s)
 		}
 	}

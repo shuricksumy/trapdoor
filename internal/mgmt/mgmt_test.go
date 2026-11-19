@@ -16,6 +16,7 @@ const status3 = "TITLE\tOpenVPN 2.6.19 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO]
 	"HEADER\tCLIENT_LIST\tCommon Name\tReal Address\tVirtual Address\tVirtual IPv6 Address\tBytes Received\tBytes Sent\tConnected Since\tConnected Since (time_t)\tUsername\tClient ID\tPeer ID\tData Channel Cipher\r\n" +
 	"CLIENT_LIST\talice\t127.0.0.1:37299\t10.98.0.2\t\t2520\t2212\t2026-11-18 15:45:36\t1795016736\tUNDEF\t1\t1\tAES-256-GCM\r\n" +
 	"HEADER\tROUTING_TABLE\tVirtual Address\tCommon Name\tReal Address\tLast Ref\tLast Ref (time_t)\r\n" +
+	"CLIENT_LIST\tUNDEF\t203.0.113.9:40100\t\t\t1640\t1020\t2026-11-18 15:45:40\t1795016740\tUNDEF\t2\t2\tN/A\r\n" +
 	"ROUTING_TABLE\t10.98.0.2\talice\t127.0.0.1:37299\t2026-11-18 15:45:36\t1795016736\r\n" +
 	"GLOBAL_STATS\tMax bcast/mcast queue length\t0\r\n" +
 	"GLOBAL_STATS\tdco_enabled\t0\r\n" +

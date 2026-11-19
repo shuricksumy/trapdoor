@@ -72,3 +72,40 @@ func TestOpenConcurrently(t *testing.T) {
 		}
 	}
 }
+
+func TestMigrationDropsUndefSessions(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "td.db")
+	db, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A database from before migration 8, with an unauthenticated connection
+	// stored as client "UNDEF" next to a real one.
+	for i, name := range []string{"UNDEF", "alice"} {
+		if _, err := db.ExecContext(ctx, `INSERT INTO sessions (agent, name, client_id, real_address, connected_at, last_seen)
+			VALUES ('openvpn', ?, ?, '203.0.113.9:1', 1, 1)`, name, i+1); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, `INSERT INTO traffic_hourly (agent, name, hour) VALUES ('openvpn', ?, 0)`, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE schema_version SET version = 7`); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	if db, err = Open(ctx, path); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	for _, table := range []string{"sessions", "traffic_hourly"} {
+		var undef, alice int
+		_ = db.QueryRowContext(ctx, `SELECT count(*) FROM `+table+` WHERE name = 'UNDEF'`).Scan(&undef)
+		_ = db.QueryRowContext(ctx, `SELECT count(*) FROM `+table+` WHERE name = 'alice'`).Scan(&alice)
+		if undef != 0 || alice != 1 {
+			t.Errorf("%s: UNDEF %d, alice %d", table, undef, alice)
+		}
+	}
+}
