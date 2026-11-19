@@ -37,7 +37,8 @@ same two-factor logins.
 - **Access rules**: which client may reach which network or port; everything else allowed or
   blocked
 - **Several servers** on one host: more OpenVPN servers (e.g. TCP 443 next to UDP 1194),
-  WireGuard and AmneziaWG ([how](docs/guide.md#more-openvpn-servers))
+  WireGuard and AmneziaWG ([how](docs/guide.md#more-openvpn-servers)), and on several hosts
+  from one web UI ([how](docs/guide.md#several-hosts))
 - **Server settings** in a form or as raw `server.conf`, checked by OpenVPN before saving,
   with a preview of the changes, backups and restart with automatic rollback
 - Light / dark / auto theme, works on phones

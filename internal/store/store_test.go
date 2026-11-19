@@ -51,3 +51,24 @@ func TestNewerSchemaRefused(t *testing.T) {
 		t.Error("expected error for newer schema")
 	}
 }
+
+// Two processes opening a new database at once ("trapdoor user add" while
+// web starts) must not both run the migrations.
+func TestOpenConcurrently(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "td.db")
+	errs := make(chan error, 4)
+	for range 4 {
+		go func() {
+			db, err := Open(context.Background(), path)
+			if err == nil {
+				err = db.Close()
+			}
+			errs <- err
+		}()
+	}
+	for range 4 {
+		if err := <-errs; err != nil {
+			t.Error(err)
+		}
+	}
+}

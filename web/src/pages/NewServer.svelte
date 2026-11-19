@@ -15,19 +15,24 @@
   let type = $state(initial);
   const isOVPN = $derived(type === 'openvpn');
 
-  function freeID(prefix) {
+  // Ids, ports and subnets only have to differ on the same machine.
+  const onMachine = (machine) => servers.list.filter((s) => (s.host ?? '') === machine);
+  const localID = (s) => (s.host ? s.id.slice(s.host.length + 1) : s.id);
+
+  function freeID(prefix, machine) {
+    const ids = onMachine(machine).map(localID);
     for (let i = 0; i < 100; i++) {
-      if (!servers.list.some((s) => s.id === `${prefix}${i}`)) return `${prefix}${i}`;
+      if (!ids.includes(`${prefix}${i}`)) return `${prefix}${i}`;
     }
     return '';
   }
 
   // A second server needs its own port and subnet, so suggest the next ones.
-  function defaults(t) {
+  function defaults(t, machine = '') {
     const k = kinds[t];
-    let taken = servers.list.filter((s) => s.type === t).length;
+    let taken = onMachine(machine).filter((s) => s.type === t).length;
     if (t === 'openvpn') taken = Math.max(0, taken - 1); // the first one has its own port (VPN_PORT)
-    return { id: freeID(k.prefix), port: k.port + taken, subnet: `10.${k.net + taken}.0.0/24` };
+    return { id: freeID(k.prefix, machine), port: k.port + taken, subnet: `10.${k.net + taken}.0.0/24` };
   }
   let f = $state({
     ...defaults(initial),
@@ -38,6 +43,7 @@
     dns: '',
     publicPort: '',
     proto: 'tcp',
+    machine: '', // '' = this machine, else a host name
     mtu: '',
     allowed: '0.0.0.0/0, ::/0',
     keepalive: 25,
@@ -48,12 +54,14 @@
   function pick(t) {
     if (t === type) return;
     type = t;
-    Object.assign(f, defaults(t));
+    Object.assign(f, defaults(t, f.machine));
   }
 
   // OpenVPN: "tun…" names belong to the first server's device.
   const idOk = $derived(
-    /^[a-z][a-z0-9-]{0,14}$/.test(f.id) && !servers.list.some((s) => s.id === f.id) && !(isOVPN && f.id.startsWith('tun')),
+    /^[a-z][a-z0-9-]{0,14}$/.test(f.id) &&
+      !servers.list.some((s) => s.id === (f.machine ? `${f.machine}.${f.id}` : f.id)) &&
+      !(isOVPN && f.id.startsWith('tun')),
   );
   const list = (s) => s.split(/[\s,]+/).filter(Boolean);
 
@@ -65,7 +73,7 @@
       if (type === 'openvpn') {
         const sv = await api('/servers', {
           method: 'POST',
-          body: { type, id: f.id, name: f.name.trim() || f.id, port: Number(f.port), proto: f.proto },
+          body: { type, host: f.machine, id: f.id, name: f.name.trim() || f.id, port: Number(f.port), proto: f.proto },
         });
         await reloadServers();
         selectServer(sv.id);
@@ -75,6 +83,7 @@
       }
       const body = {
         type,
+        host: f.machine,
         id: f.id,
         name: f.name.trim() || f.id,
         public_host: f.host.trim(),
@@ -133,6 +142,16 @@
       <span>WireGuard that is hard to detect and block. Needs the AmneziaWG app.</span>
     </button>
   </div>
+
+  {#if servers.hosts.length}
+    <label class="field">
+      <span>Machine</span>
+      <select bind:value={f.machine} onchange={() => Object.assign(f, defaults(type, f.machine))}>
+        <option value="">This machine</option>
+        {#each servers.hosts as h (h.name)}<option value={h.name} disabled={!!h.error}>{h.name}{h.error ? ' (not reachable)' : ''}</option>{/each}
+      </select>
+    </label>
+  {/if}
 
   <div class="grid">
     <label class="field">

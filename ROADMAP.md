@@ -50,14 +50,14 @@ more than OpenVPN. Done in one go before v0.1.0, so nobody has to migrate settin
 Like [WGDashboard](https://github.com/WGDashboard/WGDashboard), but for OpenVPN, WireGuard and
 AmneziaWG side by side: several VPN servers of any type on one host, managed in one UI.
 
-- [ ] **Servers** as their own objects: each has a type (OpenVPN / WireGuard / AmneziaWG), name,
+- [x] **Servers** as their own objects: each has a type (OpenVPN / WireGuard / AmneziaWG), name,
       port, subnet; clients, live sessions, traffic history and access rules belong to a server;
       server switcher in the UI; existing setups become the first OpenVPN server
   - [x] API per server (`/v1/servers/{id}/…`, `/api/v1/servers/{id}/…`), history keyed by
         server, existing setup is server `openvpn`, switcher shown when there are several
-- [ ] Agent backends behind one interface (create / remove client, sessions, traffic, apply config)
+- [x] Agent backends behind one interface (create / remove client, sessions, traffic, apply config)
   - [x] Host with OpenVPN and WireGuard servers; WireGuard servers created / removed at runtime
-- [ ] **WireGuard** server: setup, `wg0.conf` written by the agent and applied live with
+- [x] **WireGuard** server: setup, `wg0.conf` written by the agent and applied live with
       `wg syncconf` (no disconnects), peers with key pairs and addresses, AllowedIPs for routing
       and site-to-site, optional preshared key, `.conf` download + QR code, live status and traffic
       from `wg show dump` (connected = recent handshake), remove = revoke (no certificates)
@@ -73,14 +73,15 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
         timing ranges, optional content padding; smoke-tested with a real 3.1 client
 - [x] Several OpenVPN servers (e.g. UDP 1194 + TCP 443), each with its own directory, PKI,
       management port and tun device; the container supervisor runs all of them
-- [ ] Access rules for WireGuard / AmneziaWG interfaces; two-factor login
+- [x] Access rules for WireGuard / AmneziaWG interfaces; two-factor login
       stays OpenVPN-only (WireGuard has no login step)
-  - [x] WireGuard: chain `TD-<id>` per server, same Access page, direct and file (Docker) mode
+  - [x] WireGuard and AmneziaWG: chain `TD-<id>` per server, same Access page, direct and file (Docker) mode
 - [x] Docker: WireGuard / AmneziaWG in the `vpn` container (called `openvpn` before), ports per server
   - [x] Container renamed `vpn`; the old entrypoint name still works
   - [x] WireGuard in the same container (`TD_WIREGUARD=file`), `WG_PORT`, smoke-tested with a real client
   - [x] AmneziaWG in the same container (userspace `amneziawg-go`), `AWG_PORT`, smoke-tested
-- [ ] Later: one UI for several hosts (one agent per host)
+- [x] One UI for several hosts: `docker-compose.remote.yml` (vpn + agent with TLS), hosts added in
+      the UI with the agent's pinned certificate fingerprint; servers `<host>.<id>`
 
 ## v4 — extras
 

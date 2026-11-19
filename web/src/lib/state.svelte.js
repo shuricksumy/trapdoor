@@ -42,7 +42,8 @@ addEventListener('click', (e) => {
 export const session = $state({ user: null, checked: false });
 
 // VPN servers (from /api/v1/status) and the one the pages show.
-export const servers = $state({ list: [], current: '' });
+// hosts: the other machines with an agent (their servers have a "host").
+export const servers = $state({ list: [], current: '', hosts: [] });
 
 export function selectServer(id) {
   servers.current = id;
@@ -59,8 +60,9 @@ export function currentServer() {
 }
 
 /** Keep the selected server if it still exists, else the remembered one, else the first one. */
-export function setServers(list) {
+export function setServers(list, hosts = []) {
   servers.list = list;
+  servers.hosts = hosts;
   if (list.some((s) => s.id === servers.current)) return;
   let saved = '';
   try {

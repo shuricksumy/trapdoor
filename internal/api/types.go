@@ -26,6 +26,30 @@ type AgentInfo struct {
 	Version  string       `json:"version"`
 	Hostname string       `json:"hostname"`
 	Servers  []ServerInfo `json:"servers"`
+	// Hosts are the other hosts the web process manages (web only); their
+	// servers are in Servers with ids "<host>.<id>".
+	Hosts []HostStatus `json:"hosts,omitempty"`
+}
+
+// Host is another machine with a trapdoor agent, added in the web UI.
+type Host struct {
+	Name string `json:"name"` // lower-case letters, digits, dashes
+	// URL of its agent: https://203.0.113.5:9443.
+	URL string `json:"url"`
+	// Token is the agent's TD_AGENT_TOKEN (write only: never returned).
+	Token string `json:"token,omitempty"`
+	// Fingerprint of the agent's TLS certificate ("sha256:<hex>", printed
+	// by `trapdoor agent-cert`): the connection is pinned to it.
+	Fingerprint string `json:"fingerprint"`
+}
+
+// HostStatus is a host and whether its agent answers.
+type HostStatus struct {
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	Version  string `json:"version,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
+	Error    string `json:"error,omitempty"`
 }
 
 // ServerInfo describes one VPN server (GET /v1/servers/{id}/info).
@@ -34,6 +58,9 @@ type ServerInfo struct {
 	ID   string `json:"id"`
 	Type string `json:"type"` // TypeOpenVPN
 	Name string `json:"name"` // shown in the UI
+	// Host is the host the server runs on; empty for the web process's own
+	// agent (web only).
+	Host string `json:"host,omitempty"`
 
 	OpenVPNDir string `json:"openvpn_dir,omitempty"`
 	PKIDir     string `json:"pki_dir,omitempty"`
@@ -123,6 +150,8 @@ type Obfuscation struct {
 // CreateServer is the body of POST /v1/servers: a new WireGuard server.
 type CreateServer struct {
 	Type string `json:"type"` // TypeOpenVPN, TypeWireGuard or TypeAmneziaWG
+	// Host to create it on (web only; empty = the web process's own agent).
+	Host string `json:"host,omitempty"`
 	// ID is also the network interface name (e.g. wg0): lower-case letters,
 	// digits and dashes, at most 15 characters.
 	ID   string `json:"id"`

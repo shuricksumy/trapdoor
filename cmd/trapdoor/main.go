@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -36,7 +37,9 @@ commands:
             manage admin users in TD_DB_PATH (password from TD_ADMIN_PASSWORD or stdin)
   auth-verify [--ccd DIR] <file>
             OpenVPN auth-user-pass-verify (via-file) for client 2FA
-  health    <url>  exit 0 if GET <url>/healthz answers 200 (http://... or unix:/path)
+  agent-cert
+            print the agent's TLS fingerprint (TD_AGENT_TLS=auto), creating the certificate
+  health    <url>  exit 0 if GET <url>/healthz answers 200 (http://, https:// or unix:/path)
   version   print version
 `
 
@@ -64,6 +67,8 @@ func main() {
 		fmt.Println(version.String())
 	case "health":
 		err = runHealth(ctx, os.Args[2:])
+	case "agent-cert":
+		err = runAgentCert()
 	case "auth-verify":
 		os.Exit(runAuthVerify(os.Args[2:]))
 	case "-h", "--help", "help":
@@ -86,6 +91,14 @@ func runAgent(ctx context.Context, log *slog.Logger) error {
 	l, err := httpx.Listen(cfg.Listen)
 	if err != nil {
 		return err
+	}
+	if cfg.TLS == "auto" {
+		cert, fp, err := agent.AgentCert(cfg.TLSCert, cfg.TLSKey)
+		if err != nil {
+			return fmt.Errorf("agent TLS certificate: %w", err)
+		}
+		l = tls.NewListener(l, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13})
+		log.Info("agent API over TLS: add this host in the web UI with its fingerprint", "fingerprint", fp)
 	}
 	if path, ok := strings.CutPrefix(cfg.Listen, "unix:"); ok && cfg.SocketGID >= 0 {
 		if err := os.Chown(path, -1, cfg.SocketGID); err != nil {
@@ -150,16 +163,21 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 	}
 	defer func() { _ = db.Close() }()
 
+	// The own agent and the other hosts added in the UI.
+	agents, err := web.NewMultiAgent(ctx, client, db, cfg.AgentTimeout)
+	if err != nil {
+		return err
+	}
 	poller := &history.Poller{DB: db, Interval: cfg.PollInterval, Log: log,
 		List: func(ctx context.Context) ([]string, error) {
-			info, err := client.Info(ctx)
+			info, err := agents.Info(ctx)
 			ids := make([]string, 0, len(info.Servers))
 			for _, s := range info.Servers {
 				ids = append(ids, s.ID)
 			}
 			return ids, err
 		},
-		Source: func(id string) history.Source { return client.Server(id) },
+		Source: func(id string) history.Source { return agents.Server(id) },
 	}
 	go poller.Run(ctx)
 
@@ -171,7 +189,7 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 		log.Warn("TD_COOKIE_SECURE=false: login cookie is sent over plain HTTP")
 	}
 	srv := web.New(web.Deps{
-		Agent: web.ClientAgent(client), Stats: &history.Stats{DB: db},
+		Agent: agents, Hosts: agents, Stats: &history.Stats{DB: db},
 		Auth: authSvc, APIToken: cfg.APIToken, CookieSecure: cfg.CookieSecure,
 		TrustedProxies: cfg.TrustedProxies, Location: cfg.Location, Log: log,
 		ExpiryWarnDays: cfg.ExpiryWarnDays,
@@ -286,13 +304,28 @@ func readPassword() (string, error) {
 }
 
 // runHealth is the container health check (no curl in the image needed).
+func runAgentCert() error {
+	dir := env("TD_OPENVPN_DIR", "/etc/openvpn")
+	_, fp, err := agent.AgentCert(env("TD_AGENT_TLS_CERT", dir+"/trapdoor-agent.crt"), env("TD_AGENT_TLS_KEY", dir+"/trapdoor-agent.key"))
+	if err != nil {
+		return err
+	}
+	fmt.Println(fp)
+	return nil
+}
+
 func runHealth(ctx context.Context, args []string) error {
 	if len(args) != 1 {
 		return errors.New("usage: trapdoor health http://127.0.0.1:8080 | unix:/path/to/agent.sock")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	return agent.NewClient(args[0], "", 5*time.Second).Health(ctx)
+	c := agent.NewClient(args[0], "", 5*time.Second)
+	if strings.HasPrefix(args[0], "https://") {
+		// Health only (no token): the agent's self-signed certificate is not checked.
+		c = agent.NewInsecureHealthClient(args[0], 5*time.Second)
+	}
+	return c.Health(ctx)
 }
 
 // runAuthVerify is called by OpenVPN for every login:
