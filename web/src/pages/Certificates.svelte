@@ -7,6 +7,7 @@
   import TwoFactor from '../lib/TwoFactor.svelte';
   import NetworkDialog from '../lib/NetworkDialog.svelte';
   import NamedNetworks from '../lib/NamedNetworks.svelte';
+  import { placeMenu } from '../lib/menu.js';
 
   let twoFactor = $state({ open: false, name: '' });
   let network = $state({ open: false, name: '' });
@@ -285,7 +286,7 @@
                   {#if c.st.key === 'valid' || c.st.key === 'expiring'}
                     <a class="btn small" href={apiURL(`/certs/${encodeURIComponent(c.name)}/ovpn`)} download="{c.name}.ovpn">Download profile</a>
                   {/if}
-                  <details class="menu">
+                  <details class="menu" ontoggle={placeMenu}>
                     <summary class="btn small ghost" aria-label="More actions for {c.name}">More</summary>
                     <div class="menu-list">
                       {#if online.has(c.name)}
@@ -452,10 +453,8 @@
   .menu summary { list-style: none; }
   .menu summary::-webkit-details-marker { display: none; }
   .menu-list {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 4px);
-    z-index: 10;
+    position: fixed; /* placed by placeMenu: outside the scrolling table */
+    z-index: 50;
     min-width: 160px;
     display: grid;
     padding: 4px;
