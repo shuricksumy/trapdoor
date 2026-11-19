@@ -30,11 +30,19 @@ var hostPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}$`)
 // unreachable host does not slow every page down.
 const hostInfoTimeout = 5 * time.Second
 
-// HostManager lists, adds and removes other hosts.
+// HostManager lists, adds and removes other hosts (nodes).
 type HostManager interface {
 	Hosts(ctx context.Context) []api.HostStatus
 	AddHost(ctx context.Context, h api.Host) (api.HostStatus, error)
 	RemoveHost(ctx context.Context, name string) error
+	// HostFingerprint is the pinned fingerprint of a node, if it exists.
+	HostFingerprint(name string) (string, bool)
+}
+
+// HostFingerprint returns a node's pinned certificate fingerprint.
+func (m *MultiAgent) HostFingerprint(name string) (string, bool) {
+	r, ok := m.host(name)
+	return r.fingerprint, ok
 }
 
 // MultiAgent is an Agent spanning the own agent and the other hosts'.
@@ -49,8 +57,8 @@ type MultiAgent struct {
 }
 
 type remoteHost struct {
-	url string
-	c   *agent.Client
+	url, fingerprint string
+	c                *agent.Client
 }
 
 // NewMultiAgent loads the other hosts from db.
@@ -61,7 +69,7 @@ func NewMultiAgent(ctx context.Context, local *agent.Client, db *store.DB, timeo
 		return nil, err
 	}
 	for _, h := range hosts {
-		m.remote[h.Name] = remoteHost{url: h.URL, c: agent.NewPinnedClient(h.URL, h.Token, h.Fingerprint, timeout)}
+		m.remote[h.Name] = remoteHost{url: h.URL, fingerprint: h.Fingerprint, c: agent.NewPinnedClient(h.URL, h.Token, h.Fingerprint, timeout)}
 	}
 	return m, nil
 }
@@ -107,7 +115,7 @@ func (m *MultiAgent) remoteInfo(ctx context.Context) ([]api.HostStatus, []api.Se
 				res[i] = result{st: st}
 				return
 			}
-			st.Version, st.Hostname, st.Containers = info.Version, info.Hostname, info.Containers
+			st.Version, st.Hostname, st.Containers, st.Machine = info.Version, info.Hostname, info.Containers, info.Machine
 			for _, s := range info.Servers {
 				s.ID, s.Host = n+"."+s.ID, n
 				res[i].servers = append(res[i].servers, s)
@@ -203,9 +211,9 @@ func (m *MultiAgent) AddHost(ctx context.Context, h api.Host) (api.HostStatus, e
 		return api.HostStatus{}, err
 	}
 	m.mu.Lock()
-	m.remote[h.Name] = remoteHost{url: h.URL, c: c}
+	m.remote[h.Name] = remoteHost{url: h.URL, fingerprint: h.Fingerprint, c: c}
 	m.mu.Unlock()
-	return api.HostStatus{Name: h.Name, URL: h.URL, Version: info.Version, Hostname: info.Hostname}, nil
+	return api.HostStatus{Name: h.Name, Machine: info.Machine, URL: h.URL, Version: info.Version, Hostname: info.Hostname, Containers: info.Containers}, nil
 }
 
 // RemoveHost forgets a host; its servers keep running there and their
@@ -225,9 +233,13 @@ func (m *MultiAgent) RemoveHost(ctx context.Context, name string) error {
 }
 
 func (s *Server) registerHostRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/hosts", s.handleHosts)
-	mux.HandleFunc("POST /api/v1/hosts", s.handleAddHost)
-	mux.HandleFunc("DELETE /api/v1/hosts/{name}", s.handleRemoveHost)
+	// Nodes were called hosts first; both paths work.
+	for _, base := range []string{"/api/v1/hosts", "/api/v1/nodes"} {
+		mux.HandleFunc("GET "+base, s.handleHosts)
+		mux.HandleFunc("POST "+base, s.handleAddHost)
+		mux.HandleFunc("DELETE "+base+"/{name}", s.handleRemoveHost)
+	}
+	mux.HandleFunc("POST /api/v1/nodes/tokens", s.handleJoinToken)
 }
 
 func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {

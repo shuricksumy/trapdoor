@@ -40,6 +40,14 @@ type Agent struct {
 	// and AmneziaWG servers run (e.g. "vpn", "vpn-wireguard"); empty = not
 	// in a container.   TD_CONTAINER_OPENVPN, TD_CONTAINER_WIREGUARD, TD_CONTAINER_AMNEZIAWG
 	ContainerOpenVPN, ContainerWireGuard, ContainerAmneziaWG string
+	// Machine and NodeName are shown in the UI: the computer this agent runs
+	// on and the node's name.              TD_MACHINE, TD_NODE_NAME
+	Machine, NodeName string
+	// JoinURL, JoinToken: the web UI this node adds itself to at start, with a
+	// join token (from the UI, or the web UI's TD_JOIN_SECRET); NodeURL is how
+	// the web UI reaches this agent (https://…:9443).
+	// TD_JOIN_URL, TD_JOIN_TOKEN, TD_NODE_URL
+	JoinURL, JoinToken, NodeURL string
 	// OpenVPN: "off" runs no OpenVPN server on this agent (e.g. one that
 	// only runs WireGuard); "on" (default).               TD_OPENVPN
 	OpenVPN string
@@ -117,6 +125,9 @@ type Web struct {
 	Location *time.Location
 	// PollInterval for recording session history.         TD_POLL_INTERVAL
 	PollInterval time.Duration
+	// JoinSecret lets nodes join with it instead of a one-time token, e.g.
+	// the nodes of the same compose file (empty = tokens only). TD_JOIN_SECRET
+	JoinSecret string
 }
 
 // ErrNoToken is returned when the shared agent token is not set.
@@ -175,6 +186,8 @@ func LoadAgent() (Agent, error) {
 		return c, fmt.Errorf("TD_FIREWALL must be direct, file or off")
 	}
 	c.IPTablesDir = os.Getenv("TD_IPTABLES_DIR")
+	c.Machine, c.NodeName = os.Getenv("TD_MACHINE"), os.Getenv("TD_NODE_NAME")
+	c.JoinURL, c.JoinToken, c.NodeURL = os.Getenv("TD_JOIN_URL"), os.Getenv("TD_JOIN_TOKEN"), os.Getenv("TD_NODE_URL")
 	c.ContainerOpenVPN = os.Getenv("TD_CONTAINER_OPENVPN")
 	c.ContainerWireGuard = os.Getenv("TD_CONTAINER_WIREGUARD")
 	c.ContainerAmneziaWG = os.Getenv("TD_CONTAINER_AMNEZIAWG")
@@ -204,6 +217,9 @@ func LoadAgent() (Agent, error) {
 	}
 	if c.RestartSignal != "SIGHUP" && c.RestartSignal != "SIGTERM" {
 		return c, fmt.Errorf("TD_OPENVPN_RESTART must be SIGHUP or SIGTERM")
+	}
+	if c.JoinURL != "" && (c.JoinToken == "" || c.NodeURL == "" || c.NodeName == "" || c.TLS != "auto") {
+		return c, fmt.Errorf("TD_JOIN_URL needs TD_JOIN_TOKEN, TD_NODE_URL, TD_NODE_NAME and TD_AGENT_TLS=auto")
 	}
 	if c.Token == "" {
 		return c, ErrNoToken
@@ -259,6 +275,10 @@ func LoadWeb() (Web, error) {
 		CookieSecure:   env("TD_COOKIE_SECURE", "true") != "false",
 		TrustedProxies: proxies,
 		SessionIdle:    idle,
+		JoinSecret:     os.Getenv("TD_JOIN_SECRET"),
+	}
+	if c.JoinSecret != "" && len(c.JoinSecret) < 24 {
+		return c, fmt.Errorf("TD_JOIN_SECRET must be at least 24 characters (openssl rand -hex 32)")
 	}
 	if c.AgentToken == "" {
 		return c, ErrNoToken

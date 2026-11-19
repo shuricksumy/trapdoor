@@ -311,6 +311,28 @@ code=$(curl -s -o "$WORK/host-bad.json" -w "%{http_code}" -H "Authorization: Bea
 [[ $code == 400 ]] && grep -q "does not match" "$WORK/host-bad.json" || fail "wrong fingerprint accepted ($code): $(cat "$WORK/host-bad.json")"
 api -H "Content-Type: application/json" -d '{"name":"remote","url":"https://'"$RIP"':9443","token":"'"$REMOTE_TOKEN"'","fingerprint":"'"$FP"'"}' \
 	"$WEB/api/v1/hosts" >"$WORK/host.json" || fail "add host"
+api -X DELETE "$WEB/api/v1/nodes/remote" || fail "remove the node added by hand"
+log "node added by hand (pinned certificate; a wrong one refused) and removed"
+
+# The node joins by itself: a one-time token from the web API in its .env.
+JT=$(api -H "Content-Type: application/json" -d '{"name":"remote","hours":1}' "$WEB/api/v1/nodes/tokens" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])') || fail "join token"
+cat >>"$WORK/remote/.env" <<ENV
+TD_JOIN_URL=http://tdsmoke-web-1:8080
+TD_JOIN_TOKEN=$JT
+TD_NODE_NAME=remote
+TD_NODE_URL=https://tdremote-vpn-1:9443
+TD_MACHINE=machine-b
+ENV
+dr up -d agent
+joined() { api "$WEB/api/v1/nodes" | grep -q '"name":"remote","machine":"machine-b"'; }
+for _ in $(seq 30); do joined && break; sleep 1; done
+joined || fail "node did not join: $(api "$WEB/api/v1/nodes"; dr logs --tail 20 agent)"
+remotelog "joined the web UI" || fail "agent log does not show the join"
+[[ $(dr exec -T agent trapdoor agent-cert) == "$FP" ]] || fail "the agent's certificate changed"
+code=$(curl -s -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" \
+	-d '{"token":"'"$JT"'","name":"other","url":"https://'"$RIP"':9443","fingerprint":"'"$FP"'","agent_token":"'"$REMOTE_TOKEN"'"}' "$WEB/api/v1/nodes/join")
+[[ $code == 401 ]] || fail "a used join token was accepted ($code)"
+log "node joined by itself with a one-time join token (used token refused)"
 api -H "Content-Type: application/json" \
 	-d '{"host":"remote","type":"wireguard","id":"wg0","port":15282,"public_host":"127.0.0.1","subnet":"10.81.0.0/24"}' \
 	"$WEB/api/v1/servers" | grep -q '"id":"remote.wg0"' || fail "create a WireGuard server on the remote host"
@@ -324,7 +346,7 @@ api "$WEB/api/v1/servers/remote.wg0/peers/remotephone/conf" | grep -q "^Endpoint
 api -X DELETE "$WEB/api/v1/servers/remote.wg0" || fail "remove the remote server"
 api -X DELETE "$WEB/api/v1/hosts/remote" || fail "remove the host"
 ! api "$WEB/api/v1/status" | grep -q '"remote\.' || fail "remote servers still listed"
-log "second host: added with its pinned certificate, server and client created there; removed"
+log "second node: server and client created there; removed"
 
 log "backup: download through the web API (encrypted), restore into a fresh setup"
 cainfo() { api "$WEB/api/v1/status" | python3 -c 'import json,sys; s=[x for x in json.load(sys.stdin)["agent"]["servers"] if x["id"]=="openvpn"][0]; print(s["ca_name"], s["ca_not_after"])'; }

@@ -106,10 +106,13 @@ jobs:
       - name: docker compose config
         env:
           TD_AGENT_TOKEN: ci
+          TD_OFFICE_AGENT_TOKEN: ci
+          TD_GUEST_AGENT_TOKEN: ci
+          TD_JOIN_SECRET: ci-join-secret-at-least-24
         run: |
           set -e
           check() { echo "== $*"; docker compose "$@" config -q; }
           check -f docker-compose.yml
           check -f docker-compose.yml -f docker-compose.traefik.yml
           check -f docker-compose.remote.yml
-          ( cd examples/separate-containers && check -f docker-compose.yml && check -f docker-compose.yml -f docker-compose.host.yml )
+          ( cd examples/nodes && check -f docker-compose.yml && check -f docker-compose.yml -f docker-compose.host.yml )

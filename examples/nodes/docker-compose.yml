@@ -1,0 +1,202 @@
+# Nodes: one web UI and several nodes in one compose file.
+#
+# A node is an agent with its vpn container. It runs VPN servers of any type (OpenVPN,
+# WireGuard, AmneziaWG) and has its own folder, network stack, NAT, firewall and ports.
+# The web UI shows machine › node › VPN server; "Add a server" asks for the node.
+#
+#   cp .env.example .env              # set the tokens and the join secret
+#   docker compose up -d
+#   docker compose exec -it web trapdoor user add admin
+#
+# main/    node "main", next to the web UI (unix socket)
+# office/  node "office": joins the web UI by itself with TD_JOIN_SECRET; its agent
+#          listens with TLS on the compose network only (no published agent port)
+# guest/   node "guest": the same, e.g. guests without a route to the office networks
+#
+# One more node: copy the office block and folder, change the name, the ports and the
+# agent token. Nodes on other machines: ../remote (join token from the web UI).
+
+x-image: &image
+  image: ${TD_IMAGE:-ghcr.io/shuricksumy/trapdoor:latest}
+  restart: unless-stopped
+
+# The privileges every vpn container needs, nothing more.
+x-vpn: &vpn
+  <<: *image
+  user: root
+  entrypoint: ["vpn-entrypoint.sh"]
+  cap_add: [NET_ADMIN]
+  devices: [/dev/net/tun]
+  sysctls:
+    - net.ipv4.ip_forward=1
+
+# Every agent: shares its vpn container's network (OpenVPN's management interface stays
+# on 127.0.0.1), writes the files its vpn container runs. No network privileges.
+x-agent: &agent
+  <<: *image
+  user: root
+  command: ["agent"]
+
+x-agent-env: &agent-env
+  TD_MACHINE: ${TD_MACHINE:-docker-host} # nodes with the same machine are shown together
+  TD_OPENVPN_MGMT: 127.0.0.1:2080
+  TD_OPENVPN_RESTART: SIGTERM # the vpn container starts OpenVPN again
+  TD_FIREWALL: file # the vpn container applies the access rules
+  TD_WIREGUARD: file # the vpn container runs WireGuard and AmneziaWG
+  TD_SETUP_PORT: "1194"
+  TD_SETUP_PROTO: udp
+  TD_TOTP_ISSUER: ${TD_TOTP_ISSUER:-trapdoor}
+
+services:
+  # ── node "main" ────────────────────────────────────────────────────────────
+  vpn-main:
+    <<: *vpn
+    environment:
+      VPN_NAT_SUBNET: auto
+    ports:
+      - "${MAIN_OVPN_PORT:-1194}:1194/udp"
+      - "${MAIN_OVPN2_PORT:-1195}:${MAIN_OVPN2_PORT:-1195}/tcp"
+      - "${MAIN_WG_PORT:-51820}:${MAIN_WG_PORT:-51820}/udp"
+      - "${MAIN_AWG_PORT:-51830}:${MAIN_AWG_PORT:-51830}/udp"
+    volumes:
+      - ./main/openvpn:/etc/openvpn
+      - ./main/wireguard:/etc/wireguard
+      - ./main/amneziawg:/etc/amnezia/amneziawg
+
+  agent-main:
+    <<: *agent
+    network_mode: service:vpn-main
+    depends_on: [vpn-main]
+    environment:
+      <<: *agent-env
+      TD_NODE_NAME: main
+      TD_AGENT_TOKEN: ${TD_AGENT_TOKEN:?set TD_AGENT_TOKEN in .env}
+      TD_AGENT_LISTEN: unix:/run/trapdoor/agent.sock
+      TD_AGENT_SOCKET_GID: "10001"
+      TD_CONTAINER_OPENVPN: vpn-main
+      TD_CONTAINER_WIREGUARD: vpn-main
+      TD_CONTAINER_AMNEZIAWG: vpn-main
+      TD_SETUP_PUBLIC_PORT: ${MAIN_OVPN_PORT:-1194}
+    volumes:
+      - ./main/openvpn:/etc/openvpn
+      - ./main/wireguard:/etc/wireguard
+      - ./main/amneziawg:/etc/amnezia/amneziawg
+      - run:/run/trapdoor
+    healthcheck:
+      test: ["CMD", "trapdoor", "health", "unix:/run/trapdoor/agent.sock"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+
+  # ── node "office" ──────────────────────────────────────────────────────────
+  vpn-office:
+    <<: *vpn
+    environment:
+      VPN_NAT_SUBNET: auto
+    ports:
+      - "${OFFICE_OVPN_PORT:-1294}:1194/udp"
+      - "${OFFICE_WG_PORT:-51920}:${OFFICE_WG_PORT:-51920}/udp"
+      - "${OFFICE_AWG_PORT:-51930}:${OFFICE_AWG_PORT:-51930}/udp"
+    volumes:
+      - ./office/openvpn:/etc/openvpn
+      - ./office/wireguard:/etc/wireguard
+      - ./office/amneziawg:/etc/amnezia/amneziawg
+
+  agent-office:
+    <<: *agent
+    network_mode: service:vpn-office
+    depends_on: [vpn-office]
+    environment:
+      <<: *agent-env
+      TD_NODE_NAME: office
+      TD_AGENT_TOKEN: ${TD_OFFICE_AGENT_TOKEN:?set TD_OFFICE_AGENT_TOKEN in .env}
+      TD_AGENT_LISTEN: ":9443"
+      TD_AGENT_TLS: auto # self-signed, pinned by the web UI when the node joins
+      TD_JOIN_URL: http://web:8080
+      TD_JOIN_TOKEN: ${TD_JOIN_SECRET:?set TD_JOIN_SECRET in .env}
+      TD_NODE_URL: https://vpn-office:9443 # how the web UI reaches this agent
+      TD_CONTAINER_OPENVPN: vpn-office
+      TD_CONTAINER_WIREGUARD: vpn-office
+      TD_CONTAINER_AMNEZIAWG: vpn-office
+      TD_SETUP_PUBLIC_PORT: ${OFFICE_OVPN_PORT:-1294}
+    volumes:
+      - ./office/openvpn:/etc/openvpn
+      - ./office/wireguard:/etc/wireguard
+      - ./office/amneziawg:/etc/amnezia/amneziawg
+    healthcheck:
+      test: ["CMD", "trapdoor", "health", "https://127.0.0.1:9443"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+
+  # ── node "guest" ───────────────────────────────────────────────────────────
+  vpn-guest:
+    <<: *vpn
+    environment:
+      VPN_NAT_SUBNET: auto
+    ports:
+      - "${GUEST_OVPN_PORT:-1394}:1194/udp"
+      - "${GUEST_WG_PORT:-52020}:${GUEST_WG_PORT:-52020}/udp"
+      - "${GUEST_AWG_PORT:-52030}:${GUEST_AWG_PORT:-52030}/udp"
+    volumes:
+      - ./guest/openvpn:/etc/openvpn
+      - ./guest/wireguard:/etc/wireguard
+      - ./guest/amneziawg:/etc/amnezia/amneziawg
+
+  agent-guest:
+    <<: *agent
+    network_mode: service:vpn-guest
+    depends_on: [vpn-guest]
+    environment:
+      <<: *agent-env
+      TD_NODE_NAME: guest
+      TD_AGENT_TOKEN: ${TD_GUEST_AGENT_TOKEN:?set TD_GUEST_AGENT_TOKEN in .env}
+      TD_AGENT_LISTEN: ":9443"
+      TD_AGENT_TLS: auto
+      TD_JOIN_URL: http://web:8080
+      TD_JOIN_TOKEN: ${TD_JOIN_SECRET:?set TD_JOIN_SECRET in .env}
+      TD_NODE_URL: https://vpn-guest:9443
+      TD_CONTAINER_OPENVPN: vpn-guest
+      TD_CONTAINER_WIREGUARD: vpn-guest
+      TD_CONTAINER_AMNEZIAWG: vpn-guest
+      TD_SETUP_PUBLIC_PORT: ${GUEST_OVPN_PORT:-1394}
+    volumes:
+      - ./guest/openvpn:/etc/openvpn
+      - ./guest/wireguard:/etc/wireguard
+      - ./guest/amneziawg:/etc/amnezia/amneziawg
+    healthcheck:
+      test: ["CMD", "trapdoor", "health", "https://127.0.0.1:9443"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+
+  # ── the web UI ─────────────────────────────────────────────────────────────
+  web:
+    <<: *image
+    command: ["web"]
+    depends_on: [agent-main]
+    environment:
+      TD_AGENT_TOKEN: ${TD_AGENT_TOKEN:?set TD_AGENT_TOKEN in .env}
+      TD_AGENT_URL: unix:/run/trapdoor/agent.sock
+      TD_JOIN_SECRET: ${TD_JOIN_SECRET:?set TD_JOIN_SECRET in .env} # lets office and guest join
+      TD_TZ: ${TD_TZ:-UTC}
+      TD_COOKIE_SECURE: ${TD_COOKIE_SECURE:-true}
+      TD_TRUSTED_PROXIES: ${TD_TRUSTED_PROXIES:-}
+      TD_WEB_API_TOKEN: ${TD_WEB_API_TOKEN:-}
+    ports:
+      - "${WEB_BIND:-127.0.0.1:8080}:8080"
+    volumes:
+      - web-data:/data
+      - run:/run/trapdoor
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "trapdoor", "health", "http://127.0.0.1:8080"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+
+volumes:
+  run: {}
+  web-data: {}

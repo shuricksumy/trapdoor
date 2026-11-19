@@ -1,10 +1,10 @@
 <script>
   import { route, session, navigate, toasts, toast, settings, servers, setServers, selectServer, currentServer } from './lib/state.svelte.js';
   import { api, reloadServers } from './lib/api.js';
-  import { typeNames, where } from './lib/location.js';
+  import { machines, typeNames, where } from './lib/location.js';
 
   // Pages that do not belong to the selected server.
-  const serverFree = ['/servers', '/servers/new', '/hosts', '/account'];
+  const serverFree = ['/servers', '/servers/new', '/nodes', '/hosts', '/account'];
   import ThemeSwitch from './lib/ThemeSwitch.svelte';
   import Login from './pages/Login.svelte';
   import Dashboard from './pages/Dashboard.svelte';
@@ -18,7 +18,7 @@
   import WireGuardOverview from './pages/WireGuardOverview.svelte';
   import WireGuardClients from './pages/WireGuardClients.svelte';
   import NewServer from './pages/NewServer.svelte';
-  import Hosts from './pages/Hosts.svelte';
+  import Nodes from './pages/Nodes.svelte';
   import Servers from './pages/Servers.svelte';
   import Network from './pages/Network.svelte';
 
@@ -52,8 +52,8 @@
         ? { component: Account }
         : route.path === '/servers/new'
           ? { component: NewServer }
-          : route.path === '/hosts'
-            ? { component: Hosts }
+          : route.path === '/nodes' || route.path === '/hosts'
+            ? { component: Nodes }
             : route.path === '/servers'
               ? { component: Servers }
           : route.path === '/setup' && !isWG
@@ -93,7 +93,7 @@
     api('/status')
       .then((st) => {
         if (st.expiry_warn_days) settings.expiryWarnDays = st.expiry_warn_days;
-        setServers(st.agent?.servers ?? [], st.agent?.hosts ?? [], st.agent?.containers ?? null);
+        setServers(st.agent?.servers ?? [], st.agent?.hosts ?? [], st.agent?.containers ?? null, st.agent ?? {});
       })
       .catch(() => {});
   });
@@ -116,7 +116,7 @@
   });
 
   $effect(() => {
-    const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup', '/servers/new': 'Add a server', '/hosts': 'Hosts', '/servers': 'Servers' };
+    const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup', '/servers/new': 'Add a server', '/nodes': 'Nodes', '/hosts': 'Nodes', '/servers': 'Servers' };
     const name = titles[route.path] ?? navPages.find((p) => p.path === route.path)?.label ?? 'Overview';
     document.title = `${name} · trapdoor`;
   });
@@ -165,10 +165,10 @@
             <span>Server</span>
             <select value={servers.current} onchange={(e) => { selectServer(e.currentTarget.value); navigate('/'); }}>
               {#if servers.hosts.length}
-                {#each [{ name: '', label: 'This machine' }, ...servers.hosts.map((h) => ({ name: h.name, label: h.name }))] as g (g.name)}
-                  {@const list = servers.list.filter((sv) => (sv.host ?? '') === g.name)}
+                {#each machines().flatMap((m) => m.nodes) as g (g.key)}
+                  {@const list = servers.list.filter((sv) => (sv.host ?? '') === g.key)}
                   {#if list.length}
-                    <optgroup label={g.label}>
+                    <optgroup label="{g.machine} › node {g.name}">
                       {#each list as sv (sv.id)}<option value={sv.id}>{sv.name}</option>{/each}
                     </optgroup>
                   {/if}
@@ -191,7 +191,7 @@
         </div>
         <span class="bar-links small">
           {#if route.path !== '/servers'}<a class="add-server" href="/servers">Servers ({servers.list.length})</a>{/if}
-          {#if route.path !== '/hosts'}<a class="add-server" href="/hosts">Hosts{servers.hosts.length ? ` (${servers.hosts.length + 1})` : ''}</a>{/if}
+          {#if route.path !== '/nodes' && route.path !== '/hosts'}<a class="add-server" href="/nodes">Nodes ({servers.hosts.length + 1})</a>{/if}
           {#if route.path !== '/servers/new'}<a class="add-server" href="/servers/new">Add a server</a>{/if}
         </span>
       </div>

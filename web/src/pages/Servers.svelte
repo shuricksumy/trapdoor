@@ -3,7 +3,7 @@
   import { navigate, selectServer, servers, toast } from '../lib/state.svelte.js';
   import { bytes } from '../lib/format.js';
   import Dialog from '../lib/Dialog.svelte';
-  import { where } from '../lib/location.js';
+  import { machines, typeNames, where } from '../lib/location.js';
 
   // Every server on every machine, with start / stop, autostart and remove.
   let list = $state(null);
@@ -34,14 +34,10 @@
     return s.running ? { key: 'ok', label: 'Running' } : { key: 'bad', label: 'Not running', why: s.error };
   }
 
-  // Groups: this machine first, then each host (also when it does not answer).
+  // Groups: machine › node, the own node first (also nodes that do not answer).
   const groups = $derived.by(() => {
     if (!list) return [];
-    const g = [{ name: '', label: 'This machine', items: list.filter((s) => !s.host) }];
-    for (const h of servers.hosts) {
-      g.push({ name: h.name, label: h.name, host: h, items: list.filter((s) => s.host === h.name) });
-    }
-    return g;
+    return machines().flatMap((m) => m.nodes.map((n) => ({ key: n.key, node: n, items: list.filter((s) => (s.host ?? '') === n.key) })));
   });
 
   function open(s, path = '/') {
@@ -92,7 +88,7 @@
 <header class="head">
   <div>
     <h1>Servers</h1>
-    <p class="muted">Every VPN server on this machine and the other hosts.</p>
+    <p class="muted">Every VPN server on every node, grouped by machine › node.</p>
   </div>
   <div class="head-actions">
     <a class="btn" href="/servers/new?type=restore">Restore from a backup</a>
@@ -102,18 +98,20 @@
 
 {#if loadError}<div class="banner bad" role="alert">Could not load the servers: {loadError}</div>{/if}
 
-{#each groups as g (g.name)}
+{#each groups as g (g.key)}
   <section class="panel group">
     <div class="panel-head">
-      <h2>{g.label}</h2>
-      {#if g.host}
-        <span class="small {g.host.error ? 'bad' : 'muted'}">{g.host.error ? `Not reachable: ${g.host.error}` : g.host.hostname}</span>
+      <h2><span class="tag">Machine</span> {g.node.machine} <span class="sep">›</span> <span class="tag">Node</span> {g.node.name}</h2>
+      {#if g.node.error}
+        <span class="small bad">Not reachable: {g.node.error}</span>
+      {:else if g.node.containers}
+        <span class="small muted">Runs {Object.keys(g.node.containers).map((t) => typeNames[t] ?? t).join(', ')}</span>
       {/if}
     </div>
     {#if !list}
       <p class="panel-body muted">Loading…</p>
     {:else if g.items.length === 0}
-      <p class="panel-body muted">{g.host?.error ? 'Its servers are not shown while it does not answer.' : 'No servers.'}</p>
+      <p class="panel-body muted">{g.node.error ? 'Its servers are not shown while it does not answer.' : 'No servers.'}</p>
     {:else}
       <div class="table-wrap">
         <table class="servers">
@@ -177,7 +175,7 @@
 {/each}
 
 <p class="muted small foot">
-  <a href="/hosts">Machines (hosts)</a> · Stopped servers stay stopped until you start them. Autostart off: a server stays stopped after the
+  <a href="/nodes">Nodes</a> · Stopped servers stay stopped until you start them. Autostart off: a server stays stopped after the
   VPN container or the machine restarts.
 </p>
 
@@ -209,6 +207,8 @@
   .group { margin-bottom: var(--space-5); }
   .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
   .bad { color: var(--bad); }
+  .tag { font-size: var(--step--1); font-weight: 500; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+  .sep { color: var(--ink-3); margin: 0 4px; }
   .servers td { vertical-align: middle; }
   .servers .num { text-align: right; white-space: nowrap; }
   .nowrap { white-space: nowrap; }

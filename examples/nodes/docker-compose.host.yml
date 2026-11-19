@@ -1,0 +1,19 @@
+# Variant: node "main" on the host's network.
+#
+#   sudo sysctl -w net.ipv4.ip_forward=1        # Docker cannot set it in the host namespace
+#   docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
+#
+# main's interfaces (tun0, wg0, …) and their iptables rules are on the host itself: no
+# Docker port publishing or Docker NAT in the path, and a new server's port is open as soon
+# as it exists (open it in the host's firewall). agent-main shares that network, so the
+# OpenVPN management interface is on the host's 127.0.0.1:2080; the web UI still reaches
+# agent-main through the unix socket. office and guest stay on Docker bridges.
+# NAT leaves through the host's default route; set VPN_NAT_IFACE if that is not right.
+
+services:
+  vpn-main:
+    network_mode: host
+    ports: !reset []
+    sysctls: !reset []
+    environment:
+      VPN_NAT_IFACE: ${VPN_NAT_IFACE:-}

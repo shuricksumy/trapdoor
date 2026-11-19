@@ -8,7 +8,7 @@ export class ApiError extends Error {
 }
 
 // Paths that do not belong to one VPN server.
-const hostPaths = /^\/(auth\/|status$|servers($|\/)|hosts($|\/)|backup$)/;
+const hostPaths = /^\/(auth\/|status$|servers($|\/)|(hosts|nodes)($|\/)|backup$)/;
 
 /**
  * URL of an API path. Per-server paths (everything but auth and status) go
@@ -105,6 +105,6 @@ export function poll(fn, ms) {
 /** Fetch the server list again (after adding or removing a server). */
 export async function reloadServers() {
   const st = await api('/status');
-  setServers(st.agent?.servers ?? [], st.agent?.hosts ?? [], st.agent?.containers ?? null);
+  setServers(st.agent?.servers ?? [], st.agent?.hosts ?? [], st.agent?.containers ?? null, st.agent ?? {});
   return st;
 }

@@ -33,7 +33,7 @@ same two-factor logins.
 
 - **OpenVPN, WireGuard and AmneziaWG** side by side, as many as you need (e.g. OpenVPN on UDP
   1194 and TCP 443, a WireGuard and an AmneziaWG server), on this machine and on other hosts
-  from one web UI ([how](docs/guide.md#several-hosts))
+  from one web UI: nodes join it by themselves ([how](docs/guide.md#nodes))
 - **Servers page**: every server on every machine with its state, clients, connected devices
   and today's traffic; start, stop, autostart on / off, backup, remove
 - **Backup and restore**: one server (also to move it to another machine) or everything at
@@ -99,8 +99,8 @@ docker compose exec -it web trapdoor user add admin    # choose your admin passw
 4. **Clients → New client**, then **Download profile** and import it in the OpenVPN app on the
    device (OpenVPN Connect, Tunnelblick, network-manager-openvpn, …).
 5. More servers: **Add a server** (top right) for WireGuard, AmneziaWG or another OpenVPN
-   server; forward its port too. Other machines: **Hosts**
-   ([how](docs/guide.md#several-hosts)).
+   server; forward its port too. Other machines and isolated networks: **Nodes**
+   ([how](docs/guide.md#nodes)).
 
 ## Moving from openvpn-ui
 
