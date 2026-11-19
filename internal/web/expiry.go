@@ -11,6 +11,10 @@ import (
 // certificate it signed stops working at once.
 const CAWarnDays = 90
 
+// PeerWarnDays is how early a WireGuard / AmneziaWG client's end date is
+// emailed.
+const PeerWarnDays = 3
+
 // WatchExpiry logs expiring certificates at start and then once a day.
 func (s *Server) WatchExpiry(ctx context.Context) {
 	t := time.NewTicker(24 * time.Hour)
@@ -53,6 +57,9 @@ func (s *Server) checkServerExpiry(ctx context.Context, srv api.ServerInfo) []ex
 	if !srv.CANotAfter.IsZero() && srv.CANotAfter.Before(now.Add(CAWarnDays*24*time.Hour)) {
 		out = append(out, expiringCert{server: name, name: "the CA (every client)", notAfter: srv.CANotAfter})
 	}
+	if srv.Type == api.TypeWireGuard || srv.Type == api.TypeAmneziaWG {
+		return append(out, s.peerExpiry(ctx, srv.ID, name)...)
+	}
 	if !srv.PKIReady {
 		return out
 	}
@@ -73,6 +80,22 @@ func (s *Server) checkServerExpiry(ctx context.Context, srv api.ServerInfo) []ex
 	}
 	if n > 0 {
 		log.Warn("certificates need renewing", "count", n, "within_days", s.ExpiryWarnDays)
+	}
+	return out
+}
+
+// peerExpiry lists a WireGuard server's clients whose end date is near.
+func (s *Server) peerExpiry(ctx context.Context, id, server string) []expiringCert {
+	peers, err := s.Agent.Server(id).Peers(ctx)
+	if err != nil {
+		return nil
+	}
+	limit := s.Now().Add(PeerWarnDays * 24 * time.Hour)
+	var out []expiringCert
+	for _, p := range peers {
+		if p.ExpiresAt != nil && !p.Disabled && !p.Expired && p.ExpiresAt.Before(limit) {
+			out = append(out, expiringCert{server: server, name: p.Name, notAfter: *p.ExpiresAt})
+		}
 	}
 	return out
 }

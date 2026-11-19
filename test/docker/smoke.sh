@@ -186,6 +186,15 @@ api -X PUT -H "Content-Type: application/json" -d '{"disabled":true}' "$WEB/api/
 for _ in $(seq 10); do vpnlog "wireguard wg0: peers updated" && break; sleep 1; done
 sleep 1
 ! wgping || fail "disabled WireGuard client still gets through"
+# An end date in the past keeps it off the interface; none brings it back.
+api -X PUT -H "Content-Type: application/json" -d '{"disabled":false,"settings":{"expires_at":"2000-01-01T00:00:00Z"}}' \
+	"$WEB/api/v1/servers/wg0/peers/wgsmoke" | grep -q '"expired":true' || fail "past end date not reported as expired"
+sleep 3
+! wgping || fail "expired WireGuard client gets through"
+api -X PUT -H "Content-Type: application/json" -d '{"settings":{}}' "$WEB/api/v1/servers/wg0/peers/wgsmoke" >/dev/null
+for _ in $(seq 15); do wgping && break; sleep 1; done
+wgping || fail "client without an end date blocked"
+log "WireGuard end date: an expired client is off the interface, back without one"
 sudo wg-quick down /etc/wireguard/tdsmoke.conf >/dev/null 2>&1 || true
 api -X DELETE "$WEB/api/v1/servers/wg0" || fail "remove WireGuard server"
 for _ in $(seq 10); do dc exec -T vpn ip link show wg0 >/dev/null 2>&1 || break; sleep 1; done

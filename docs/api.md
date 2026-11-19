@@ -75,7 +75,8 @@ set; `agent.hosts` lists the other nodes and whether they answer, `agent.machine
 | GET, POST | `…/peers` | WireGuard clients: list / add (body as the agent's) |
 | POST | `…/peers/bulk` | add several clients |
 | GET, PUT | `…/settings` | WireGuard server settings and client defaults |
-| GET, PUT, DELETE | `…/peers/{name}` | get / `{"disabled"?,"lan"?,"address"?,"psk"?,"settings"?:{notes,dns,allowed_ips,mtu,keepalive}}` / delete |
+| GET, PUT, DELETE | `…/peers/{name}` | get / `{"disabled"?,"lan"?,"address"?,"psk"?,"settings"?:{notes,dns,allowed_ips,mtu,keepalive,expires_at}}` / delete |
+| GET, PUT | `…/cert-defaults` | OpenVPN: `{"validity_days"}` for new and renewed client certificates when a request has none (0 = 825 days) |
 | GET | `…/peers/{name}/conf` | download the client's WireGuard configuration |
 
 Calls are passed to the agent (404 for an unknown server); every change is logged as
@@ -135,7 +136,7 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 | GET, PUT | `/v1/servers/{id}/settings` | `{"name","public_host","public_port","dns":[…],"allowed_ips":[…],"mtu","keepalive","psk"}` | a WireGuard server's settings and client defaults |
 | DELETE | `/v1/servers/{id}` | – | 204; WireGuard: takes the interface down and deletes its files; added OpenVPN server: stops it and moves its directory to `.removed/` (the first server: 409) |
 | GET | `…/peers` | – | clients with live state (`connected`, `endpoint`, `last_handshake`, bytes) |
-| POST | `…/peers` | `{"name","address"?,"lan"?:[cidr],"public_key"?,"psk"?,"notes"?,"dns"?:[…],"allowed_ips"?:[…],"mtu"?,"keepalive"?}` | 201 client (keys generated unless `public_key`, next free address; empty settings = the server's defaults) |
+| POST | `…/peers` | `{"name","address"?,"lan"?:[cidr],"public_key"?,"psk"?,"notes"?,"dns"?:[…],"allowed_ips"?:[…],"mtu"?,"keepalive"?,"expires_at"?}` (`expires_at`: RFC 3339; after it the client is off the interface and `"expired": true`) | 201 client (keys generated unless `public_key`, next free address; empty settings = the server's defaults) |
 | GET, PUT, DELETE | `…/peers/{name}` | PUT: `{"disabled"?,"lan"?,"address"?,"psk"?,"settings"?}` (settings replace the client's own, empty = server defaults) | client / updated client / 204 |
 | GET | `…/peers/{name}/conf` | – | the client's configuration file (409 while disabled) |
 | GET | `…/sessions` | – | connected clients, as for OpenVPN (`DELETE …/sessions/{id}` is 409) |

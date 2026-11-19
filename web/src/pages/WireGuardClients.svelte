@@ -33,6 +33,7 @@
 
   function status(p) {
     if (p.disabled) return { tone: 'off', label: 'Disabled' };
+    if (p.expired) return { tone: 'bad', label: 'Expired' };
     if (p.connected) return { tone: 'ok', label: 'Connected' };
     if (p.last_handshake && !p.last_handshake.startsWith('0001')) return { tone: 'warn', label: `Seen ${relative(p.last_handshake)}` };
     return { tone: 'off', label: 'Never connected' };
@@ -77,7 +78,7 @@
 
   function blank() {
     return { name: '', prefix: 'guest', count: 5, notes: '', address: '', ownKey: false, publicKey: '', psk: defaults?.psk ?? true,
-      lan: '', dns: '', allowed: '', mtu: '', keepalive: '' };
+      lan: '', dns: '', allowed: '', mtu: '', keepalive: '', until: '' };
   }
 
   async function openCreate() {
@@ -94,13 +95,22 @@
     editing = p.name;
     form = { ...blank(), notes: p.notes ?? '', address: p.address, psk: p.preshared_key, lan: (p.lan ?? []).join(', '),
       dns: (p.dns ?? []).join(', '), allowed: (p.allowed_ips ?? []).join(', '), mtu: p.mtu || '',
-      keepalive: p.keepalive ?? '' };
+      keepalive: p.keepalive ?? '', until: p.expires_at ? localDate(p.expires_at) : '' };
     formError = '';
     formOpen = true;
   }
 
+  // The end date is the end of that day, in this browser's time zone.
+  const localDate = (t) => {
+    const d = new Date(t);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  };
+  const today = localDate(new Date());
+  const until = (t) => new Date(t).toLocaleDateString([], { dateStyle: 'medium' });
+
   function settingsBody() {
     const b = { notes: form.notes.trim() };
+    if (form.until) b.expires_at = new Date(form.until + 'T23:59:59').toISOString();
     if (form.dns.trim()) b.dns = list(form.dns);
     if (form.allowed.trim()) b.allowed_ips = list(form.allowed);
     if (form.mtu) b.mtu = Number(form.mtu);
@@ -242,6 +252,7 @@
                 <div class="nm">
                   <span class="name">{p.name}{#if emails[p.name]}<span class="faint small email">{emails[p.name]}</span>{/if}</span>
                   {#if p.notes}<span class="faint small">{p.notes}</span>{/if}
+                  {#if p.expires_at}<span class="small" class:faint={!p.expired} class:bad-text={p.expired}>{p.expired ? 'Ended' : 'Until'} {until(p.expires_at)}</span>{/if}
 
                   {#if p.lan?.length}<span class="faint small mono">LAN {p.lan.join(', ')}</span>{/if}
                 </div>
@@ -312,6 +323,15 @@
     <label class="field">
       <span>Notes (optional)</span>
       <input bind:value={form.notes} placeholder="e.g. Alice's work phone" maxlength="500" autocomplete="off" />
+    </label>
+
+    <label class="field">
+      <span>Works until (optional)</span>
+      <span class="until">
+        <input type="date" bind:value={form.until} min={mode === 'edit' ? undefined : today} />
+        {#if form.until}<button type="button" class="btn small ghost" onclick={() => (form.until = '')}>No end date</button>{/if}
+      </span>
+      <span class="hint">E.g. for a guest: after that day {mode === 'bulk' ? 'these clients are' : 'the client is'} taken off the server and cannot connect. Empty: no end date.</span>
     </label>
 
     {#if mode !== 'bulk'}
@@ -423,6 +443,8 @@
   .head p { margin-top: var(--space-1); }
   .banner { margin-bottom: var(--space-3); }
   .name { font-weight: 500; }
+  .until { display: flex; gap: var(--space-2); align-items: center; }
+  .bad-text { color: var(--bad); }
   .email { font-weight: 400; margin-left: var(--space-2); }
   .nm { display: grid; gap: 2px; }
   .c-traffic span + span { margin-left: var(--space-3); }

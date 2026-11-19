@@ -39,6 +39,9 @@ same two-factor logins.
 - **Backup and restore**: one server (also to move it to another machine) or everything at
   once, optionally encrypted with a passphrase; **scheduled** daily or weekly into a folder,
   the newest N kept ([how](docs/guide.md#backup-and-restore))
+- **Client lifetimes**: OpenVPN certificates from 30 days to 10 years or until a date, a
+  default per server; WireGuard / AmneziaWG clients with an end date (e.g. guests), taken
+  off the server when it passes
 - **Email**: send a client its profile or WireGuard config (with QR code) and how to set it
   up; notifications when a backup fails, a node stops answering or certificates expire
   ([how](docs/guide.md#email))

@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/shuricksumy/trapdoor/internal/api"
 	"github.com/shuricksumy/trapdoor/internal/config"
@@ -143,6 +144,25 @@ func (h *Host) getLocked(id string) (mounted, bool) {
 		}
 	}
 	return mounted{}, false
+}
+
+// WatchClientExpiry takes WireGuard / AmneziaWG clients off their server
+// when their end date passes (checked every minute).
+func (h *Host) WatchClientExpiry(ctx context.Context) {
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			for _, b := range h.list() {
+				if w, ok := b.(*WGServer); ok {
+					w.checkExpiry(ctx)
+				}
+			}
+		}
+	}
 }
 
 func (h *Host) list() []backend {

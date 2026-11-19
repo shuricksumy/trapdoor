@@ -249,3 +249,6 @@ td.num, th.num { text-align: right; }
 
 /* An on/off action in a table row (Disable, Revoke) */
 .btn.warn-btn { color: var(--warn); }
+
+/* A checkbox with its label on one line */
+.check { display: flex; gap: var(--space-2); align-items: center; }

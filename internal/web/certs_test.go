@@ -5,8 +5,10 @@ import (
 
 	"github.com/shuricksumy/trapdoor/internal/api"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCertManagement(t *testing.T) {
@@ -103,5 +105,44 @@ func TestServerConfigPassthrough(t *testing.T) {
 	}
 	if rec := e.do(http.MethodGet, "/api/v1/servers/openvpn/server/backups", "", bearer); rec.Code != http.StatusOK {
 		t.Errorf("backups = %d", rec.Code)
+	}
+}
+
+func TestCertDefaults(t *testing.T) {
+	e := newTestEnv(t, token)
+	bearer := header("Authorization", "Bearer "+token)
+	days := func(rec *httptest.ResponseRecorder) int {
+		c := decode[api.Cert](t, rec)
+		return int(time.Until(c.NotAfter).Hours()/24 + 0.5)
+	}
+	if rec := e.do(http.MethodGet, "/api/v1/servers/openvpn/cert-defaults", "", bearer); !strings.Contains(rec.Body.String(), `"validity_days":0`) {
+		t.Fatalf("default: %s", rec.Body)
+	}
+	if n := days(e.do(http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"a1"}`, bearer)); n < 824 || n > 826 {
+		t.Errorf("default lifetime %d days", n)
+	}
+	for _, bad := range []string{`{"validity_days":-1}`, `{"validity_days":3651}`} {
+		if rec := e.do(http.MethodPut, "/api/v1/servers/openvpn/cert-defaults", bad, bearer); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d", bad, rec.Code)
+		}
+	}
+	if rec := e.do(http.MethodPut, "/api/v1/servers/openvpn/cert-defaults", `{"validity_days":3650}`, bearer); rec.Code != http.StatusOK {
+		t.Fatalf("set: %d %s", rec.Code, rec.Body)
+	}
+	// New and renewed certificates get the server's lifetime; an explicit one wins.
+	if n := days(e.do(http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"a2"}`, bearer)); n < 3649 {
+		t.Errorf("new: %d days", n)
+	}
+	if n := days(e.do(http.MethodPost, "/api/v1/servers/openvpn/certs/a1/renew", "", bearer)); n < 3649 {
+		t.Errorf("renewed: %d days", n)
+	}
+	if n := days(e.do(http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"a3","validity_days":30}`, bearer)); n > 31 {
+		t.Errorf("explicit: %d days", n)
+	}
+	if rec := e.do(http.MethodPut, "/api/v1/servers/openvpn/cert-defaults", `{"validity_days":0}`, bearer); rec.Code != http.StatusOK {
+		t.Fatal(rec.Code)
+	}
+	if n := days(e.do(http.MethodPost, "/api/v1/servers/openvpn/certs", `{"name":"a4"}`, bearer)); n > 826 {
+		t.Errorf("back to the default: %d days", n)
 	}
 }

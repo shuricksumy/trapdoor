@@ -3,8 +3,11 @@ package agent
 import (
 	"context"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shuricksumy/trapdoor/internal/api"
 	"github.com/shuricksumy/trapdoor/internal/wg"
@@ -119,5 +122,63 @@ func TestWireGuardClientOptions(t *testing.T) {
 	}
 	if _, err := s.AddPeers(ctx, api.NewPeers{Prefix: "x", Count: 300}); !IsStatus(err, http.StatusBadRequest) {
 		t.Errorf("too many: %v", err)
+	}
+}
+
+func TestWireGuardClientExpiry(t *testing.T) {
+	c, h, cfg := ovpnHost(t)
+	ctx := context.Background()
+	if _, err := c.CreateServer(ctx, api.CreateServer{Type: api.TypeWireGuard, ID: "wg0", PublicHost: "vpn.example.com", Subnet: "10.9.0.0/24"}); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := h.get("wg0")
+	w := m.b.(*WGServer)
+	now := time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)
+	w.mu.Lock()
+	w.now = func() time.Time { return now }
+	w.mu.Unlock()
+	serverConf := func() string {
+		b, err := os.ReadFile(filepath.Join(cfg.WireGuardDir, "wg0.conf"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	s := c.Server("wg0")
+	until := now.Add(48 * time.Hour)
+	guest, err := s.AddPeer(ctx, api.NewPeer{Name: "guest", PeerSettings: api.PeerSettings{ExpiresAt: &until}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if guest.ExpiresAt == nil || !guest.ExpiresAt.Equal(until) || guest.Expired {
+		t.Fatalf("guest = %+v", guest)
+	}
+	if !strings.Contains(serverConf(), guest.PublicKey) {
+		t.Fatal("guest not on the server before its end date")
+	}
+	w.checkExpiry(ctx) // nothing changed: nothing written
+	// Two days later the check takes it off; the config can still be shown.
+	w.mu.Lock()
+	now = now.Add(49 * time.Hour)
+	w.mu.Unlock()
+	w.checkExpiry(ctx)
+	if strings.Contains(serverConf(), guest.PublicKey) {
+		t.Fatal("expired guest still on the server")
+	}
+	peers, err := s.Peers(ctx)
+	if err != nil || len(peers) != 1 || !peers[0].Expired {
+		t.Fatalf("peers = %+v, %v", peers, err)
+	}
+	// Extended: back on the server at once.
+	later := now.Add(24 * time.Hour)
+	if _, err := s.UpdatePeer(ctx, "guest", api.PeerUpdate{Settings: &api.PeerSettings{ExpiresAt: &later}}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(serverConf(), guest.PublicKey) {
+		t.Fatal("extended guest not back on the server")
+	}
+	// No end date any more.
+	if p, err := s.UpdatePeer(ctx, "guest", api.PeerUpdate{Settings: &api.PeerSettings{}}); err != nil || p.ExpiresAt != nil {
+		t.Fatalf("end date not removed: %+v, %v", p, err)
 	}
 }

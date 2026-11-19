@@ -247,6 +247,8 @@ type Peer struct {
 	// OwnKey: the client brought its own key pair; trapdoor has no private
 	// key for it, so its config has a placeholder instead.
 	OwnKey bool `json:"own_key"`
+	// Expired: past ExpiresAt, so (like Disabled) not in the server config.
+	Expired bool `json:"expired,omitempty"`
 	PeerSettings
 	// Live state from the interface.
 	Connected     bool      `json:"connected"`
@@ -264,6 +266,8 @@ type PeerSettings struct {
 	AllowedIPs []string `json:"allowed_ips,omitempty"` // what the client sends through the tunnel
 	MTU        int      `json:"mtu,omitempty"`
 	Keepalive  *int     `json:"keepalive,omitempty"` // seconds; 0 = off
+	// ExpiresAt: the client stops working then (e.g. a guest); nil = never.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // NewPeer is the body of POST /v1/servers/{id}/peers.

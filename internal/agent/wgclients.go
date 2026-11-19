@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/netip"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/shuricksumy/trapdoor/internal/api"
 	"github.com/shuricksumy/trapdoor/internal/httpx"
@@ -24,6 +26,7 @@ type peerSettings struct {
 	allowed   []netip.Prefix
 	mtu       int
 	keepalive *int
+	expires   *time.Time
 }
 
 func parseDNS(in []string) ([]string, error) {
@@ -73,6 +76,10 @@ func checkKeepalive(k int) error {
 
 func parsePeerSettings(in api.PeerSettings) (peerSettings, error) {
 	out := peerSettings{notes: strings.TrimSpace(in.Notes), mtu: in.MTU, keepalive: in.Keepalive}
+	if in.ExpiresAt != nil && !in.ExpiresAt.IsZero() {
+		t := in.ExpiresAt.UTC().Truncate(time.Second)
+		out.expires = &t
+	}
 	if len(out.notes) > 500 || strings.ContainsAny(out.notes, "\r\n") {
 		return out, errors.New("notes: one line, at most 500 characters")
 	}
@@ -96,6 +103,35 @@ func parsePeerSettings(in api.PeerSettings) (peerSettings, error) {
 
 func (set peerSettings) apply(p *wgPeer) {
 	p.Notes, p.DNS, p.AllowedIPs, p.MTU, p.Keepalive = set.notes, set.dns, set.allowed, set.mtu, set.keepalive
+	p.ExpiresAt = set.expires
+}
+
+// expired: the client's end date has passed.
+func (p wgPeer) expired(now time.Time) bool {
+	return p.ExpiresAt != nil && !now.Before(*p.ExpiresAt)
+}
+
+// expiredKey names the expired clients, to see when the set changes.
+func (s *WGServer) expiredKey() string {
+	var b strings.Builder
+	now := s.now()
+	for _, p := range s.st.Peers {
+		if p.expired(now) {
+			b.WriteString(p.PublicKey + ",")
+		}
+	}
+	return b.String()
+}
+
+// checkExpiry applies the config again when a client's end date passed (or
+// the clock went back): expired clients are left out of it.
+func (s *WGServer) checkExpiry(ctx context.Context) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if k := s.expiredKey(); k != s.expired {
+		s.log.Info("WireGuard clients expired or extended: config applied again")
+		s.applyLocked(ctx, false)
+	}
 }
 
 // wantPSK decides whether a new client gets a preshared key.

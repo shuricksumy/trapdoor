@@ -452,14 +452,14 @@ func (s *Server) notifyExpiry(ctx context.Context, certs []expiringCert) {
 	}
 	sort.Slice(fresh, func(i, j int) bool { return fresh[i].notAfter.Before(fresh[j].notAfter) })
 	var b strings.Builder
-	b.WriteString("These certificates expire soon; their clients cannot connect afterwards. Renew them on the Clients page (also in bulk).\n\n")
+	b.WriteString("These clients stop working soon. OpenVPN: renew the certificate on the Clients page (also in bulk). WireGuard / AmneziaWG: change the client's end date (Clients → More → Edit).\n\n")
 	for _, c := range fresh {
 		days := int(c.notAfter.Sub(s.Now()).Hours() / 24)
 		fmt.Fprintf(&b, "- %s on %s: %s (in %d days)\n", c.name, c.server, c.notAfter.In(s.Location).Format("2006-01-02"), days)
 	}
-	subject := fmt.Sprintf("%d certificates expire soon", len(fresh))
+	subject := fmt.Sprintf("%d clients stop working soon", len(fresh))
 	if len(fresh) == 1 {
-		subject = "a certificate expires soon"
+		subject = fresh[0].name + " stops working soon"
 	}
 	s.notify(ctx, func(n Notify) bool { return n.CertExpiry }, subject, b.String())
 }

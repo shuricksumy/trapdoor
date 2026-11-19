@@ -2,6 +2,7 @@ package web
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -15,6 +16,8 @@ func (s *Server) registerCertRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/servers/{server}/certs", s.handleListCerts)
 	mux.HandleFunc("POST /api/v1/servers/{server}/certs", s.handleIssueCert)
 	mux.HandleFunc("POST /api/v1/servers/{server}/certs/renew", s.handleRenewMany)
+	mux.HandleFunc("GET /api/v1/servers/{server}/cert-defaults", s.handleGetCertDefaults)
+	mux.HandleFunc("PUT /api/v1/servers/{server}/cert-defaults", s.handleSetCertDefaults)
 	mux.HandleFunc("GET /api/v1/servers/{server}/certs/{name}", s.handleGetCert)
 	mux.HandleFunc("DELETE /api/v1/servers/{server}/certs/{name}", s.handleRemoveCert)
 	mux.HandleFunc("POST /api/v1/servers/{server}/certs/{name}/revoke", s.handleRevokeCert)
@@ -214,6 +217,9 @@ func (s *Server) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid certificate name")
 		return
 	}
+	if req.ValidityDays == 0 {
+		req.ValidityDays = s.certDays(r)
+	}
 	c, err := s.agent(r).IssueCert(r.Context(), req)
 	if err != nil {
 		s.agentError(w, err)
@@ -260,6 +266,9 @@ func (s *Server) handleRenewCert(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength != 0 && !decodeJSON(w, r, &req) {
 		return
 	}
+	if req.ValidityDays == 0 {
+		req.ValidityDays = s.certDays(r)
+	}
 	c, err := s.agent(r).RenewCert(r.Context(), name, req.ValidityDays)
 	if err != nil {
 		s.agentError(w, err)
@@ -279,6 +288,9 @@ func (s *Server) handleRenewMany(w http.ResponseWriter, r *http.Request) {
 	if len(req.Names) == 0 || len(req.Names) > 500 {
 		httpx.WriteError(w, http.StatusBadRequest, "names must list 1-500 certificates")
 		return
+	}
+	if req.ValidityDays == 0 {
+		req.ValidityDays = s.certDays(r)
 	}
 	seen := map[string]bool{}
 	results := make([]api.RenewResult, 0, len(req.Names))
@@ -366,4 +378,54 @@ func (s *Server) handleKillSession(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "session.kill", "client_id="+strconv.FormatInt(id, 10))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// settingCertDays holds each OpenVPN server's lifetime for new and renewed
+// client certificates (server id → days).
+const settingCertDays = "openvpn.cert_days"
+
+// certDays is the server's lifetime for new certificates; 0 = the agent's
+// default (825 days).
+func (s *Server) certDays(r *http.Request) int {
+	m := map[string]int{}
+	_, _ = s.Stats.DB.Setting(r.Context(), settingCertDays, &m)
+	return m[r.PathValue("server")]
+}
+
+// CertDefaults is GET / PUT /api/v1/servers/{server}/cert-defaults.
+type CertDefaults struct {
+	// ValidityDays for new and renewed client certificates (1-3650); 0 =
+	// the default, 825.
+	ValidityDays int `json:"validity_days"`
+}
+
+func (s *Server) handleGetCertDefaults(w http.ResponseWriter, r *http.Request) {
+	httpx.WriteJSON(w, http.StatusOK, CertDefaults{ValidityDays: s.certDays(r)})
+}
+
+func (s *Server) handleSetCertDefaults(w http.ResponseWriter, r *http.Request) {
+	var req CertDefaults
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.ValidityDays < 0 || req.ValidityDays > 3650 {
+		httpx.WriteError(w, http.StatusBadRequest, "validity_days: 1-3650 (0: the default, 825)")
+		return
+	}
+	m := map[string]int{}
+	if _, err := s.Stats.DB.Setting(r.Context(), settingCertDays, &m); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if req.ValidityDays == 0 {
+		delete(m, r.PathValue("server"))
+	} else {
+		m[r.PathValue("server")] = req.ValidityDays
+	}
+	if err := s.Stats.DB.SetSetting(r.Context(), settingCertDays, m); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(r, "cert.defaults", fmt.Sprint(req.ValidityDays))
+	httpx.WriteJSON(w, http.StatusOK, req)
 }

@@ -137,7 +137,7 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Needs attention</h2>
-      <a class="small" href="/certificates?show=expiring">Clients</a>
+      <a class="small" href="/clients?show=expiring">Clients</a>
     </div>
     {#if attention.length === 0 && caDays >= 90}
       <p class="empty">No certificates expire in the next {settings.expiryWarnDays} days.</p>

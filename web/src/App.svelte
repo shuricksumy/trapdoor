@@ -24,7 +24,7 @@
 
   const pages = [
     { path: '/', label: 'Overview', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', component: Dashboard },
-    { path: '/certificates', label: 'Clients', icon: 'M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z', component: Certificates },
+    { path: '/clients', label: 'Clients', icon: 'M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z', component: Certificates },
     { path: '/sessions', label: 'Connected', icon: 'M4 12h4l2-5 4 10 2-5h4', component: Sessions },
     { path: '/statistics', label: 'Traffic', icon: 'M5 20V11M10 20V5M15 20v-7M20 20V8', component: Statistics },
     { path: '/network', label: 'Network', icon: 'M12 3v6M5 21v-4h14v4M12 9a2 2 0 1 0 0 .01M12 11v6M5 17v-2h14v2', component: Network },
@@ -60,6 +60,11 @@
             ? { component: Setup }
             : (navPages.find((p) => p.path === route.path) ?? navPages[0]),
   );
+
+  // Old address of the OpenVPN clients page.
+  $effect(() => {
+    if (route.path === '/certificates') navigate('/clients' + location.search, { replace: true });
+  });
 
   // Start the selected server from the "stopped" banner.
   let starting = $state(false);
