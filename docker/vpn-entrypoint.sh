@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs the VPN servers for the "openvpn" compose service.
+# Runs the VPN servers for the "vpn" compose service (named "openvpn" before).
 # - WireGuard and AmneziaWG (TD_WIREGUARD=file on the agent): brings up every
 #   interface the agent describes in $WG_DIR or $AWG_DIR (<id>.json + <id>.conf;
 #   AmneziaWG runs in userspace with amneziawg-go), applies changes with

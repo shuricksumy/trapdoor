@@ -14,11 +14,12 @@ x-image: &image
   restart: unless-stopped
 
 services:
-  # The only container with network privileges.
-  openvpn:
+  # Runs the VPN servers (OpenVPN, WireGuard, AmneziaWG); the only container
+  # with network privileges.
+  vpn:
     <<: *image
     user: root
-    entrypoint: ["openvpn-entrypoint.sh"]
+    entrypoint: ["vpn-entrypoint.sh"]
     cap_add: [NET_ADMIN]
     devices: [/dev/net/tun]
     sysctls:
@@ -38,22 +39,22 @@ services:
       - ${WIREGUARD_DIR:-./wireguard}:/etc/wireguard
       - ${AMNEZIAWG_DIR:-./amneziawg}:/etc/amnezia/amneziawg
 
-  # Manages PKI and OpenVPN. Shares the openvpn container's network, so the
+  # Manages PKI and OpenVPN. Shares the vpn container's network, so the
   # management interface stays on 127.0.0.1 and is never published.
   agent:
     <<: *image
     user: root # owns the files in /etc/openvpn
     command: ["agent"]
-    network_mode: service:openvpn
-    depends_on: [openvpn]
+    network_mode: service:vpn
+    depends_on: [vpn]
     environment:
       TD_AGENT_TOKEN: ${TD_AGENT_TOKEN:?set TD_AGENT_TOKEN in .env}
       TD_AGENT_LISTEN: unix:/run/trapdoor/agent.sock
       TD_AGENT_SOCKET_GID: "10001" # lets the non-root web container connect
       TD_OPENVPN_MGMT: ${TD_OPENVPN_MGMT:-127.0.0.1:2080}
-      TD_OPENVPN_RESTART: SIGTERM # the openvpn service starts OpenVPN again
-      TD_FIREWALL: file # access rules are applied by the openvpn service
-      TD_WIREGUARD: file # WireGuard and AmneziaWG interfaces are run by the openvpn service
+      TD_OPENVPN_RESTART: SIGTERM # the vpn service starts OpenVPN again
+      TD_FIREWALL: file # access rules are applied by the vpn service
+      TD_WIREGUARD: file # WireGuard and AmneziaWG interfaces are run by the vpn service
       TD_OPENVPN_MGMT_PASSWORD: ${TD_OPENVPN_MGMT_PASSWORD:-}
       # the setup keeps OpenVPN on the published port
       TD_SETUP_PORT: "1194"

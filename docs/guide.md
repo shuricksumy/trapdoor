@@ -89,7 +89,7 @@ the whole `server.conf`. Every other line and comment in the file is kept.
   if it does not come back within 30 s, the config it ran with before is restored and it is
   started again
 - Restart method `TD_OPENVPN_RESTART`: `SIGHUP` (default; OpenVPN re-reads its config) or
-  `SIGTERM` when a supervisor starts it again — the Docker image's `openvpn` service does
+  `SIGTERM` when a supervisor starts it again — the Docker image's `vpn` service does
   that inside the same container, so the agent keeps its shared network
 
 ## OpenVPN 2.7
@@ -229,7 +229,7 @@ wizard then runs for it, with that port and protocol fixed.
   the certificates are kept until you delete that folder. The first server cannot be
   removed.
 
-In Docker, the `openvpn` service runs every server: it starts OpenVPN for each
+In Docker, the `vpn` service runs every server: it starts OpenVPN for each
 `servers/<id>/server.conf` as soon as the setup writes it, restarts it like the first
 one, adds NAT for its subnet (`VPN_NAT_SUBNET=auto` or empty for none; a fixed CIDR
 applies to the first server only), applies its access rules and stops it when the server is
@@ -268,7 +268,7 @@ interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/2
 
 In Docker, the compose file publishes one WireGuard port, `WG_PORT` (default 51820), the
 same inside and outside: create the first WireGuard server with that port. Each more
-server needs its own port added to the `openvpn` service. The host kernel needs the
+server needs its own port added to the `vpn` service. The host kernel needs the
 WireGuard module (Linux 5.6 or newer has it).
 
 On Ubuntu, AppArmor lets `wg-quick` read configurations only from `/etc/wireguard`, so keep

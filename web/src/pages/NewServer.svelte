@@ -152,7 +152,7 @@
       <label class="field">
         <span>Port</span>
         <input type="number" bind:value={f.port} min="1" max="65535" required />
-        <span class="hint">In Docker, the port the openvpn container publishes for it (VPN2_PORT).</span>
+        <span class="hint">In Docker, the port the vpn container publishes for it (VPN2_PORT).</span>
       </label>
       <label class="field">
         <span>Protocol</span>

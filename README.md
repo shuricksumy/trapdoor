@@ -103,8 +103,14 @@ out) in the file. With **Caddy, nginx** or anything else, proxy to `WEB_BIND` an
 docker compose pull && docker compose up -d
 ```
 
-The `agent` container uses the network of the `openvpn` container. After restarting
-`openvpn` on its own, restart `agent` too (`docker compose restart agent`), otherwise the
+**Coming from a version with an `openvpn` service** (compose files before November 2026): the
+service is now called `vpn`. Take the new `docker-compose.yml` (keep your `.env`), then run
+`docker compose up -d --remove-orphans` once: it replaces the old `openvpn` container, which
+would otherwise keep the VPN ports. Your files stay where they are. A compose file you keep
+with the old name works too.
+
+The `agent` container uses the network of the `vpn` container. After restarting
+`vpn` on its own, restart `agent` too (`docker compose restart agent`), otherwise the
 agent cannot reach OpenVPN; `docker compose up -d` handles this by itself.
 
 Images on GitHub Container Registry, `ghcr.io/shuricksumy/trapdoor` (amd64 and arm64):
