@@ -200,11 +200,11 @@ func (s *Server) handleSetNamedNetwork(w http.ResponseWriter, r *http.Request) {
 		out := []api.NamedNetwork{}
 		found := false
 		for _, n := range nets {
-			switch {
-			case n.Name == old:
+			switch n.Name {
+			case old:
 				out = append(out, req)
 				found = true
-			case n.Name == req.Name:
+			case req.Name:
 				return nil, http.StatusConflict, fmt.Errorf("a network named %q exists", req.Name)
 			default:
 				out = append(out, n)
