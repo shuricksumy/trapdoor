@@ -143,6 +143,11 @@ var migrations = []string{
 		email  TEXT NOT NULL,
 		PRIMARY KEY (agent, client)
 	) WITHOUT ROWID;`,
+
+	// 8: OpenVPN reports a connection that has not authenticated yet (or
+	// failed to) as "UNDEF"; such rows were stored as sessions before.
+	`DELETE FROM sessions WHERE name IN ('UNDEF', '');
+	DELETE FROM traffic_hourly WHERE name IN ('UNDEF', '');`,
 }
 
 func (db *DB) migrate(ctx context.Context) error {

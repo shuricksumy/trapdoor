@@ -343,6 +343,8 @@ assert alice["sessions"] >= 2, alice
 assert alice["upload"] > 0 and alice["download"] > 0, alice
 assert alice["online_seconds"] > 0, alice
 assert r["series"][0]["upload"] == r["total"]["upload"], r
+# Refused logins above were connections without a client yet ("UNDEF"): not a client.
+assert not any(u["name"] in ("UNDEF", "") for u in r["users"]), [u["name"] for u in r["users"]]
 print("    alice:", alice)
 PY
 webapi "$WEB/api/v1/servers/openvpn/history/sessions?preset=today&name=alice" | grep -q '"disconnected_at"' || fail "no closed session in history"
