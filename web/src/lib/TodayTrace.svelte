@@ -3,7 +3,8 @@
   // connected today, like a logic-analyser trace.
   import { time, duration, bytes } from './format.js';
 
-  let { sessions = [], now = new Date() } = $props();
+  // label: how a client's login is shown (its display name, for OpenVPN).
+  let { sessions = [], now = new Date(), label = (n) => n } = $props();
 
   const dayStart = $derived(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
   const dayMs = 86400000;
@@ -44,8 +45,8 @@
     </div>
     {#each rows as r (r.name)}
       <div class="row">
-        <span class="name" title={r.name}>
-          {#if r.live}<i class="dot" aria-label="online"></i>{/if}{r.name}
+        <span class="name" title={label(r.name) !== r.name ? `${label(r.name)} (${r.name})` : r.name}>
+          {#if r.live}<i class="dot" aria-label="online"></i>{/if}{label(r.name)}
         </span>
         <div class="lane">
           {#each ticks.slice(1, -1) as h (h)}<i class="grid" style="left: {(h / 24) * 100}%"></i>{/each}

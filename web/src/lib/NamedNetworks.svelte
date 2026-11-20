@@ -2,6 +2,7 @@
   import { api } from './api.js';
   import { toast } from './state.svelte.js';
   import Dialog from './Dialog.svelte';
+  import { clientName, clientTitle } from './names.svelte.js';
 
   // clients: names of the clients that can use a network.
   let { open = $bindable(false), clients = [], onsaved } = $props();
@@ -109,7 +110,7 @@
         <span>Where they are</span>
         <select bind:value={edit.via}>
           <option value="">Reached through the server (e.g. its own LAN)</option>
-          {#each clients as c (c)}<option value={c}>Behind the client {c} (site-to-site)</option>{/each}
+          {#each clients as c (c)}<option value={c}>Behind the client {clientName(c)} (site-to-site)</option>{/each}
         </select>
         {#if edit.via}<span class="hint">The server also needs a route to them: add them under Routes on the Server page.</span>{/if}
       </label>
@@ -120,7 +121,7 @@
         {:else}
           <div class="clients">
             {#each clients.filter((c) => c !== edit.via) as c (c)}
-              <label class="check"><input type="checkbox" checked={edit.clients.has(c)} onchange={() => toggle(c)} /><span>{c}</span></label>
+              <label class="check"><input type="checkbox" checked={edit.clients.has(c)} onchange={() => toggle(c)} /><span title={clientTitle(c)}>{clientName(c)}</span></label>
             {/each}
           </div>
         {/if}
@@ -140,7 +141,7 @@
               <strong>{n.name}</strong>
               <span class="mono small">{n.networks.join(', ')}</span>
               <span class="faint small">
-                {n.via ? `Behind ${n.via}` : 'Through the server'} · {n.clients.length === 0 ? 'no clients' : n.clients.length === 1 ? n.clients[0] : `${n.clients.length} clients`}
+                {n.via ? `Behind ${clientName(n.via)}` : 'Through the server'} · {n.clients.length === 0 ? 'no clients' : n.clients.length === 1 ? clientName(n.clients[0]) : `${n.clients.length} clients`}
                 {#if n.description}· {n.description}{/if}
               </span>
             </div>

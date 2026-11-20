@@ -3,6 +3,7 @@
   import { currentServer } from '../lib/state.svelte.js';
   import NetworkDialog from '../lib/NetworkDialog.svelte';
   import NamedNetworks from '../lib/NamedNetworks.svelte';
+  import { loadClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
 
   // Routing at a glance: the server's network, named networks and what every
   // client can reach (OpenVPN), or every peer's addresses (WireGuard).
@@ -24,6 +25,7 @@
       } else {
         const [n, c, nn, cfg] = await Promise.all([api('/network'), api('/network/clients'), api('/named-networks'), api('/server/config').catch(() => null)]);
         srv = n;
+        loadClientNames();
         clients = c;
         nets = nn.networks;
         pushed = cfg?.settings?.push_routes ?? [];
@@ -87,8 +89,8 @@
               <tr>
                 <td><strong>{n.name}</strong>{#if n.description}<span class="faint small block">{n.description}</span>{/if}</td>
                 <td class="mono">{n.networks.join(', ')}</td>
-                <td>{n.via ? `Behind ${n.via}` : 'Through the server'}</td>
-                <td>{n.clients.length ? n.clients.join(', ') : '–'}</td>
+                <td>{n.via ? `Behind ${clientName(n.via)}` : 'Through the server'}</td>
+                <td>{n.clients.length ? n.clients.map(clientName).join(', ') : '–'}</td>
               </tr>
             {/each}
           </tbody>
@@ -134,7 +136,7 @@
           {#each clients as c (c.name)}
             <tr>
               <td>
-                <strong>{c.name}</strong>
+                <strong title={clientTitle(c.name)}>{clientName(c.name)}</strong>
                 {#if c.warnings?.length}<span class="warn-dot" title={c.warnings.join('\n')}>!</span>{/if}
               </td>
               <td class="mono">{c.static_ip || 'automatic'}</td>
