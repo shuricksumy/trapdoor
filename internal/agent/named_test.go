@@ -143,3 +143,55 @@ func TestNamedNetworks(t *testing.T) {
 		t.Errorf("remove twice: %v", err)
 	}
 }
+
+// Naming routes a client already has, in another order and with comments
+// (openvpn-ui's files), must not rewrite its file.
+func TestNamedNetworkKeepsUnchangedFiles(t *testing.T) {
+	dir := t.TempDir()
+	p, err := pki.Init(filepath.Join(dir, "pki"), pki.InitOptions{}, pki.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conf := "server 10.8.0.0 255.255.255.0\ntopology subnet\nclient-config-dir ccd\nclient-to-client\n"
+	if err := os.WriteFile(filepath.Join(dir, "server.conf"), []byte(conf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ccdDir := filepath.Join(dir, "ccd")
+	cfg := config.Agent{Token: "secret", OpenVPNDir: dir, CCDDir: ccdDir, MgmtAddr: "127.0.0.1:1"}
+	srv := httptest.NewServer(serve(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), p)))
+	t.Cleanup(srv.Close)
+	c := NewClient(srv.URL, "secret", 10*time.Second).Server(DefaultServerID)
+	ctx := context.Background()
+	for _, n := range []string{"router", "laptop"} {
+		if _, err := c.IssueCert(ctx, api.IssueCertRequest{Name: n}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files := map[string]string{
+		"router": "### Automatic generated \"router\" settings file\nifconfig-push 10.8.0.20 255.255.255.0\niroute 192.168.50.0 255.255.255.0\n",
+		"laptop": "### Automatic generated \"laptop\" settings file\n# Route to router\npush \"route 192.168.50.0 255.255.255.0\"\n# Route to docker\npush \"route 172.30.0.0 255.255.255.0\"\n#2FA_KEY:00\n",
+	}
+	if err := os.MkdirAll(ccdDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for n, f := range files {
+		if err := os.WriteFile(filepath.Join(ccdDir, n), []byte(f), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := c.SetNamedNetwork(ctx, "Router LAN", api.NamedNetwork{Networks: []string{"192.168.50.0/24"}, Via: "router", Clients: []string{"laptop"}}); err != nil {
+		t.Fatal(err)
+	}
+	for n, f := range files {
+		if b, _ := os.ReadFile(filepath.Join(ccdDir, n)); string(b) != f {
+			t.Errorf("%s rewritten:\n%s\nwas:\n%s", n, b, f)
+		}
+	}
+	// A real change still writes.
+	if _, err := c.SetNamedNetwork(ctx, "Router LAN", api.NamedNetwork{Networks: []string{"192.168.50.0/24", "192.168.51.0/24"}, Via: "router", Clients: []string{"laptop"}}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(ccdDir, "laptop")); !strings.Contains(string(b), "192.168.51.0") || !strings.Contains(string(b), "#2FA_KEY:00") {
+		t.Errorf("laptop after a change:\n%s", b)
+	}
+}

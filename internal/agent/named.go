@@ -295,7 +295,9 @@ func (s *Server) changeNamed(w http.ResponseWriter, r *http.Request,
 			return
 		}
 		n := withNamed(ownNet(cur, old, c), next, c)
-		if slices.Equal(n.Routes, cur.Routes) && slices.Equal(n.LAN, cur.LAN) {
+		// Compare as sets: a file with the same routes in another order (e.g.
+		// from openvpn-ui) is left as it is, with its comments.
+		if slices.Equal(n.Routes, union(nil, cur.Routes)) && slices.Equal(n.LAN, union(nil, cur.LAN)) {
 			continue
 		}
 		ws, err := ccdnet.Validate(c, n, srv, ips)
