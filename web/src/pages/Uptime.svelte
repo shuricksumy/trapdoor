@@ -1,4 +1,5 @@
 <script>
+  import { untrack } from 'svelte';
   // Uptime of the selected server's clients over any period: a summary, a
   // status bar per client (by hour up to 3 days, by day beyond), a calendar of
   // one client, and every up and down in time order. Filters live in the URL.
@@ -6,7 +7,7 @@
   import { currentServer, route, setQuery } from '../lib/state.svelte.js';
   import { clientName, loadClientNames } from '../lib/names.svelte.js';
   import { duration, relative, dateTime } from '../lib/format.js';
-  import { bucketSpan, level, monthGrid, preset, presetOf, sortClients, uptimePct } from '../lib/uptime.js';
+  import { bucketSpan, level, monthGrid, pageList, preset, presetOf, sortClients, uptimePct } from '../lib/uptime.js';
 
   const isWG = ['wireguard', 'amneziawg'].includes(currentServer()?.type);
   const presets = [['today', 'Today'], ['7d', '7 days'], ['30d', '30 days'], ['this_month', 'This month'], ['last_month', 'Last month'], ['this_year', 'This year']];
@@ -28,6 +29,33 @@
   let known = $state([]); // every current client, also the ones never seen
   let events = $state([]);
   let total = $state(0);
+  // Pages of the ups and downs: the page in the URL, the size remembered per browser
+  const sizes = [25, 50, 100];
+  const savedSize = () => {
+    try {
+      const n = Number(localStorage.getItem('td-uptime-page-size'));
+      return sizes.includes(n) ? n : 25;
+    } catch {
+      return 25;
+    }
+  };
+  let page = $state(Math.max(1, Number(q.get('page')) || 1));
+  let size = $state(savedSize());
+  const pages = $derived(Math.max(1, Math.ceil(total / size)));
+  let list = $state(null); // the table, to scroll back to its top
+  function go(p) {
+    page = Math.min(Math.max(1, p), pages);
+    list?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+  function setSize(n) {
+    size = n;
+    page = 1;
+    try {
+      localStorage.setItem('td-uptime-page-size', String(n));
+    } catch {
+      /* private mode: not remembered */
+    }
+  }
   let error = $state('');
   let loading = $state(false);
   let now = $state(new Date());
@@ -40,31 +68,40 @@
       .then((list) => (known = isWG ? list.filter((p) => !p.disabled).map((p) => p.name) : list.filter((c) => c.current && c.kind !== 'server' && c.status !== 'revoked').map((c) => c.name)))
       .catch(() => {});
   });
+  // Filters changed: the status bars, and back to the first page of events.
+  let seenParams = untrack(() => params);
   $effect(() => {
     const qs = params;
     if (!from || !to || to < from) return;
-    setQuery({ from, to, name, quiet: quiet ? '' : '0' });
+    if (qs !== seenParams) {
+      seenParams = qs;
+      page = 1;
+    }
     loading = true;
     now = new Date();
-    Promise.all([api(`/history/uptime?from=${from}&to=${to}`), api(`/history/events?${qs}&limit=100`)])
-      .then(([u, e]) => {
+    api(`/history/uptime?from=${from}&to=${to}`)
+      .then((u) => {
         report = u;
-        events = e.events;
-        total = e.total;
         error = '';
       })
       .catch((e) => (error = e.message))
       .finally(() => (loading = false));
   });
-  async function more() {
-    try {
-      const e = await api(`/history/events?${params}&limit=100&offset=${events.length}`);
-      events = [...events, ...e.events];
-      total = e.total;
-    } catch (e) {
-      error = e.message;
-    }
-  }
+  // One page of events.
+  $effect(() => {
+    const qs = params;
+    if (!from || !to || to < from) return;
+    const p = page;
+    const n = size;
+    setQuery({ from, to, name, quiet: quiet ? '' : '0', page: p > 1 ? p : '' });
+    api(`/history/events?${qs}&limit=${n}&offset=${(p - 1) * n}`)
+      .then((e) => {
+        total = e.total;
+        if (e.events.length === 0 && p > 1 && e.total > 0) page = Math.ceil(e.total / n); // past the end
+        else events = e.events;
+      })
+      .catch((e) => (error = e.message));
+  });
 
   // Status bars
   const rows = $derived.by(() => {
@@ -248,7 +285,12 @@
 </section>
 
 <section class="panel" class:loading>
-  <div class="panel-head"><h2>Ups and downs</h2><span class="faint small">{total} in {label}{quiet ? ', quick reconnects hidden' : ''}</span></div>
+  <div class="panel-head" bind:this={list}>
+    <h2>Ups and downs</h2>
+    <span class="faint small">
+      {#if total}{(page - 1) * size + 1}–{Math.min(page * size, total)} of {total}{:else}0{/if} in {label}{quiet ? ', quick reconnects hidden' : ''}
+    </span>
+  </div>
   {#if events.length === 0}
     <p class="panel-body muted">{report ? 'None in this period.' : 'Loading…'}</p>
   {:else}
@@ -270,9 +312,23 @@
         </tbody>
       </table>
     </div>
-    {#if events.length < total}
-      <div class="panel-body more"><button class="btn" onclick={more}>Show more ({total - events.length} left)</button></div>
-    {/if}
+    <nav class="pager" aria-label="Pages of ups and downs">
+      <label class="size"><span class="faint small">Rows</span>
+        <select value={size} onchange={(e) => setSize(Number(e.currentTarget.value))}>
+          {#each sizes as n (n)}<option value={n}>{n}</option>{/each}
+        </select>
+      </label>
+      {#if pages > 1}
+        <div class="pages">
+          <button class="btn small ghost" disabled={page <= 1} onclick={() => go(page - 1)} aria-label="Previous page">← Previous</button>
+          {#each pageList(page, pages) as p, i (i)}
+            {#if p === '…'}<span class="gap" aria-hidden="true">…</span>
+            {:else}<button class="num" class:on={p === page} aria-current={p === page ? 'page' : undefined} onclick={() => go(p)}>{p}</button>{/if}
+          {/each}
+          <button class="btn small ghost" disabled={page >= pages} onclick={() => go(page + 1)} aria-label="Next page">Next →</button>
+        </div>
+      {/if}
+    </nav>
   {/if}
 </section>
 
@@ -321,7 +377,14 @@
   .ev.down { color: var(--bad); background: var(--bad-soft); }
   .link { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-weight: 500; cursor: pointer; text-align: left; }
   .link:hover { text-decoration: underline; }
-  .more { display: flex; justify-content: center; }
+  .pager { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-3) var(--space-5) var(--space-4); border-top: 1px solid var(--line); }
+  .size { display: flex; align-items: center; gap: var(--space-2); }
+  .size select { height: 32px; width: auto; }
+  .pages { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .num { min-width: 34px; height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--surface); color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
+  .num:hover { border-color: var(--accent); }
+  .num.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); font-weight: 600; }
+  .gap { padding: 0 4px; color: var(--ink-3); }
   .cal .nav { display: flex; align-items: center; gap: var(--space-2); }
   .month { min-width: 140px; text-align: center; font-weight: 600; }
   .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; max-width: 640px; }

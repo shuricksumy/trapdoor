@@ -81,3 +81,20 @@ export function presetOf(from, to, now = new Date()) {
   }
   return '';
 }
+
+/**
+ * The page buttons to show: the first, the last, and two around the current
+ * one, with '…' for the gaps. Pages are numbered from 1.
+ */
+export function pageList(current, pages) {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+  const out = [1];
+  // a fixed width (nine items for long lists), so the buttons do not jump
+  const lo = Math.max(2, Math.min(current - 2, pages - 6));
+  const hi = Math.min(pages - 1, Math.max(current + 2, 7));
+  if (lo > 2) out.push('…');
+  for (let p = lo; p <= hi; p++) out.push(p);
+  if (hi < pages - 1) out.push('…');
+  out.push(pages);
+  return out;
+}
