@@ -273,8 +273,9 @@ is reached by the clients whose allowed IPs (their own, or the server's defaults
 other networks in them are "through the server", and `0.0.0.0/0` is the internet. Its
 **Routing** tab edits the default allowed IPs (with a switch for all traffic) and shows
 whether clients reach each other (the *Clients cannot reach each other* script preset).
-Devices get changes with their new config. Clicking a client opens its editor on the Clients
-page (`/clients?edit=<name>`).
+Devices get changes with their new config. Clicking a client (on the map or *Edit*) opens its
+network right there: address, allowed IPs (own or the defaults), DNS and the networks behind
+it; its other settings stay as they are. `/clients?edit=<name>` opens the full editor.
 
 ## Access rules
 
