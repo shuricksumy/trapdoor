@@ -324,7 +324,7 @@
                 <td data-label="VPN address">
                   {#if c.static_ip}<span class="mono">{c.static_ip}</span>
                   {:else}
-                    <span class="faint">automatic</span>{#if now} <span class="mono small">· now {now}</span>{/if}
+                    <span class="faint">automatic</span>{#if now}<span class="mono small block">now {now}</span>{/if}
                     <button class="link small block" disabled={!!busy} onclick={() => makeFixed(c.name)} title="Give it a fixed address (needed for access rules about this client)">{busy === c.name ? 'Fixing…' : 'Make fixed'}</button>
                   {/if}
                 </td>
@@ -432,7 +432,7 @@
   .tag { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 8px; border-radius: 999px; background: var(--sunken); font-size: 12px; }
   .tag.named { background: var(--accent-soft); color: var(--ink); }
   .tag.all { border: 1px dashed var(--line); background: none; }
-  .who { display: inline-flex; align-items: center; gap: 8px; }
+  .who { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); opacity: 0.6; flex: none; }
   .dot.on { background: var(--ok); opacity: 1; }
   .router { padding: 0 6px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); font-size: 11px; font-weight: 600; }
