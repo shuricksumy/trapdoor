@@ -3,7 +3,7 @@
 Requires Go 1.24+ and, for the UI, Node 22.
 
 ```
-make ui      # web/ → internal/webui/dist (embedded by the next build)
+make ui      # web/ → internal/webui/dist (embedded by the next build); runs svelte-check and npm test
 make build   # → bin/trapdoor (without `make ui` the UI shows a "not built" notice)
 make test
 make lint    # needs golangci-lint

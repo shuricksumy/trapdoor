@@ -10,7 +10,7 @@ all: ui build
 
 # Builds web/ into internal/webui/dist, which `build` embeds.
 ui:
-	cd web && npm ci && npm run check && npm run build
+	cd web && npm ci && npm run check && npm test && npm run build
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/trapdoor ./cmd/trapdoor

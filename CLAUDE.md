@@ -19,6 +19,7 @@ make build         # bin/trapdoor
 make test          # go test ./...
 make lint          # golangci-lint
 cd web && npm run check   # svelte-check
+cd web && npm test        # node --test: UI logic in src/**/*.test.js (also run by make ui)
 sudo test/e2e/run.sh bin/trapdoor         # real OpenVPN server + clients, network namespace, iptables (needs openvpn, oathtool, iproute2)
 test/docker/smoke.sh <image>                # the compose setup with a real VPN client
 ```
@@ -54,7 +55,7 @@ Run locally: `TD_AGENT_TOKEN=dev TD_OPENVPN_DIR=/tmp/td TD_CRL_COPIES=- TD_FIREW
 - Security posture: web has no privileges, agent has no network port in Docker (except `docker-compose.remote.yml`: TLS 1.3 with a self-signed certificate pinned by fingerprint, plus the token), the management interface stays on 127.0.0.1, strict CSP (any inline script needs its hash in `internal/webui`).
 - Every feature gets unit tests, plus a step in `test/e2e/run.sh` (real OpenVPN) or `test/docker/smoke.sh` when it touches OpenVPN, the firewall or Docker. Fakes must behave like the real thing: e.g. a SIGTERMed OpenVPN keeps answering on management for a few seconds.
 - Go: stdlib first (net/http routing, log/slog). SQLite via `ncruces/go-sqlite3` (pure Go, CGO off). Go 1.24: check that a dependency's go.mod does not require a newer Go.
-- UI: plain sentence-case copy written for users, light and dark themes, phone layout. Check with `npm run check` and look at screenshots (puppeteer with Chrome).
+- UI: plain sentence-case copy written for users, light and dark themes, phone layout. Logic worth testing goes in a plain `.js` module with a `*.test.js` next to it (`npm test`). Check with `npm run check` and look at screenshots (puppeteer with Chrome).
 
 ## Workflow
 
