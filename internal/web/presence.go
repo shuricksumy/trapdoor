@@ -12,20 +12,18 @@ import (
 	"github.com/shuricksumy/trapdoor/internal/api"
 	"github.com/shuricksumy/trapdoor/internal/httpx"
 	"github.com/shuricksumy/trapdoor/internal/mail"
-	"github.com/shuricksumy/trapdoor/internal/store"
 	"github.com/shuricksumy/trapdoor/internal/telegram"
 )
 
 const settingPresence = "presence"
 
 // PresenceSettings is GET / PUT /api/v1/presence: where clients' online /
-// offline changes go. The channels themselves (SMTP, bot) are the Email and
-// Telegram settings; which clients is chosen per client.
+// offline changes go, one email address and / or one Telegram chat. They are
+// sent through the Email and Telegram settings; which clients is chosen per
+// client.
 type PresenceSettings struct {
-	// Emails get the changes; empty = the admin emails.
-	Emails []string `json:"emails"`
-	// Chats get the changes; empty = the Telegram chats.
-	Chats []string `json:"chats"`
+	Email string `json:"email"` // "" = no email
+	Chat  string `json:"chat"`  // "" = no Telegram message
 	// GraceMinutes: a client is reported offline only after this long, so a
 	// quick reconnect stays quiet (and so is its "online" after it).
 	GraceMinutes int `json:"grace_minutes"`
@@ -61,14 +59,21 @@ func (s *Server) handleSetPresence(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	var err error
-	if req.Emails, err = mail.ParseAddresses(req.Emails); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "emails: "+err.Error())
-		return
+	if req.Email = strings.TrimSpace(req.Email); req.Email != "" {
+		a, err := mail.ParseAddresses([]string{req.Email})
+		if err != nil || len(a) != 1 {
+			httpx.WriteError(w, http.StatusBadRequest, "email: one address, like you@example.com")
+			return
+		}
+		req.Email = a[0]
 	}
-	if req.Chats, err = telegram.ParseChats(req.Chats); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, err.Error())
-		return
+	if req.Chat = strings.TrimSpace(req.Chat); req.Chat != "" {
+		c, err := telegram.ParseChats([]string{req.Chat})
+		if err != nil || len(c) != 1 {
+			httpx.WriteError(w, http.StatusBadRequest, "Telegram chat: one chat id, like 123456789 or @channel")
+			return
+		}
+		req.Chat = c[0]
 	}
 	if req.GraceMinutes < 1 || req.GraceMinutes > 120 {
 		httpx.WriteError(w, http.StatusBadRequest, "report offline after 1 to 120 minutes")
@@ -90,13 +95,15 @@ func (s *Server) handleClientNotify(w http.ResponseWriter, r *http.Request) {
 	}
 	out := m[r.PathValue("server")]
 	if out == nil {
-		out = map[string]store.NotifyFlags{}
+		out = map[string]bool{}
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleSetClientNotify(w http.ResponseWriter, r *http.Request) {
-	var f store.NotifyFlags
+	var f struct {
+		On bool `json:"on"`
+	}
 	if !decodeJSON(w, r, &f) {
 		return
 	}
@@ -105,7 +112,7 @@ func (s *Server) handleSetClientNotify(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "bad client name")
 		return
 	}
-	if err := s.Stats.DB.SetClientNotify(r.Context(), server, name, f); err != nil {
+	if err := s.Stats.DB.SetClientNotify(r.Context(), server, name, f.On); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -229,35 +236,31 @@ func (s *Server) reportPresence(ctx context.Context, ps PresenceSettings, events
 	}
 	es, _ := s.emailSettings(ctx)
 	ts, _ := s.telegramSettings(ctx)
-	emails := ps.Emails
-	if len(emails) == 0 {
-		emails = es.Admins
-	}
-	chats := ps.Chats
-	if len(chats) == 0 {
-		chats = ts.Chats
+	byEmail := ps.Email != "" && es.on()
+	byTelegram := ps.Chat != "" && ts.on()
+	if !byEmail && !byTelegram {
+		return
 	}
 	names := s.presenceNames(ctx, events, flags)
 	sort.SliceStable(events, func(i, j int) bool { return events[i].at.Before(events[j].at) })
 	for _, ev := range events {
-		f := flags[ev.agent][ev.name]
-		if !f.Email && !f.Telegram {
+		if !flags[ev.agent][ev.name] {
 			continue
 		}
 		subject, text := s.presenceMessage(ev, names)
-		if f.Email && es.on() && len(emails) > 0 {
+		if byEmail {
 			s.mailWG.Add(1)
 			go func() {
 				defer s.mailWG.Done()
-				_ = s.sendMail(context.WithoutCancel(ctx), es.Config, mail.Message{To: emails, Subject: "trapdoor: " + subject,
+				_ = s.sendMail(context.WithoutCancel(ctx), es.Config, mail.Message{To: []string{ps.Email}, Subject: "trapdoor: " + subject,
 					Text: text + "\n\n-- \ntrapdoor" + s.baseURLLine()})
 			}()
 		}
-		if f.Telegram && ts.on() && len(chats) > 0 {
+		if byTelegram {
 			s.mailWG.Add(1)
 			go func() {
 				defer s.mailWG.Done()
-				_ = s.sendTelegram(context.WithoutCancel(ctx), ts.Token, chats, text)
+				_ = s.sendTelegram(context.WithoutCancel(ctx), ts.Token, []string{ps.Chat}, text)
 			}()
 		}
 	}
@@ -265,14 +268,14 @@ func (s *Server) reportPresence(ctx context.Context, ps PresenceSettings, events
 
 // presenceNames are the servers' names and the OpenVPN clients' display
 // names for the events to send ("agent" → name, "agent/client" → name).
-func (s *Server) presenceNames(ctx context.Context, events []presenceEvent, flags map[string]map[string]store.NotifyFlags) map[string]string {
+func (s *Server) presenceNames(ctx context.Context, events []presenceEvent, flags map[string]map[string]bool) map[string]string {
 	out := map[string]string{}
 	if s.Agent == nil {
 		return out
 	}
 	want := map[string]bool{}
 	for _, ev := range events {
-		if f := flags[ev.agent][ev.name]; f.Email || f.Telegram {
+		if flags[ev.agent][ev.name] {
 			want[ev.agent] = true
 		}
 	}

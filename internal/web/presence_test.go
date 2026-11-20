@@ -54,24 +54,24 @@ func TestPresence(t *testing.T) {
 	if err := db.SetSetting(ctx, settingTelegram, TelegramSettings{Enabled: true, Token: tgToken, Chats: []string{"4242"}}); err != nil {
 		t.Fatal(err)
 	}
-	for _, bad := range []string{`{"grace_minutes":0}`, `{"grace_minutes":2,"emails":["nope"]}`, `{"grace_minutes":2,"chats":["x y"]}`} {
+	for _, bad := range []string{`{"grace_minutes":0}`, `{"grace_minutes":2,"email":"nope"}`, `{"grace_minutes":2,"email":"a@example.com, b@example.com"}`, `{"grace_minutes":2,"chat":"x y"}`} {
 		if rec := call(http.MethodPut, "/api/v1/presence", bad); rec.Code != http.StatusBadRequest {
 			t.Errorf("%s: %d", bad, rec.Code)
 		}
 	}
-	if rec := call(http.MethodPut, "/api/v1/presence", `{"grace_minutes":2,"emails":["family@example.com"],"chats":["777"]}`); rec.Code != http.StatusOK {
+	if rec := call(http.MethodPut, "/api/v1/presence", `{"grace_minutes":2,"email":"family@example.com","chat":"777"}`); rec.Code != http.StatusOK {
 		t.Fatal(rec.Body)
 	}
-	// Per client: anna by email and Telegram, bob by Telegram, carol not at all.
-	for name, body := range map[string]string{"anna": `{"email":true,"telegram":true}`, "bob": `{"telegram":true}`, "carol": `{"email":true}`} {
+	// Per client on / off: anna and bob on, carol turned on and off again.
+	for name, body := range map[string]string{"anna": `{"on":true}`, "bob": `{"on":true}`, "carol": `{"on":true}`} {
 		if rec := call(http.MethodPut, "/api/v1/servers/openvpn/notify/"+name, body); rec.Code != http.StatusOK {
 			t.Fatal(rec.Body)
 		}
 	}
-	if rec := call(http.MethodPut, "/api/v1/servers/openvpn/notify/carol", `{}`); rec.Code != http.StatusOK {
+	if rec := call(http.MethodPut, "/api/v1/servers/openvpn/notify/carol", `{"on":false}`); rec.Code != http.StatusOK {
 		t.Fatal(rec.Body)
 	}
-	if rec := call(http.MethodGet, "/api/v1/servers/openvpn/notify", ""); rec.Body.String() != `{"anna":{"email":true,"telegram":true},"bob":{"email":false,"telegram":true}}`+"\n" {
+	if rec := call(http.MethodGet, "/api/v1/servers/openvpn/notify", ""); rec.Body.String() != `{"anna":true,"bob":true}`+"\n" {
 		t.Fatalf("notify list: %s", rec.Body)
 	}
 
@@ -145,20 +145,22 @@ func TestPresence(t *testing.T) {
 	if len(m) != 1 || !strings.HasSuffix(m[0], "anna is online") || len(g) != 1 || !strings.Contains(g[0], "🟢 anna is online on openvpn since Nov 20 12:20 from 203.0.113.7:5000") {
 		t.Fatalf("online: %v %v", m, g)
 	}
-	// Telegram only for bob, and how long he was online.
+	// How long bob was online; only Telegram once the email address is removed.
+	if rec := call(http.MethodPut, "/api/v1/presence", `{"grace_minutes":2,"chat":"777"}`); rec.Code != http.StatusOK {
+		t.Fatal(rec.Body)
+	}
 	disconnect("bob", 30*time.Minute)
 	m, g = check(33 * time.Minute)
-	if len(m) != 0 || len(g) != 1 || !strings.Contains(g[0], "bob is offline") || !strings.Contains(g[0], "(was online 23 min)") {
+	if len(m) != 0 || len(g) != 1 || !strings.Contains(g[0], "777: 🔴 bob is offline") || !strings.Contains(g[0], "(was online 23 min)") {
 		t.Fatalf("bob offline: %v %v", m, g)
 	}
 
-	// Without the channels' recipients set here, the admins and the bot's chats get them.
+	// No address and no chat: nothing is sent.
 	if rec := call(http.MethodPut, "/api/v1/presence", `{"grace_minutes":2}`); rec.Code != http.StatusOK {
 		t.Fatal(rec.Body)
 	}
 	disconnect("anna", 40*time.Minute)
-	m, g = check(43 * time.Minute)
-	if len(m) != 1 || !strings.HasPrefix(m[0], "admin@example.com |") || len(g) != 1 || !strings.HasPrefix(g[0], "4242: ") {
-		t.Fatalf("default recipients: %v %v", m, g)
+	if m, g := check(43 * time.Minute); len(m)+len(g) != 0 {
+		t.Fatalf("sent without recipients: %v %v", m, g)
 	}
 }

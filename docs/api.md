@@ -53,9 +53,9 @@ server). Below, `…` stands for that prefix.
 | POST | `/api/v1/email/test` | `{"to"}` (optional, default: the admins) → a test email; 502 with the SMTP error |
 | GET, PUT | `/api/v1/telegram` | Telegram settings: `{"enabled","token","chats":[…],"notify":{"backup_failed","node_down","cert_expiry"}}`; GET never returns the token (`token_set`) and adds `last`; PUT with an empty token keeps it, `clear_token` removes it |
 | POST | `/api/v1/telegram/test` | `{"chat"}` (optional, default: the chats) → a test message; 502 with Telegram's error |
-| GET, PUT | `/api/v1/presence` | where clients' online / offline messages go: `{"emails":[…],"chats":[…],"grace_minutes"}` (empty lists: the admin emails / the Telegram chats) |
-| GET | `/api/v1/servers/{server}/notify` | clients with online / offline messages: `{"<client>": {"email","telegram"}}` |
-| PUT | `/api/v1/servers/{server}/notify/{name}` | `{"email","telegram"}` (both false: off) |
+| GET, PUT | `/api/v1/presence` | where clients' online / offline messages go: `{"email","chat","grace_minutes"}` (one address, one chat; empty: none) |
+| GET | `/api/v1/servers/{server}/notify` | clients with online / offline messages on: `{"<client>": true}` |
+| PUT | `/api/v1/servers/{server}/notify/{name}` | `{"on"}` |
 | GET | `/api/v1/servers/{server}/emails` | the clients' addresses: `{"<client>": "<email>"}` |
 | PUT | `/api/v1/servers/{server}/emails/{name}` | `{"email"}` (empty: forget it) |
 | POST | `/api/v1/servers/{server}/emails/{name}/send` | `{"email","note","qr_gif"}` (all optional; email: another address, stored; qr_gif: base64 GIF attached) → emails the client's `.ovpn` / `.conf` with instructions |

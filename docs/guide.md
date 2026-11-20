@@ -714,11 +714,11 @@ out). The web process needs to reach `api.telegram.org`.
 
 A message when a client connects or disconnects, by email and / or Telegram:
 
-- **Per client**: *More* → *Online / offline messages* on the Clients page (OpenVPN and
-  WireGuard / AmneziaWG): Email, Telegram, or neither. A 🔔 next to the name shows it is on.
-- **Where they go** (Account → *Client online / offline*): email addresses (empty: the admin
-  emails) and Telegram chats (empty: the chats in the Telegram settings). The channels
-  themselves are the Email and Telegram settings.
+- **Per client**: *More* → *Online / offline messages: on* (or *off*) on the Clients page
+  (OpenVPN and WireGuard / AmneziaWG). A 🔔 next to the name shows it is on.
+- **Where they go** (Account → *Client online / offline*): one email address and / or one
+  Telegram chat, the same for every client; empty means none. They are sent through the
+  Email and Telegram settings, which must be on.
 - **Offline after** (default 2 minutes): a client is reported offline once it has stayed away
   this long, so a quick reconnect (a new IP, a phone waking up) stays quiet, and so does its
   "online" afterwards. A client that comes back after its "offline" was sent is reported

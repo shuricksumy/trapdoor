@@ -10,7 +10,6 @@
   import { placeMenu } from '../lib/menu.js';
   import SendProfile from '../lib/SendProfile.svelte';
   import Lifetime from '../lib/Lifetime.svelte';
-  import ClientNotify from '../lib/ClientNotify.svelte';
 
   let twoFactor = $state({ open: false, name: '' });
   let network = $state({ open: false, name: '' });
@@ -20,8 +19,7 @@
   let mailing = $state({ open: false, name: '' });
 
   let certs = $state([]);
-  let notify = $state({}); // name → { email, telegram }: online / offline messages
-  let notifying = $state({ open: false, name: '' });
+  let notify = $state({}); // name → true: online / offline messages on
   let online = $state(new Set());
   let loadError = $state('');
   let loaded = $state(false);
@@ -29,6 +27,16 @@
   let search = $state(route.query.get('q') ?? '');
   let filter = $state(route.query.get('show') ?? 'all');
   let showHistory = $state(false);
+
+  async function setNotify(name, on) {
+    try {
+      await api(`/notify/${encodeURIComponent(name)}`, { method: 'PUT', body: { on } });
+      notify = { ...notify, [name]: on || undefined };
+      toast(on ? 'Online / offline messages on.' : 'Online / offline messages off.');
+    } catch (e) {
+      toast(e.message, 'bad');
+    }
+  }
 
   async function load() {
     try {
@@ -315,7 +323,7 @@
                 <span class="name">
                   {#if online.has(c.name) && c.current}<i class="dot" title="Connected now"></i>{/if}
                   {c.notes || c.name}
-                  {#if c.current && (notify[c.name]?.email || notify[c.name]?.telegram)}<span class="bell" title="Online / offline messages: {[notify[c.name].email && 'email', notify[c.name].telegram && 'Telegram'].filter(Boolean).join(', ')}">🔔</span>{/if}
+                  {#if c.current && notify[c.name]}<span class="bell" title="Online / offline messages on">🔔</span>{/if}
                 </span>
                 {#if c.notes}<span class="mono faint small ip" title="Login (certificate name)">{c.name}</span>{/if}
                 {#if !c.current}<span class="faint small">replaced</span>{/if}
@@ -352,7 +360,7 @@
                       {/if}
                       {#if c.status !== 'revoked'}
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; openNaming(c.name); }}>Display name</button>
-                        <button onclick={(e) => { e.currentTarget.closest('details').open = false; notifying = { open: true, name: c.name, label: c.notes }; }}>Online / offline messages</button>
+                        <button onclick={(e) => { e.currentTarget.closest('details').open = false; setNotify(c.name, !notify[c.name]); }}>{notify[c.name] ? 'Online / offline messages: off' : 'Online / offline messages: on'}</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; network = { open: true, name: c.name }; }}>Network</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; twoFactor = { open: true, name: c.name }; }}>Two-factor login</button>
                         <button onclick={() => ask('renew', c.name)}>Renew</button>
@@ -443,8 +451,6 @@
     </button>
   {/snippet}
 </Dialog>
-
-<ClientNotify bind:open={notifying.open} name={notifying.name} label={notifying.label} flags={notify[notifying.name]} onsaved={(f) => (notify = { ...notify, [notifying.name]: f })} />
 
 <Dialog bind:open={naming.open} title="Display name">
   <form id="naming" class="form" onsubmit={saveNaming}>

@@ -149,12 +149,10 @@ var migrations = []string{
 	`DELETE FROM sessions WHERE name IN ('UNDEF', '');
 	DELETE FROM traffic_hourly WHERE name IN ('UNDEF', '');`,
 
-	// 9: which clients' online / offline changes are sent, and how
+	// 9: the clients whose online / offline changes are sent
 	`CREATE TABLE IF NOT EXISTS client_notify (
-		agent    TEXT    NOT NULL,
-		client   TEXT    NOT NULL,
-		email    INTEGER NOT NULL DEFAULT 0,
-		telegram INTEGER NOT NULL DEFAULT 0,
+		agent  TEXT NOT NULL,
+		client TEXT NOT NULL,
 		PRIMARY KEY (agent, client)
 	) WITHOUT ROWID;`,
 }
@@ -340,16 +338,10 @@ func (db *DB) SetClientEmail(ctx context.Context, agent, client, email string) e
 	return err
 }
 
-// NotifyFlags say how a client's online / offline changes are sent.
-type NotifyFlags struct {
-	Email    bool `json:"email"`
-	Telegram bool `json:"telegram"`
-}
-
-// ClientNotify returns the clients with notifications on, by server id and
-// client name; agent "" returns every server.
-func (db *DB) ClientNotify(ctx context.Context, agent string) (map[string]map[string]NotifyFlags, error) {
-	q := `SELECT agent, client, email, telegram FROM client_notify`
+// ClientNotify returns the clients whose online / offline changes are sent,
+// by server id and client name; agent "" returns every server.
+func (db *DB) ClientNotify(ctx context.Context, agent string) (map[string]map[string]bool, error) {
+	q := `SELECT agent, client FROM client_notify`
 	args := []any{}
 	if agent != "" {
 		q += ` WHERE agent = ?`
@@ -360,29 +352,27 @@ func (db *DB) ClientNotify(ctx context.Context, agent string) (map[string]map[st
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	out := map[string]map[string]NotifyFlags{}
+	out := map[string]map[string]bool{}
 	for rows.Next() {
 		var a, c string
-		var f NotifyFlags
-		if err := rows.Scan(&a, &c, &f.Email, &f.Telegram); err != nil {
+		if err := rows.Scan(&a, &c); err != nil {
 			return nil, err
 		}
 		if out[a] == nil {
-			out[a] = map[string]NotifyFlags{}
+			out[a] = map[string]bool{}
 		}
-		out[a][c] = f
+		out[a][c] = true
 	}
 	return out, rows.Err()
 }
 
-// SetClientNotify stores how a client's changes are sent; all off removes it.
-func (db *DB) SetClientNotify(ctx context.Context, agent, client string, f NotifyFlags) error {
-	if !f.Email && !f.Telegram {
+// SetClientNotify turns a client's online / offline messages on or off.
+func (db *DB) SetClientNotify(ctx context.Context, agent, client string, on bool) error {
+	if !on {
 		_, err := db.ExecContext(ctx, `DELETE FROM client_notify WHERE agent = ? AND client = ?`, agent, client)
 		return err
 	}
-	_, err := db.ExecContext(ctx, `INSERT INTO client_notify (agent, client, email, telegram) VALUES (?, ?, ?, ?)
-		ON CONFLICT (agent, client) DO UPDATE SET email = excluded.email, telegram = excluded.telegram`, agent, client, f.Email, f.Telegram)
+	_, err := db.ExecContext(ctx, `INSERT INTO client_notify (agent, client) VALUES (?, ?) ON CONFLICT DO NOTHING`, agent, client)
 	return err
 }
 

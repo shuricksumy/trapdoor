@@ -11,7 +11,7 @@
   async function load() {
     try {
       const p = await api('/presence');
-      f = { emails: (p.emails ?? []).join(', '), chats: (p.chats ?? []).join(', '), grace: p.grace_minutes || 2 };
+      f = { email: p.email ?? '', chat: p.chat ?? '', grace: p.grace_minutes || 2 };
       loadError = '';
     } catch (err) {
       loadError = err.message;
@@ -28,7 +28,7 @@
     try {
       await api('/presence', {
         method: 'PUT',
-        body: { emails: f.emails.split(/[,\s;]+/).filter(Boolean), chats: [f.chats], grace_minutes: Number(f.grace) },
+        body: { email: f.email.trim(), chat: f.chat.trim(), grace_minutes: Number(f.grace) },
       });
       toast('Saved.');
       await load();
@@ -49,20 +49,20 @@
   {:else}
     <form class="panel-body body" onsubmit={save}>
       <p class="muted small">
-        A message when a client connects or disconnects, for the clients you pick on the Clients page (bell: email and / or
-        Telegram). It goes through the email and Telegram settings above.
+        A message when a client connects or disconnects, for the clients you turn it on for on the Clients page (More → Online /
+        offline messages; a 🔔 marks them). Sent to this address and / or chat, through the email and Telegram settings above.
       </p>
       {#if error}<div class="banner bad" role="alert">{error}</div>{/if}
       <div class="grid">
         <label class="field">
-          <span>Emails</span>
-          <input bind:value={f.emails} placeholder="the admin emails" autocomplete="off" spellcheck="false" />
-          <span class="hint">Empty: the admin emails.</span>
+          <span>Email</span>
+          <input type="email" bind:value={f.email} placeholder="you@example.com" autocomplete="off" spellcheck="false" />
+          <span class="hint">Empty: no email.</span>
         </label>
         <label class="field">
-          <span>Telegram chats</span>
-          <input bind:value={f.chats} placeholder="the Telegram chats" autocomplete="off" spellcheck="false" />
-          <span class="hint">Empty: the chats in the Telegram settings.</span>
+          <span>Telegram chat</span>
+          <input bind:value={f.chat} placeholder="123456789 or @channel" autocomplete="off" spellcheck="false" />
+          <span class="hint">Empty: no Telegram message.</span>
         </label>
         <label class="field">
           <span>Offline after (minutes)</span>
