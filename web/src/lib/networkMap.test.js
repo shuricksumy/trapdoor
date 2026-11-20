@@ -1,7 +1,7 @@
 // node --test: the OpenVPN network map.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMap, buildWGMap, covers, normalize, overlaps, parse } from './networkMap.js';
+import { buildMap, buildWGMap, checkNetwork, covers, normalize, overlaps, parse } from './networkMap.js';
 
 const srv = { subnet: '10.8.0.0/24', server_ip: '10.8.0.1', pushes_full_tunnel: false, routes: ['192.168.1.0/24'] };
 const clients = [
@@ -148,4 +148,52 @@ test('WireGuard: a LAN nobody sends to is a problem', () => {
   assert.deepEqual(n.reachedBy, ['laptop']); // only the full-tunnel laptop
   const m2 = buildWGMap({ subnet: '10.66.0.0/24', peers: peers.filter((p) => p.name !== 'laptop'), defaults: { allowed_ips: ['10.66.0.0/24'] } });
   assert.deepEqual(m2.problems.map((p) => p.kind), ['unreached']);
+});
+
+test('checkNetwork: what the routing editors accept', () => {
+  const opts = { list: ['10.20.0.0/16'], subnet: '10.8.0.0/24' };
+  assert.deepEqual(checkNetwork('192.168.1.0/24', opts), { value: '192.168.1.0/24', note: '' });
+  assert.deepEqual(checkNetwork('192.168.1.7/24', opts), { value: '192.168.1.0/24', note: 'Added as 192.168.1.0/24' });
+  assert.deepEqual(checkNetwork(' 10.1.2.3 ', opts), { value: '10.1.2.3/32', note: '' }); // a host
+  assert.match(checkNetwork('192.168.1.0/33', opts).error, /not an IPv4 network/);
+  assert.match(checkNetwork('home lan', opts).error, /not an IPv4 network/);
+  assert.match(checkNetwork('0.0.0.0/0', opts).error, /all traffic/);
+  assert.match(checkNetwork('10.8.0.0/16', opts).error, /overlaps the VPN network/);
+  assert.match(checkNetwork('10.8.0.5', opts).error, /overlaps the VPN network/);
+  assert.match(checkNetwork('10.20.0.0/16', opts).error, /already there/);
+  assert.deepEqual(checkNetwork('', opts), { error: '' });
+  // WireGuard allowed IPs may contain the VPN network
+  assert.deepEqual(checkNetwork('10.8.0.0/24', { ...opts, allowSubnet: true }), { value: '10.8.0.0/24', note: '' });
+});
+
+// A server set up by openvpn-ui: client-to-client, LANs behind routers (iroute),
+// routes pushed per client, no "route" lines, the networks named afterwards.
+test('an openvpn-ui style server: no route warnings, routers, names, who reaches what', () => {
+  const s = { subnet: '10.8.1.0/24', server_ip: '10.8.1.1', pushes_full_tunnel: false, routes: [] };
+  const cs = [
+    { name: 'docker', static_ip: '', full_tunnel: false, routes: [], lan: [], named: [] },
+    { name: 'castle', static_ip: '10.8.1.222', full_tunnel: false, routes: [], lan: [], named: [] },
+    { name: 'cabin', static_ip: '10.8.1.39', full_tunnel: false, routes: [], lan: [], named: [] },
+    { name: 'phone', static_ip: '10.8.1.60', full_tunnel: true, routes: [], lan: [], named: [] },
+    { name: 'laptop', static_ip: '', full_tunnel: false, routes: [], lan: [], named: [] },
+  ];
+  const nets = [
+    { name: 'Docker services', networks: ['172.30.0.0/24'], via: 'docker', clients: ['castle', 'cabin', 'laptop'] },
+    { name: 'Castle LAN', networks: ['192.168.222.0/24'], via: 'castle', clients: ['cabin'] },
+    { name: 'Cabin LAN', networks: ['192.168.39.0/24'], via: 'cabin', clients: ['castle'] },
+    { name: 'Spare LAN', networks: ['192.168.90.0/24'], via: 'laptop', clients: [] },
+  ];
+  const m = buildMap({ srv: s, clients: cs, nets, online: new Set(['castle']), c2c: true });
+  const n = byKey(m);
+  assert.deepEqual(m.problems.map((p) => p.kind), ['unreached']); // only Spare LAN
+  assert.equal(m.problems[0].name, 'Spare LAN');
+  assert.ok(m.networks.every((x) => x.ok && x.missingRoute.length === 0));
+  assert.deepEqual(n['named:Docker services'].serverOnly, ['172.30.0.0/24']);
+  assert.deepEqual(n['named:Castle LAN'].reachedBy, ['cabin']);
+  // routers first (castle is online), then the rest by name
+  assert.deepEqual(m.clients.map((c) => c.name), ['castle', 'cabin', 'docker', 'laptop', 'phone']);
+  assert.deepEqual(m.internet, ['phone']);
+  // the same server without client-to-client needs a route for every LAN
+  const m2 = buildMap({ srv: s, clients: cs, nets, c2c: false });
+  assert.equal(m2.problems.filter((p) => p.kind === 'route').length, 4);
 });

@@ -5,7 +5,7 @@
   // are sent back unchanged. The device needs its new config afterwards.
   import { api } from './api.js';
   import { toast } from './state.svelte.js';
-  import { normalize, overlaps } from './networkMap.js';
+  import { checkNetwork } from './networkMap.js';
   import Dialog from './Dialog.svelte';
 
   // peer: from GET /peers; defaults: GET /settings; subnet: the VPN network
@@ -43,11 +43,10 @@
       f.ownDNS = true;
       if (!f.dns.includes(raw)) f.dns = [...f.dns, raw];
     } else {
-      const n = normalize(raw);
-      if (!n) return (error = `${raw} is not an IPv4 network like 192.168.1.0/24`);
-      if (kind === 'lan' && subnet && overlaps(n, subnet)) return (error = `${n} overlaps the VPN network ${subnet}`);
+      const r = checkNetwork(raw, { list: f[kind], subnet, allowSubnet: kind === 'allowed' });
+      if (!r.value) return (error = r.error ?? '');
       if (kind === 'allowed') f.ownAllowed = true;
-      if (!f[kind].includes(n)) f[kind] = [...f[kind], n];
+      f[kind] = [...f[kind], r.value];
     }
     input[kind] = '';
     error = '';

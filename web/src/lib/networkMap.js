@@ -166,3 +166,21 @@ export function buildWGMap({ subnet = '', serverIp = '', peers = [], defaults = 
   problems.push(...overlapProblems(networks));
   return { clients, networks, internet, problems, server: { ip: serverIp, subnet } };
 }
+
+/**
+ * Checks a network typed into one of the routing editors.
+ * Returns { value } to add (normalised), or { error }, plus a note when the
+ * address was changed ("192.168.1.5/24" → "Added as 192.168.1.0/24").
+ * opts: { list: already there, subnet: the VPN network (refused when it overlaps),
+ *         allowSubnet: true where the VPN network is fine (WireGuard allowed IPs) }
+ */
+export function checkNetwork(raw, { list = [], subnet = '', allowSubnet = false } = {}) {
+  const s = String(raw ?? '').trim();
+  if (!s) return { error: '' };
+  const n = normalize(s);
+  if (!n) return { error: `${s} is not an IPv4 network like 192.168.1.0/24` };
+  if (n === '0.0.0.0/0') return { error: 'For all traffic use the switch for it' };
+  if (!allowSubnet && subnet && overlaps(n, subnet)) return { error: `${n} overlaps the VPN network ${subnet}` };
+  if (list.includes(n)) return { error: `${n} is already there` };
+  return { value: n, note: s.includes('/') && n !== s ? `Added as ${n}` : '' };
+}

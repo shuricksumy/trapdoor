@@ -6,7 +6,7 @@
   import { api, reloadServers } from './api.js';
   import { toast } from './state.svelte.js';
   import { clientName } from './names.svelte.js';
-  import { normalize, overlaps, covers } from './networkMap.js';
+  import { checkNetwork, overlaps, covers } from './networkMap.js';
 
   // settings: GET /settings; map: buildWGMap(); subnet; isolate: scripts preset; own: clients with their own allowed IPs
   let { settings, map, subnet = '', isolate = false, own = [], onsaved } = $props();
@@ -32,17 +32,12 @@
   let error = $state('');
   let note = $state('');
   function add() {
-    const raw = input.trim();
-    if (!raw) return;
-    note = '';
-    const n = normalize(raw);
-    if (!n) return (error = `${raw} is not an IPv4 network like 192.168.1.0/24`);
-    if (n === '0.0.0.0/0') return (error = 'For all traffic use the switch above');
-    if (draft.includes(n)) return (error = `${n} is already there`);
-    draft = [...draft, n];
+    const r = checkNetwork(input, { list: draft, subnet, allowSubnet: true });
+    error = r.error ?? '';
+    note = r.note ?? '';
+    if (!r.value) return;
+    draft = [...draft, r.value];
     input = '';
-    error = '';
-    note = raw.includes('/') && n !== raw ? `Added as ${n}` : '';
   }
   const remove = (r) => (draft = draft.filter((x) => x !== r));
 
