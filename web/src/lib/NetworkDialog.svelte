@@ -146,8 +146,8 @@
       </label>
 
       <fieldset>
-        <legend>Networks this client can reach</legend>
-        <span class="hint">For example your home LAN behind another client or the server. Sent to the device as routes.</span>
+        <legend>→ This client reaches</legend>
+        <span class="hint">Networks elsewhere that this device should reach through the VPN, e.g. the LAN behind another client or next to the server. Sent to the device as routes.</span>
         <div class="chips">
           {#each named.filter((u) => u.as === 'route') as u (u.name)}
             <span class="chip named" title="Named network: changes for every client that has it">{label(u.name)}<button type="button" aria-label="Leave {u.name}" onclick={() => leave(u)}>×</button></span>
@@ -170,8 +170,8 @@
       </fieldset>
 
       <fieldset>
-        <legend>Networks behind this client</legend>
-        <span class="hint">When this device is a router (site-to-site), e.g. the LAN of a NAS or a remote office.</span>
+        <legend>⌂ Behind this client</legend>
+        <span class="hint">Only when this device is a router (site-to-site): its own LAN, e.g. a home or a remote office. Other clients reach it through this client.</span>
         <div class="chips">
           {#each named.filter((u) => u.as === 'lan') as u (u.name)}
             <span class="chip named" title="Named network: changes for every client that has it">{label(u.name)}<button type="button" aria-label="Not behind {name}" onclick={() => leave(u)}>×</button></span>

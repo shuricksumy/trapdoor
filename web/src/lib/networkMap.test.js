@@ -1,7 +1,7 @@
 // node --test: the OpenVPN network map.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMap, covers, normalize, overlaps, parse } from './networkMap.js';
+import { buildMap, buildWGMap, covers, normalize, overlaps, parse } from './networkMap.js';
 
 const srv = { subnet: '10.8.0.0/24', server_ip: '10.8.0.1', pushes_full_tunnel: false, routes: ['192.168.1.0/24'] };
 const clients = [
@@ -109,4 +109,43 @@ test('client-to-client: a LAN without a server route is fine for clients, noted 
   assert.ok(!m.problems.some((p) => p.kind === 'route'));
   // nobody reaching it is still worth saying
   assert.ok(m.problems.some((p) => p.kind === 'unreached' && p.network === 'lan:192.168.50.0/24'));
+});
+
+test('LANs behind two clients that overlap are a problem', () => {
+  const cs = [...clients, { name: 'cabin', static_ip: '', full_tunnel: false, routes: [], lan: ['192.168.1.128/25'], named: [] }];
+  const m = buildMap({ srv, clients: cs });
+  const o = m.problems.filter((p) => p.kind === 'overlap');
+  assert.equal(o.length, 1);
+  assert.deepEqual([o[0].via, o[0].otherVia].sort(), ['cabin', 'home-router']);
+});
+
+const peers = [
+  { name: 'home', address: '10.66.0.10', lan: ['192.168.1.0/24'], allowed_ips: ['10.66.0.0/24'], connected: true },
+  { name: 'phone', address: '10.66.0.2', lan: [], allowed_ips: [], connected: false },
+  { name: 'laptop', address: '10.66.0.3', lan: [], allowed_ips: ['0.0.0.0/0', '::/0'], connected: true },
+  { name: 'old', address: '10.66.0.4', lan: ['10.99.0.0/16'], allowed_ips: [], disabled: true },
+];
+const defaults = { allowed_ips: ['10.66.0.0/24', '192.168.1.0/24', '172.28.0.0/24'] };
+
+test('WireGuard: LANs behind peers, networks through the server, the internet', () => {
+  const m = buildWGMap({ subnet: '10.66.0.0/24', serverIp: '10.66.0.1', peers, defaults });
+  const n = byKey(m);
+  // the phone (defaults) and the laptop (everything) reach the home LAN
+  assert.equal(n['lan:192.168.1.0/24'].via, 'home');
+  assert.equal(n['lan:192.168.1.0/24'].reachedBy, 'all');
+  // the edge network is through the server; home's own allowed IPs do not include it
+  assert.deepEqual([...n['srv:172.28.0.0/24'].reachedBy].sort(), ['laptop', 'phone']);
+  // disabled peers and the VPN subnet are left out
+  assert.ok(!n['lan:10.99.0.0/16'] && !n['srv:10.66.0.0/24']);
+  assert.deepEqual(m.clients.map((c) => c.name), ['home', 'laptop', 'phone']);
+  assert.deepEqual(m.internet, ['laptop']);
+  assert.deepEqual(m.problems, []);
+});
+
+test('WireGuard: a LAN nobody sends to is a problem', () => {
+  const m = buildWGMap({ subnet: '10.66.0.0/24', peers, defaults: { allowed_ips: ['10.66.0.0/24'] } });
+  const n = byKey(m)['lan:192.168.1.0/24'];
+  assert.deepEqual(n.reachedBy, ['laptop']); // only the full-tunnel laptop
+  const m2 = buildWGMap({ subnet: '10.66.0.0/24', peers: peers.filter((p) => p.name !== 'laptop'), defaults: { allowed_ips: ['10.66.0.0/24'] } });
+  assert.deepEqual(m2.problems.map((p) => p.kind), ['unreached']);
 });

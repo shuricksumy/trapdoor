@@ -3,7 +3,7 @@
   import qrcode from 'qrcode-generator';
   import { api, apiURL, poll } from '../lib/api.js';
   import { bytes, relative } from '../lib/format.js';
-  import { toast, currentServer } from '../lib/state.svelte.js';
+  import { toast, currentServer, route, setQuery } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
   import { placeMenu } from '../lib/menu.js';
   import SendProfile from '../lib/SendProfile.svelte';
@@ -28,6 +28,15 @@
     }
   }
   onMount(() => poll(load, 8000));
+  // ?edit=<name> (e.g. from the Network page) opens that client's editor once.
+  let wantEdit = route.query.get('edit');
+  $effect(() => {
+    if (!wantEdit || !loaded) return;
+    const p = peers.find((x) => x.name === wantEdit);
+    wantEdit = null;
+    setQuery({ edit: '' });
+    if (p) openEdit(p);
+  });
 
   const rows = $derived([...peers].sort((a, b) => a.name.localeCompare(b.name)));
 

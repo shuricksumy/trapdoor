@@ -13,6 +13,7 @@
   let busy = $state(false);
   let clients = $state([]);
   let net = $state(null);
+  let netNames = $state({}); // OpenVPN: CIDR → named network
   let showRules = $state(false);
 
   const isWG = ['wireguard', 'amneziawg'].includes(currentServer()?.type);
@@ -43,7 +44,8 @@
         clients = peers.filter((p) => !p.disabled).map((p) => p.name).sort();
         net = wgNetwork(peers, fw);
       } else {
-        const [fw, cs, n] = await Promise.all([api('/firewall'), api('/certs').catch(() => []), api('/network').catch(() => null)]);
+        const [fw, cs, n, nn] = await Promise.all([api('/firewall'), api('/certs').catch(() => []), api('/network').catch(() => null), api('/named-networks').catch(() => null)]);
+        netNames = Object.fromEntries((nn?.networks ?? []).flatMap((x) => x.networks.map((c) => [c, x.name])));
         take(fw);
         setClientNames(cs);
         clients = cs.filter((c) => c.current && c.kind !== 'server' && c.status !== 'revoked').map((c) => c.name).sort((a, b) => clientName(a).localeCompare(clientName(b)));
@@ -129,7 +131,7 @@
     if (state?.subnet) out.push({ label: 'VPN network', value: state.subnet });
     if (net?.server_ip) out.push({ label: 'The server', value: net.server_ip });
     for (const r of net?.routes ?? []) out.push({ label: r, value: r });
-    for (const [c, lans] of Object.entries(net?.client_lans ?? {})) for (const l of lans) out.push({ label: `${l} (behind ${c})`, value: l });
+    for (const [c, lans] of Object.entries(net?.client_lans ?? {})) for (const l of lans) out.push({ label: `${netNames[l] ? `${netNames[l]}: ` : ''}${l} (behind ${clientName(c)})`, value: l });
     // a client LAN usually also has a server "route": show it once, with its client
     const seen = new Map();
     for (const s of out) seen.set(s.value, s);
@@ -174,7 +176,7 @@
         <span><strong>Block</strong><span class="hint">Clients reach only what a rule allows. Replies to allowed traffic always pass.</span></span>
       </label>
     </fieldset>
-    <AccessDiagram {policy} type={currentServer()?.type} id={currentServer()?.id} subnet={state.subnet} {net} fwMode={state.mode} c2c={state.client_to_client} />
+    <AccessDiagram {policy} type={currentServer()?.type} id={currentServer()?.id} subnet={state.subnet} {net} names={netNames} fwMode={state.mode} c2c={state.client_to_client} />
     {#if policy.enabled && policy.default === 'deny' && saved && JSON.parse(saved).default !== 'deny'}
       <p class="banner warn">If you open this page through the VPN, add a rule that allows it first, or you lock yourself out.</p>
     {/if}

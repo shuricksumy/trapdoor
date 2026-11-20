@@ -29,7 +29,7 @@
       set = await api('/settings', {
         method: 'PUT',
         body: { ...f, public_port: Number(f.public_port), mtu: Number(f.mtu) || 0, keepalive: Number(f.keepalive) || 0,
-          dns: list(f.dns), allowed_ips: list(f.allowed_ips) },
+          dns: list(f.dns), allowed_ips: set.allowed_ips },
       });
       f = { ...set, dns: set.dns.join(', '), allowed_ips: set.allowed_ips.join(', '), mtu: set.mtu || '' };
       await reloadServers();
@@ -69,11 +69,11 @@
           <span>DNS</span>
           <input bind:value={f.dns} placeholder="none" autocomplete="off" spellcheck="false" />
         </label>
-        <label class="field">
+        <div class="field">
           <span>Allowed IPs</span>
-          <input bind:value={f.allowed_ips} autocomplete="off" spellcheck="false" required />
-          <span class="hint">0.0.0.0/0, ::/0 sends everything through the VPN.</span>
-        </label>
+          <span class="mono small">{set.allowed_ips.join(', ') || '–'}</span>
+          <span class="hint">Routing, all traffic through the VPN: on the <a href="/network?tab=routing">Network</a> page.</span>
+        </div>
         <label class="field">
           <span>MTU</span>
           <input type="number" bind:value={f.mtu} min="1280" max="9000" placeholder="automatic" />

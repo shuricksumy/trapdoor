@@ -1,11 +1,13 @@
 <script>
-  // The OpenVPN network as a picture: clients on the left, the server in the
-  // middle, the networks on the right (through the server or behind a client)
-  // with who reaches them. Half-done routes are orange. Built by networkMap.js.
+  // A VPN network as a picture: clients on the left, the server in the middle,
+  // the networks on the right (through the server or behind a client) with who
+  // reaches them. Half-done routes are orange. Built by networkMap.js (buildMap
+  // for OpenVPN, buildWGMap for WireGuard / AmneziaWG).
   import { clientName } from './names.svelte.js';
 
-  // map: buildMap(); srv: GET /network; onclient(name), onnetwork(node): open the editors.
-  let { map, srv, onclient, onnetwork } = $props();
+  // server: { title, ip, subnet, line }; onclient(name), onnetwork(node): open the editors.
+  let { map, server, onclient, onnetwork } = $props();
+  const anyWarn = $derived(map.networks.some((n) => n.missingRoute?.length));
 
   const MAX = 14; // clients drawn; the rest is "+N more"
   const shown = $derived(map.clients.slice(0, MAX));
@@ -54,10 +56,10 @@
 
     <!-- server -->
     <rect x="330" y={sTop} width="180" height={sBottom - sTop} rx="12" class="box server" />
-    <text x="420" y={(sTop + sBottom) / 2 - 22} class="t b" text-anchor="middle">OpenVPN server</text>
-    <text x="420" y={(sTop + sBottom) / 2} class="t s mono" text-anchor="middle">{srv?.server_ip ?? ''}</text>
-    <text x="420" y={(sTop + sBottom) / 2 + 18} class="t xs m mono" text-anchor="middle">{srv?.subnet ?? ''}</text>
-    <text x="420" y={(sTop + sBottom) / 2 + 38} class="t xs m" text-anchor="middle">{srv?.routes?.length ?? 0} route{srv?.routes?.length === 1 ? '' : 's'} into the VPN</text>
+    <text x="420" y={(sTop + sBottom) / 2 - 22} class="t b" text-anchor="middle">{server?.title ?? 'Server'}</text>
+    <text x="420" y={(sTop + sBottom) / 2} class="t s mono" text-anchor="middle">{server?.ip ?? ''}</text>
+    <text x="420" y={(sTop + sBottom) / 2 + 18} class="t xs m mono" text-anchor="middle">{server?.subnet ?? ''}</text>
+    <text x="420" y={(sTop + sBottom) / 2 + 38} class="t xs m" text-anchor="middle">{server?.line ?? ''}</text>
 
     <!-- clients -->
     {#each shown as c, i (c.name)}
@@ -121,7 +123,7 @@
     {/each}
     <li class="sbox"><strong>Internet</strong><span class="faint">{internet.line2}{internet.reached.length ? ` ${who(internet.reached, 60)}` : ''}</span></li>
   </ul>
-  <figcaption class="hint">Click a client or a network to change it. Grey lines: offline clients. Orange: the server does not send that network into the VPN yet.</figcaption>
+  <figcaption class="hint">Click a client or a network to change it. Grey lines: offline clients.{#if anyWarn}{' '}Orange: the server does not send that network into the VPN yet.{/if}</figcaption>
 </figure>
 
 <style>
