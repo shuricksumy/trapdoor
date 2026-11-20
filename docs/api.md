@@ -51,6 +51,7 @@ server). Below, `…` stands for that prefix.
 | POST | `/api/v1/backup` | `{"passphrase"}` → a backup file (`.tdbackup` encrypted, or `.tar.gz` without a passphrase); see the guide |
 | GET, PUT | `/api/v1/email` | email settings: `{"enabled","host","port","security":"starttls\|tls\|none","username","password","from","insecure_skip_verify","admins":[…],"notify":{"backup_failed","node_down","cert_expiry"}}`; GET never returns the password (`password_set`) and adds `last` (the last email's outcome); PUT with an empty password keeps it, `clear_password` removes it |
 | POST | `/api/v1/email/test` | `{"to"}` (optional, default: the admins) → a test email; 502 with the SMTP error |
+| GET | `/api/v1/servers/{server}/history/uptime` | `?range=24h\|7d` (by hour), `?range=30d` (by day) or `?month=YYYY-MM` (a calendar month by day) → `{"from","to","step","starts":[…],"clients":[{"name","online","last_seen","sessions","online_seconds","buckets":[seconds per step]}]}` |
 | GET, PUT | `/api/v1/telegram` | Telegram settings: `{"enabled","token","chats":[…],"notify":{"backup_failed","node_down","cert_expiry"}}`; GET never returns the token (`token_set`) and adds `last`; PUT with an empty token keeps it, `clear_token` removes it |
 | POST | `/api/v1/telegram/test` | `{"chat"}` (optional, default: the chats) → a test message; 502 with Telegram's error |
 | GET, PUT | `/api/v1/presence` | where clients' online / offline messages go: `{"email","chat","grace_minutes"}` (one address, one chat; empty: none) |
