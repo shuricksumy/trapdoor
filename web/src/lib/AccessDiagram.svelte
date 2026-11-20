@@ -7,7 +7,7 @@
   // How a switch turns into rules: accessRules.js.
   // type: openvpn | wireguard | amneziawg; net: the Access page's network;
   // fwMode: direct | file | off (TD_FIREWALL); c2c: OpenVPN client-to-client is on.
-  let { policy, type = 'openvpn', id = '', subnet = '', net = null, fwMode = 'direct', c2c = false } = $props();
+  let { policy, type = 'openvpn', id = '', subnet = '', net = null, names = {}, fwMode = 'direct', c2c = false } = $props();
 
   const wg = $derived(type === 'wireguard' || type === 'amneziawg');
   const kind = $derived(type === 'amneziawg' ? 'AmneziaWG' : wg ? 'WireGuard' : 'OpenVPN');
@@ -22,7 +22,7 @@
   const info = {
     server: { name: 'This server', sub: () => net?.server_ip || 'address not known' },
     clients: { name: 'Other VPN clients', sub: () => subnet || 'the VPN network' },
-    routed: { name: 'Networks it routes', sub: () => (routed.length ? routed.join(', ') : 'none set up') },
+    routed: { name: 'Networks it routes', sub: () => (routed.length ? [...new Set(routed.map((c) => names[c] ?? c))].join(', ') : 'none set up') },
     internet: { name: 'Internet', sub: () => 'and everything else' },
   };
   const dests = $derived(
@@ -130,12 +130,12 @@
     {#if fwMode === 'off'}
       <li>The agent does not manage the firewall (<span class="mono">TD_FIREWALL=off</span>). Set it to <span class="mono">direct</span> or <span class="mono">file</span> to use these rules.</li>
     {/if}
-    <li>Rules only limit. A client reaches a network only if the server routes it there too: {wg ? 'the allowed IPs on the Network page' : 'routes on the Server and Network pages'}.</li>
+    <li>Rules only limit. A client reaches a network only if the server routes it there too: the <a href="/network?tab=routing">Network page</a> ({wg ? 'allowed IPs' : 'routes'}).</li>
     <li>A rule for one client needs a fixed VPN address{wg ? ' (every WireGuard client has one)' : ': Network → Edit, or the button that shows up here'}.</li>
     {#if !wg}
       <li class:warn={c2c}>
-        {c2c ? 'Clients can reach each other is on' : 'Clients can reach each other is off'} on the Server page (<span class="mono">client-to-client</span>).
-        {c2c ? 'OpenVPN then passes traffic between clients itself, so these rules cannot block it. Turn it off to control Other VPN clients here.' : 'Good: traffic between clients goes through these rules.'}
+        {c2c ? 'Clients can reach each other inside OpenVPN' : 'Clients do not reach each other inside OpenVPN'} (<span class="mono">client-to-client</span>, Network → Routing).
+        {c2c ? 'OpenVPN then passes traffic between clients itself, so these rules cannot block it. Turn it off under Network → Routing to control Other VPN clients here.' : 'Good: traffic between clients goes through these rules.'}
       </li>
     {/if}
   </ul>

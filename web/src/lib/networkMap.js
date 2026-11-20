@@ -98,9 +98,71 @@ export function buildMap({ srv, clients = [], nets = [], pushed = [], online = n
     for (const cidr of n.missingRoute) problems.push({ kind: 'route', cidr, network: n.key, name: n.name, via: n.via });
     if (n.via && n.reachedBy !== 'all' && n.reachedBy.length === 0) problems.push({ kind: 'unreached', network: n.key, name: n.name, via: n.via });
   }
+  problems.push(...overlapProblems(networks));
   // server.conf routes into the VPN that no client has behind it: traffic for them goes nowhere
   const lans = networks.filter((n) => n.via).flatMap((n) => n.cidrs);
   for (const r of routes) if (!lans.some((l) => covers(r, l) || covers(l, r))) problems.push({ kind: 'orphan', cidr: r });
 
   return { clients: clientNodes, networks, internet, problems };
+}
+
+/** LANs behind two different clients that share addresses: traffic for them can only go one way. */
+export function overlapProblems(networks) {
+  const out = [];
+  const lans = networks.filter((n) => n.via).flatMap((n) => n.cidrs.map((cidr) => ({ cidr, n })));
+  for (let i = 0; i < lans.length; i++) {
+    for (let j = i + 1; j < lans.length; j++) {
+      const a = lans[i];
+      const b = lans[j];
+      if (a.n.via !== b.n.via && overlaps(a.cidr, b.cidr)) {
+        out.push({ kind: 'overlap', cidr: a.cidr, other: b.cidr, name: a.n.name, via: a.n.via, otherName: b.n.name, otherVia: b.n.via, network: a.n.key });
+      }
+    }
+  }
+  return out;
+}
+
+const ALL4 = '0.0.0.0/0';
+const isAll = (c) => c === ALL4 || c === '::/0';
+
+/**
+ * The WireGuard / AmneziaWG map in the same shape as buildMap.
+ * input: { subnet, serverIp, peers: GET /peers, defaults: GET /settings }
+ * A client sends what its allowed IPs say (its own, or the server's defaults).
+ */
+export function buildWGMap({ subnet = '', serverIp = '', peers = [], defaults = null }) {
+  const active = peers.filter((p) => !p.disabled && !p.expired);
+  const sends = (p) => (p.allowed_ips?.length ? p.allowed_ips : defaults?.allowed_ips ?? []);
+  const reachedBy = (cidr, via) => {
+    const who = active.filter((p) => p.name !== via && sends(p).some((r) => isAll(r) || covers(r, cidr))).map((p) => p.name);
+    const others = active.filter((p) => p.name !== via);
+    return others.length > 0 && who.length === others.length ? 'all' : who;
+  };
+
+  const networks = [];
+  for (const p of active) for (const cidr of p.lan ?? []) networks.push({ key: `lan:${cidr}`, name: cidr, named: false, cidrs: [cidr], via: p.name });
+  const behind = networks.map((n) => n.cidrs[0]);
+  const through = [...new Set(active.flatMap(sends))].filter(
+    (c) => !isAll(c) && !c.includes(':') && !(subnet && overlaps(c, subnet)) && !behind.some((b) => overlaps(b, c)),
+  );
+  for (const cidr of through) networks.push({ key: `srv:${cidr}`, name: cidr, named: false, cidrs: [cidr], via: '' });
+  for (const n of networks) {
+    n.reachedBy = reachedBy(n.cidrs[0], n.via);
+    n.missingRoute = [];
+    n.serverOnly = [];
+    n.ok = true;
+  }
+
+  const routers = new Map();
+  for (const n of networks) if (n.via) routers.set(n.via, [...(routers.get(n.via) ?? []), n.name]);
+  const clients = active
+    .map((p) => ({ name: p.name, ip: p.address ?? '', online: !!p.connected, full: sends(p).some(isAll), router: routers.get(p.name) ?? [] }))
+    .sort((a, b) => b.router.length - a.router.length || Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
+  const full = clients.filter((c) => c.full).map((c) => c.name);
+  const internet = clients.length > 0 && full.length === clients.length ? 'all' : full;
+
+  const problems = [];
+  for (const n of networks) if (n.via && n.reachedBy !== 'all' && n.reachedBy.length === 0) problems.push({ kind: 'unreached', network: n.key, name: n.name, via: n.via, cidr: n.cidrs[0] });
+  problems.push(...overlapProblems(networks));
+  return { clients, networks, internet, problems, server: { ip: serverIp, subnet } };
 }

@@ -239,7 +239,7 @@ and `phone`. Manage them under Clients → Named networks, or with
 
 ### The Network page
 
-For OpenVPN everything about routing is on one page (menu → Network):
+Everything about routing is on one page (menu → Network), the same for every server type:
 
 - **Map**: clients on the left (routers first, online ones with a green line), the server in
   the middle, the networks on the right: each one through the server or behind a client,
@@ -250,21 +250,31 @@ For OpenVPN everything about routing is on one page (menu → Network):
   networks are a list.
 - **Needs attention**, each with a button: a LAN behind a client without a server route
   (*Add the route* writes `route <net> <mask>` into `server.conf`, checked and backed up like
-  the Server page), a LAN nobody reaches (*Give it to clients*), a server route no client has
-  behind it. Saved `server.conf` changes show *Apply and restart*: every client reconnects,
-  and the previous config comes back if OpenVPN does not start.
+  the Server page), a LAN nobody reaches (*Give it to clients*; WireGuard: *Give it to every
+  client* adds it to the default allowed IPs), LANs behind two clients that overlap, a server
+  route no client has behind it. Saved `server.conf` changes show *Apply and restart*: every
+  client reconnects, and the previous config comes back if OpenVPN does not start.
 - Tabs (also as `?tab=` in the address):
-  - **Clients**: every client's VPN address, whether all its traffic goes through the VPN,
-    what it reaches (own routes, named networks, routes for everyone) and what is behind it.
+  - **Clients**: routers first, then the connected ones (green dot). Every client's VPN
+    address (OpenVPN: an automatic one shows its current address and *Make fixed*), whether
+    all its traffic goes through the VPN, what it reaches (own routes, named networks, routes
+    for everyone; WireGuard: its allowed IPs or the defaults), what is behind it, its own
+    access rules, and *Reconnect* (OpenVPN) to apply changes now. A search box shows up with
+    more than six clients; on phones every client is a card.
   - **Routing**: all traffic through the VPN for every client, client-to-client, the networks
     every client reaches (`push "route …"`) and the networks the server sends into the VPN
     (`route …`), each with where it is (behind which client, or through the server).
     Addresses are normalised (`192.168.1.5/24` → `192.168.1.0/24`); networks inside the VPN
     subnet are refused. Saved to `server.conf`; OpenVPN uses it after a restart.
-  - **Named networks**: the list, and *Manage*.
+  - **Named networks** (OpenVPN): the list, and *Manage*.
 
-For WireGuard / AmneziaWG the page lists every client's address, networks behind it, allowed
-IPs and DNS.
+For WireGuard / AmneziaWG the map is built from the clients' allowed IPs: a LAN behind a client
+is reached by the clients whose allowed IPs (their own, or the server's defaults) cover it,
+other networks in them are "through the server", and `0.0.0.0/0` is the internet. Its
+**Routing** tab edits the default allowed IPs (with a switch for all traffic) and shows
+whether clients reach each other (the *Clients cannot reach each other* script preset).
+Devices get changes with their new config. Clicking a client opens its editor on the Clients
+page (`/clients?edit=<name>`).
 
 ## Access rules
 
@@ -449,8 +459,8 @@ interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/2
   as *Expired*. A later date, or none, brings it back at once; nothing else changes. With
   email set up, the admins hear about it three days before.
 - **Settings and client defaults** (Server page): name, the public address and port clients
-  connect to, and the defaults for every client's config: DNS, allowed IPs, MTU,
-  keepalive, preshared key for new clients. A client's own settings win. Devices need the
+  connect to, and the defaults for every client's config: DNS, MTU, keepalive, preshared key
+  for new clients. The default allowed IPs (routing) are on the Network page. A client's own settings win. Devices need the
   new config (QR code) after a change.
 - WireGuard has no logins or sessions. A client counts as connected while its last
   handshake is less than 3 minutes old; traffic history works as for OpenVPN.
