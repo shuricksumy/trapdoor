@@ -26,6 +26,14 @@ same two-factor logins.
 | --- |
 | <img src="docs/screenshots/servers.png" width="800"> |
 
+| Network: who reaches what, with fixes |
+| --- |
+| <img src="docs/screenshots/network.png" width="800"> |
+
+| Routing (dark) | WireGuard network (dark) |
+| --- | --- |
+| <img src="docs/screenshots/network-routing-dark.png" width="400"> | <img src="docs/screenshots/network-wireguard-dark.png" width="400"> |
+
 | Clients | Traffic | Access rules |
 | --- | --- | --- |
 | <img src="docs/screenshots/clients.png" width="300"> | <img src="docs/screenshots/traffic-dark.png" width="300"> | <img src="docs/screenshots/access.png" width="300"> |
@@ -57,15 +65,14 @@ same two-factor logins.
 - **Setup** that creates the certificate authority, keys and `server.conf` with modern
   defaults (tls-crypt-v2, AES-GCM, TLS 1.2+) ([what it asks](docs/guide.md#setup))
 - **Clients**: create, download the `.ovpn` profile, revoke, restore, renew (also in bulk),
-  optional key passphrase; warnings before certificates expire
+  optional key passphrase; a display name ("Anna's phone") shown on every page; warnings
+  before certificates expire
 - **Two-factor login** per client with an authenticator app (QR code) and/or a static password
 - **Connected now**: live sessions with traffic, disconnect a device
 - **Traffic history** per client and for the whole server: any date range, by day, month or
   year, CSV export
 - **Network per client**: fixed VPN address, routes, networks behind a client (site-to-site),
-  all traffic through the VPN; named networks (e.g. "Office LAN") given to several clients at once;
-  a Network page with a map of who reaches what, one-click fixes for missing routes, and all
-  of the server's routing in one place
+  all traffic through the VPN; named networks (e.g. "Office LAN") given to several clients at once
 - **Access rules**: which client may reach which network or port; everything else allowed or
   blocked; a diagram with a switch per destination
 - **Server settings** in a form or as raw `server.conf`, checked by OpenVPN before saving,
@@ -78,11 +85,16 @@ same two-factor logins.
   ([how](docs/guide.md#wireguard-servers))
 - **AmneziaWG** hides the VPN from blocking: obfuscation levels 1.5, 2.0 (default) and 3.1,
   random values within the AmneziaWG limits; no kernel module needed in Docker
-- Live state from the interface, traffic history and access rules as for OpenVPN
+- Live state from the interface, traffic history, access rules and the Network page as for
+  OpenVPN; the default allowed IPs are the routing
 - Changes apply without disconnecting anybody (`wg syncconf`)
 
 **Everywhere**
 
+- **Network page** for every server type: a map of clients, the server and the networks they
+  reach (behind which client, or through the server), *Needs attention* with a fix button
+  (e.g. *Add the route*), and tabs for the clients, the routing and the named networks
+  ([how](docs/guide.md#the-network-page))
 - Light / dark / auto theme, works on phones
 - Secure by design: the web UI has no privileges, admin passwords are hashed, login attempts
   are throttled, no external scripts or CDNs
