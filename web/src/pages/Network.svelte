@@ -1,6 +1,6 @@
 <script>
   import { api, reloadServers } from '../lib/api.js';
-  import { currentServer, toast, route, setQuery, navigate } from '../lib/state.svelte.js';
+  import { currentServer, toast, route, setQuery } from '../lib/state.svelte.js';
   import NetworkDialog from '../lib/NetworkDialog.svelte';
   import NamedNetworks from '../lib/NamedNetworks.svelte';
   import { loadClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
@@ -8,12 +8,14 @@
   import NetworkMap from '../lib/NetworkMap.svelte';
   import RoutingPanel from '../lib/RoutingPanel.svelte';
   import WGRoutingPanel from '../lib/WGRoutingPanel.svelte';
+  import WGNetworkDialog from '../lib/WGNetworkDialog.svelte';
   import { buildMap, buildWGMap } from '../lib/networkMap.js';
 
   // Routing at a glance, the same for every server type: a map of who reaches
   // what, what needs attention (with a fix), and tabs for the clients, the
   // routing and (OpenVPN) the named networks.
   const server = currentServer();
+  let wgEdit = $state({ open: false, peer: null });
   const isWG = ['wireguard', 'amneziawg'].includes(server?.type);
   const kind = server?.type === 'amneziawg' ? 'AmneziaWG' : isWG ? 'WireGuard' : 'OpenVPN';
 
@@ -97,7 +99,7 @@
   let edit = $state({ open: false, name: '' });
   let namedOpen = $state(false);
   function editClient(name) {
-    if (isWG) navigate(`/clients?edit=${encodeURIComponent(name)}`);
+    if (isWG) wgEdit = { open: true, peer: peers.find((p) => p.name === name) ?? null };
     else edit = { open: true, name };
   }
   function openNetwork(n) {
@@ -387,6 +389,10 @@
       </div>
     {/if}
   </section>
+{/if}
+
+{#if isWG}
+  <WGNetworkDialog bind:open={wgEdit.open} peer={wgEdit.peer} defaults={settings} {subnet} onsaved={load} />
 {/if}
 
 {#if !isWG}
