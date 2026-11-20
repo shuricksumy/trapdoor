@@ -45,3 +45,39 @@ export function monthGrid(year, month) {
   for (let k = 0; k < cells.length; k += 7) weeks.push(cells.slice(k, k + 7));
   return weeks;
 }
+
+/** YYYY-MM-DD in local time. */
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** The quick picks of the Uptime page: { from, to } as YYYY-MM-DD, both days included. */
+export function preset(key, now = new Date()) {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const today = new Date(y, m, now.getDate());
+  const back = (days) => new Date(y, m, now.getDate() - days);
+  switch (key) {
+    case 'today':
+      return { from: ymd(today), to: ymd(today) };
+    case '7d':
+      return { from: ymd(back(6)), to: ymd(today) };
+    case '30d':
+      return { from: ymd(back(29)), to: ymd(today) };
+    case 'this_month':
+      return { from: ymd(new Date(y, m, 1)), to: ymd(today) };
+    case 'last_month':
+      return { from: ymd(new Date(y, m - 1, 1)), to: ymd(new Date(y, m, 0)) };
+    case 'this_year':
+      return { from: ymd(new Date(y, 0, 1)), to: ymd(today) };
+    default:
+      return null;
+  }
+}
+
+/** Which quick pick a range is, or '' for a custom one. */
+export function presetOf(from, to, now = new Date()) {
+  for (const k of ['today', '7d', '30d', 'this_month', 'last_month', 'this_year']) {
+    const p = preset(k, now);
+    if (p.from === from && p.to === to) return k;
+  }
+  return '';
+}

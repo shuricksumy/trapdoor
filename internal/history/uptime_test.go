@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,5 +94,75 @@ func TestUptime(t *testing.T) {
 	}
 	if _, err := st.Uptime(ctx, base, base.Add(time.Hour), Step("week"), time.UTC, now); !errors.Is(err, ErrBadQuery) {
 		t.Errorf("bad step: %v", err)
+	}
+}
+
+func TestEvents(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "td.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	base := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
+	at := func(h, m int) int64 {
+		return base.Add(time.Duration(h)*time.Hour + time.Duration(m)*time.Minute).Unix()
+	}
+	id := 0
+	add := func(name string, from, to int64) {
+		id++
+		var disc any = to
+		if to == 0 {
+			disc = nil
+		}
+		if _, err := db.ExecContext(ctx, `INSERT INTO sessions (agent, name, client_id, real_address, connected_at, last_seen, disconnected_at)
+			VALUES ('openvpn', ?, ?, '203.0.113.7:1', ?, ?, ?)`, name, id, from, max(from, to), disc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("anna", at(8, 0), at(9, 0))    // up 8:00, down 9:00
+	add("anna", at(9, 1), at(12, 0))   // a quick reconnect (1 min), then down 12:00
+	add("bob", at(-1, 0), at(1, 0))    // up yesterday: only its down is in the day
+	add("bob", at(20, 0), 0)           // still up
+	add("carol", at(-3, 0), at(-2, 0)) // before the day: nothing
+	st := &Stats{DB: db, Agent: "openvpn"}
+	day := func(quiet time.Duration, name string) []Event {
+		ev, total, err := st.Events(ctx, base, base.Add(24*time.Hour), name, quiet, 0, 100)
+		if err != nil || total != len(ev) {
+			t.Fatalf("events: %v %d", err, total)
+		}
+		return ev
+	}
+	short := func(ev []Event) []string {
+		out := []string{}
+		for _, e := range ev {
+			k := "down"
+			if e.Up {
+				k = "up"
+			}
+			out = append(out, e.Time.Format("15:04")+" "+e.Name+" "+k)
+		}
+		return out
+	}
+	got := short(day(0, ""))
+	want := []string{"20:00 bob up", "12:00 anna down", "09:01 anna up", "09:00 anna down", "08:00 anna up", "01:00 bob down"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("all:\n%v\nwant\n%v", got, want)
+	}
+	// quiet 2 minutes: anna's reconnect folds into one session 8:00-12:00
+	ev := day(2*time.Minute, "anna")
+	if strings.Join(short(ev), ",") != "12:00 anna down,08:00 anna up" || ev[0].Lasted != 4*3600 || ev[1].Merged != 1 || ev[1].From != "203.0.113.7:1" {
+		t.Errorf("quiet: %+v", ev)
+	}
+	// paging, newest first
+	page, total, _ := st.Events(ctx, base, base.Add(24*time.Hour), "", 0, 2, 2)
+	if total != 6 || strings.Join(short(page), ",") != "09:01 anna up,09:00 anna down" {
+		t.Errorf("page: %v of %d", short(page), total)
+	}
+	if page, _, _ := st.Events(ctx, base, base.Add(24*time.Hour), "", 0, 50, 2); len(page) != 0 {
+		t.Errorf("past the end: %v", page)
+	}
+	if _, _, err := st.Events(ctx, base, base, "", 0, 0, 10); !errors.Is(err, ErrBadQuery) {
+		t.Errorf("empty period: %v", err)
 	}
 }

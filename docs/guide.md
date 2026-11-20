@@ -712,17 +712,25 @@ out). The web process needs to reach `api.telegram.org`.
 
 ## Uptime
 
-Connected → *Uptime*: every client like a status page, from the session history.
+Menu → *Uptime*: when each client of the selected server was online, for any period back to
+the first record (trapdoor never deletes the session history).
 
-- A bar per hour (*24 hours*, *7 days*) or per day (*30 days*): dark green when the client was
-  online (almost) all of it, light green for part of it, grey when offline. Hover for the time
-  online. Next to it the share of the period it was online and when it was last seen.
-- Clients that never connected are listed too; connected ones come first.
-- Click a client for its calendar: a month, each day shaded by its time online (relative to
-  its busiest day) with the hours, earlier months with ←. A day lists its sessions: from, to,
-  how long, from which address.
+- **Filters**, kept in the address so a view can be bookmarked: *Today*, *7 days*, *30 days*,
+  *This month*, *Last month*, *This year*, or any *From* / *To* dates (up to 4 years); one
+  client or all; *Hide quick reconnects* folds a disconnect followed by a reconnect within the
+  quiet time of the online / offline messages into one session.
+- **Summary**: clients online now, average uptime, time online, sessions, ups and downs.
+- **Status**: a bar per client, by hour up to 3 days and by day beyond. Dark green: online
+  (almost) all of it, light green: part of it, grey: offline; hover for the time online. The
+  share of the period it was online and when it was last seen; clients never seen are listed
+  too, connected ones first.
+- **Calendar**: click a client for a month, each day shaded by its time online (relative to its
+  busiest day), earlier months with ←; a day lists its ups and downs.
+- **Ups and downs**: every connect and disconnect in the period, newest first, 100 at a time
+  (*Show more*): when, who, from which address, how long it was up, how many quick reconnects
+  were folded in. Click a client to show only it. *Export CSV* downloads the whole list.
 - Days are days in `TD_TZ`. WireGuard / AmneziaWG count a client as gone 3 minutes after its
-  last handshake, so their sessions end a little later than the device went away.
+  last handshake, so their downs come a little after the device went away.
 
 ## Client online / offline
 

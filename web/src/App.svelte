@@ -11,6 +11,7 @@
   import Certificates from './pages/Certificates.svelte';
   import Sessions from './pages/Sessions.svelte';
   import Statistics from './pages/Statistics.svelte';
+  import Uptime from './pages/Uptime.svelte';
   import Account from './pages/Account.svelte';
   import Server from './pages/Server.svelte';
   import Setup from './pages/Setup.svelte';
@@ -27,6 +28,7 @@
     { path: '/', label: 'Overview', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', component: Dashboard },
     { path: '/clients', label: 'Clients', icon: 'M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z', component: Certificates },
     { path: '/sessions', label: 'Connected', icon: 'M4 12h4l2-5 4 10 2-5h4', component: Sessions },
+    { path: '/uptime', label: 'Uptime', icon: 'M3 12h3l2-4 3 8 2-4h3M17 6h4v4M21 6l-4 4M3 19h18', component: Uptime },
     { path: '/statistics', label: 'Traffic', icon: 'M5 20V11M10 20V5M15 20v-7M20 20V8', component: Statistics },
     { path: '/network', label: 'Network', icon: 'M12 3v6M5 21v-4h14v4M12 9a2 2 0 1 0 0 .01M12 11v6M5 17v-2h14v2', component: Network },
     { path: '/access', label: 'Access', icon: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5zM12 15v2', component: Access },
@@ -36,11 +38,9 @@
   const wgPages = [
     { path: '/', label: 'Overview', icon: pages[0].icon, component: WireGuardOverview },
     { path: '/clients', label: 'Clients', icon: pages[1].icon, component: WireGuardClients },
-    pages[2],
-    pages[3],
-    pages[4],
-    pages[5],
-    { path: '/server', label: 'Server', icon: pages[6].icon, component: WireGuardServer },
+    // Connected, Uptime, Traffic, Network, Access: the same pages
+    ...pages.filter((p) => ['/sessions', '/uptime', '/statistics', '/network', '/access'].includes(p.path)),
+    { path: '/server', label: 'Server', icon: pages.find((p) => p.path === '/server').icon, component: WireGuardServer },
   ];
 
   // WireGuard and AmneziaWG servers share their pages.

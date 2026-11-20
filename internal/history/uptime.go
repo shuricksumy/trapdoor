@@ -137,3 +137,91 @@ func (s *Stats) Uptime(ctx context.Context, from, to time.Time, step Step, loc *
 	sort.Slice(out.Clients, func(i, j int) bool { return out.Clients[i].Name < out.Clients[j].Name })
 	return out, nil
 }
+
+// Event is a client going up (connected) or down (disconnected).
+type Event struct {
+	Time   time.Time `json:"time"`
+	Name   string    `json:"name"`
+	Up     bool      `json:"up"`
+	From   string    `json:"from,omitempty"`   // up: the address it connected from
+	Lasted int64     `json:"lasted,omitempty"` // down: seconds it was up
+	// Merged: quick reconnects folded into this up (with quiet set).
+	Merged int `json:"merged,omitempty"`
+}
+
+// Events lists ups and downs in [from, to), newest first: offset and limit
+// page through them. With quiet > 0, a down followed by an up of the same
+// client within quiet is dropped (a quick reconnect), and the session counts
+// as one. A session still open has no down; its up says so by having none.
+func (s *Stats) Events(ctx context.Context, from, to time.Time, name string, quiet time.Duration, offset, limit int) ([]Event, int, error) {
+	if !to.After(from) {
+		return nil, 0, fmt.Errorf("%w: to is not after from", ErrBadQuery)
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	// Sessions touching the period, plus the quiet time before it, so a
+	// reconnect right at the start is recognised.
+	q := `SELECT name, connected_at, disconnected_at, real_address FROM sessions
+		WHERE agent = ? AND connected_at < ? AND COALESCE(disconnected_at, last_seen) >= ?`
+	args := []any{s.Agent, to.Unix(), from.Add(-quiet).Unix()}
+	if name != "" {
+		q += ` AND name = ?`
+		args = append(args, name)
+	}
+	q += ` ORDER BY name, connected_at`
+	rows, err := s.DB.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	type span struct {
+		name     string
+		up, down int64 // down 0 = still open
+		from     string
+		merged   int
+	}
+	var spans []span
+	for rows.Next() {
+		var sp span
+		var disc *int64
+		if err := rows.Scan(&sp.name, &sp.up, &disc, &sp.from); err != nil {
+			return nil, 0, err
+		}
+		if disc != nil {
+			sp.down = *disc
+		}
+		// fold into the previous session of the same client when the gap is short
+		if n := len(spans); quiet > 0 && n > 0 && spans[n-1].name == sp.name && spans[n-1].down != 0 &&
+			sp.up-spans[n-1].down < int64(quiet/time.Second) {
+			spans[n-1].down = sp.down
+			spans[n-1].merged++
+			continue
+		}
+		spans = append(spans, sp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	var all []Event
+	in := func(t int64) bool { return t >= from.Unix() && t < to.Unix() }
+	for _, sp := range spans {
+		if in(sp.up) {
+			all = append(all, Event{Time: time.Unix(sp.up, 0).UTC(), Name: sp.name, Up: true, From: sp.from, Merged: sp.merged})
+		}
+		if sp.down != 0 && in(sp.down) {
+			all = append(all, Event{Time: time.Unix(sp.down, 0).UTC(), Name: sp.name, Lasted: sp.down - sp.up})
+		}
+	}
+	sort.SliceStable(all, func(i, j int) bool {
+		if !all[i].Time.Equal(all[j].Time) {
+			return all[i].Time.After(all[j].Time)
+		}
+		return !all[i].Up && all[j].Up // a down before an up at the same second, newest first
+	})
+	total := len(all)
+	if offset >= total {
+		return []Event{}, total, nil
+	}
+	return all[offset:min(total, offset+limit)], total, nil
+}
