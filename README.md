@@ -59,8 +59,8 @@ same two-factor logins.
 - **Email and Telegram**: send a client its profile or WireGuard config (with QR code) and how
   to set it up; notifications when a backup fails, a node stops answering or certificates
   expire, by email and / or your own Telegram bot ([how](docs/guide.md#email))
-- **Uptime** per client like a status page: when it was online, by hour or day, and a month
-  calendar with its sessions ([how](docs/guide.md#uptime))
+- **Uptime** page for any period back to the first record: status bars per client, a month
+  calendar, every up and down with filters and CSV export ([how](docs/guide.md#uptime))
 - **Online / offline messages** for the clients you pick: when they connect or disconnect, by
   email and / or Telegram, quiet for quick reconnects ([how](docs/guide.md#client-online--offline))
 

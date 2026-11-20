@@ -72,6 +72,35 @@ func TestUptimeAPI(t *testing.T) {
 			t.Errorf("%s: %d", bad, rec.Code)
 		}
 	}
+	// any dates: up to 3 days by hour, longer by day
+	rec = get("/api/v1/servers/openvpn/history/uptime?from=2026-11-19&to=2026-11-20")
+	_ = json.Unmarshal(rec.Body.Bytes(), &rep)
+	if rep.Step != history.StepHour || len(rep.Starts) != 48 {
+		t.Errorf("2 days: %s %d", rep.Step, len(rep.Starts))
+	}
+	rec = get("/api/v1/servers/openvpn/history/uptime?from=2026-01-01&to=2026-11-20")
+	_ = json.Unmarshal(rec.Body.Bytes(), &rep)
+	if rep.Step != history.StepDay || len(rep.Starts) != 324 || rep.Clients[0].OnlineSec != 90*60 {
+		t.Errorf("this year: %s %d", rep.Step, len(rep.Starts))
+	}
+	for _, bad := range []string{"from=2026-11-20&to=2026-11-19", "from=2020-01-01&to=2026-11-20", "from=x&to=2026-11-20"} {
+		if rec := get("/api/v1/servers/openvpn/history/uptime?" + bad); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d", bad, rec.Code)
+		}
+	}
+	// events and their CSV
+	rec = get("/api/v1/servers/openvpn/history/events?from=2026-11-20&to=2026-11-20")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"total":2`) || !strings.Contains(rec.Body.String(), `"lasted":5400`) {
+		t.Errorf("events: %d %s", rec.Code, rec.Body)
+	}
+	rec = get("/api/v1/servers/openvpn/history/events.csv?from=2026-11-20&to=2026-11-20&quiet=1")
+	lines := strings.Split(strings.TrimSpace(rec.Body.String()), "\n")
+	if rec.Code != http.StatusOK || len(lines) != 3 || lines[1] != "2026-11-20 10:00:00,anna,up,,,0" || lines[2] != "2026-11-20 11:30:00,anna,down,,5400,0" {
+		t.Errorf("csv: %q", lines)
+	}
+	if !strings.Contains(rec.Header().Get("Content-Disposition"), "uptime-2026-11-20-2026-11-20.csv") {
+		t.Errorf("csv name: %s", rec.Header().Get("Content-Disposition"))
+	}
 	// carol's open session belongs to wg0
 	rec = get("/api/v1/servers/wg0/history/uptime?range=24h")
 	_ = json.Unmarshal(rec.Body.Bytes(), &rep)

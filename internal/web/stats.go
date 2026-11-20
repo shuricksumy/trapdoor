@@ -118,7 +118,17 @@ func (s *Server) handleUptime(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	var from, to time.Time
 	step := history.StepHour
-	if m := q.Get("month"); m != "" {
+	if q.Get("from") != "" || q.Get("to") != "" {
+		f, t, err := s.dateRange(r)
+		if err != nil {
+			s.queryError(w, err)
+			return
+		}
+		from, to, step = f, t, history.StepDay
+		if to.Sub(from) <= 3*24*time.Hour {
+			step = history.StepHour
+		}
+	} else if m := q.Get("month"); m != "" {
 		first, err := time.ParseInLocation("2006-01", m, loc)
 		if err != nil {
 			httpx.WriteError(w, http.StatusBadRequest, "month: like 2026-11")
@@ -146,4 +156,104 @@ func (s *Server) handleUptime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, rep)
+}
+
+// dateRange reads from / to (YYYY-MM-DD, both days included) in the web's
+// time zone: [from 00:00, the day after to 00:00).
+func (s *Server) dateRange(r *http.Request) (from, to time.Time, err error) {
+	loc := s.Location
+	if loc == nil {
+		loc = time.UTC
+	}
+	v := r.URL.Query()
+	if from, err = time.ParseInLocation(time.DateOnly, v.Get("from"), loc); err != nil {
+		return from, to, fmt.Errorf("%w: from must be YYYY-MM-DD", history.ErrBadQuery)
+	}
+	if to, err = time.ParseInLocation(time.DateOnly, v.Get("to"), loc); err != nil {
+		return from, to, fmt.Errorf("%w: to must be YYYY-MM-DD", history.ErrBadQuery)
+	}
+	to = to.AddDate(0, 0, 1)
+	if !to.After(from) {
+		return from, to, fmt.Errorf("%w: to is before from", history.ErrBadQuery)
+	}
+	if to.Sub(from) > 4*366*24*time.Hour {
+		return from, to, fmt.Errorf("%w: at most 4 years", history.ErrBadQuery)
+	}
+	return from, to, nil
+}
+
+// eventsQuery reads the events parameters: the period, a client, and quiet=1
+// to fold quick reconnects (the online / offline messages' quiet time).
+func (s *Server) eventsQuery(r *http.Request) (from, to time.Time, name string, quiet time.Duration, err error) {
+	if from, to, err = s.dateRange(r); err != nil {
+		return
+	}
+	v := r.URL.Query()
+	name = v.Get("name")
+	if len(name) > 128 {
+		err = fmt.Errorf("%w: invalid name", history.ErrBadQuery)
+		return
+	}
+	if v.Get("quiet") == "1" {
+		ps, _ := s.presenceSettings(r.Context())
+		quiet = time.Duration(ps.GraceMinutes) * time.Minute
+	}
+	return
+}
+
+// handleEvents is GET /api/v1/servers/{server}/history/events: ups and
+// downs, newest first, a page at a time.
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	from, to, name, quiet, err := s.eventsQuery(r)
+	if err != nil {
+		s.queryError(w, err)
+		return
+	}
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	ev, total, err := s.stats(r).Events(r.Context(), from, to, name, quiet, max(offset, 0), limit)
+	if err != nil {
+		s.queryError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"total": total, "events": ev})
+}
+
+// handleEventsCSV is the same list as CSV, all of it, oldest first.
+func (s *Server) handleEventsCSV(w http.ResponseWriter, r *http.Request) {
+	from, to, name, quiet, err := s.eventsQuery(r)
+	if err != nil {
+		s.queryError(w, err)
+		return
+	}
+	st := s.stats(r)
+	var all []history.Event
+	for off := 0; ; off += 1000 {
+		page, total, err := st.Events(r.Context(), from, to, name, quiet, off, 1000)
+		if err != nil {
+			s.queryError(w, err)
+			return
+		}
+		all = append(all, page...)
+		if off+1000 >= total {
+			break
+		}
+	}
+	loc := s.Location
+	if loc == nil {
+		loc = time.UTC
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="uptime-%s-%s.csv"`, from.Format(time.DateOnly), to.AddDate(0, 0, -1).Format(time.DateOnly)))
+	cw := csv.NewWriter(w)
+	_ = cw.Write([]string{"time", "client", "event", "from", "was_up_seconds", "quick_reconnects"})
+	for i := len(all) - 1; i >= 0; i-- {
+		e := all[i]
+		kind, lasted := "down", strconv.FormatInt(e.Lasted, 10)
+		if e.Up {
+			kind, lasted = "up", ""
+		}
+		_ = cw.Write([]string{e.Time.In(loc).Format("2006-01-02 15:04:05"), e.Name, kind, e.From, lasted, strconv.Itoa(e.Merged)})
+	}
+	cw.Flush()
 }

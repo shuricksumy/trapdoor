@@ -52,3 +52,17 @@ test('month grid: Monday first, whole weeks', () => {
   assert.equal(feb.length, 4);
   assert.equal(feb[0][0].day, 1);
 });
+
+test('presets: both days included, local dates', async () => {
+  const { preset, presetOf } = await import('./uptime.js');
+  const now = new Date(2026, 10, 20, 15, 0); // Nov 20, 2026 local
+  assert.deepEqual(preset('today', now), { from: '2026-11-20', to: '2026-11-20' });
+  assert.deepEqual(preset('7d', now), { from: '2026-11-14', to: '2026-11-20' });
+  assert.deepEqual(preset('30d', now), { from: '2026-10-22', to: '2026-11-20' });
+  assert.deepEqual(preset('this_month', now), { from: '2026-11-01', to: '2026-11-20' });
+  assert.deepEqual(preset('last_month', now), { from: '2026-10-01', to: '2026-10-31' });
+  assert.deepEqual(preset('this_year', now), { from: '2026-01-01', to: '2026-11-20' });
+  assert.deepEqual(preset('last_month', new Date(2027, 0, 5)), { from: '2026-12-01', to: '2026-12-31' });
+  assert.equal(presetOf('2026-11-14', '2026-11-20', now), '7d');
+  assert.equal(presetOf('2026-11-02', '2026-11-20', now), '');
+});
