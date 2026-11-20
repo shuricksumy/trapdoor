@@ -66,3 +66,15 @@ test('presets: both days included, local dates', async () => {
   assert.equal(presetOf('2026-11-14', '2026-11-20', now), '7d');
   assert.equal(presetOf('2026-11-02', '2026-11-20', now), '');
 });
+
+test('page buttons: first, last, two around the current one', async () => {
+  const { pageList } = await import('./uptime.js');
+  assert.deepEqual(pageList(1, 1), [1]);
+  assert.deepEqual(pageList(2, 5), [1, 2, 3, 4, 5]);
+  assert.deepEqual(pageList(1, 20), [1, 2, 3, 4, 5, 6, 7, '…', 20]);
+  assert.deepEqual(pageList(10, 20), [1, '…', 8, 9, 10, 11, 12, '…', 20]);
+  assert.deepEqual(pageList(20, 20), [1, '…', 14, 15, 16, 17, 18, 19, 20]);
+  assert.deepEqual(pageList(4, 8), [1, 2, 3, 4, 5, 6, 7, 8]);
+  // the length stays the same while paging through, so the buttons do not jump
+  for (let c = 1; c <= 30; c++) assert.equal(pageList(c, 30).length, 9, `page ${c}`);
+});

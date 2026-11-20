@@ -726,9 +726,10 @@ the first record (trapdoor never deletes the session history).
   too, connected ones first.
 - **Calendar**: click a client for a month, each day shaded by its time online (relative to its
   busiest day), earlier months with ←; a day lists its ups and downs.
-- **Ups and downs**: every connect and disconnect in the period, newest first, 100 at a time
-  (*Show more*): when, who, from which address, how long it was up, how many quick reconnects
-  were folded in. Click a client to show only it. *Export CSV* downloads the whole list.
+- **Ups and downs**: every connect and disconnect in the period, newest first, in pages of 25,
+  50 or 100 (the size is remembered in the browser, the page is in the address): when, who,
+  from which address, how long it was up, how many quick reconnects were folded in. Changing
+  a filter goes back to the first page. Click a client to show only it. *Export CSV* downloads the whole list.
 - Days are days in `TD_TZ`. WireGuard / AmneziaWG count a client as gone 3 minutes after its
   last handshake, so their downs come a little after the device went away.
 
