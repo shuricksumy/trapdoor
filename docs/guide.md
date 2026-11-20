@@ -144,9 +144,10 @@ Use an authenticator app that supports SHA-256 codes (some apps only do SHA-1).
 ## Server configuration
 
 **Server** page (or `/api/v1/servers/openvpn/server/config`): a form for the common options (port, protocol,
-VPN subnet, topology, DNS and search domain for clients, full tunnel, client-to-client,
-duplicate-cn, max clients, server routes, routes pushed to everyone) and a raw editor for
-the whole `server.conf`. Every other line and comment in the file is kept.
+VPN subnet, topology, DNS and search domain for clients, duplicate-cn, max clients) and a raw
+editor for the whole `server.conf`. Every other line and comment in the file is kept. Routing
+(full tunnel, client-to-client, server routes, routes pushed to everyone) is on the
+[Network](#the-network-page) page.
 
 - Before saving, the config is checked: OpenVPN itself parses it, plus trapdoor's checks
   (values OpenVPN only checks at startup, referenced key/cert files and directories exist,
@@ -213,7 +214,7 @@ Per client, in the UI (Clients → More → Network) or `PUT /api/v1/servers/ope
 
 Addresses are checked against `server` / `topology` in `server.conf` and against the other
 clients' static addresses. A LAN behind a client also needs `route <net> <mask>` in
-`server.conf`: trapdoor warns with the exact line to add. `server.conf` needs
+`server.conf`: the Network page offers to add it. `server.conf` needs
 `client-config-dir ccd`. Changes apply when the client reconnects (the UI offers to reconnect
 it). The 2FA lines and any other lines in the file are kept; openvpn-ui's files are read as they are.
 
@@ -233,13 +234,36 @@ and `phone`. Manage them under Clients → Named networks, or with
 - A client's Network dialog shows its named networks as chips next to its own routes:
   remove one, or pick *Add a named network…* (reach it) / *…behind this client*; that
   changes the named network right away, for this client.
-- The **Network** page (menu) shows it all at once: the server's network and routes, the
-  named networks, and for every client its VPN address, whether all its traffic goes
-  through the VPN, what it reaches (own routes, named networks, routes for everyone) and
-  what is behind it, with the warnings in one place. For WireGuard / AmneziaWG it lists
-  every client's address, networks behind it, allowed IPs and DNS.
 - Behind a client, the server needs a `route` line for the networks, as for a LAN set on
-  the client: trapdoor warns with the line to add.
+  the client: the Network page offers to add it.
+
+### The Network page
+
+For OpenVPN everything about routing is on one page (menu → Network):
+
+- **Map**: clients on the left (routers first, online ones with a green line), the server in
+  the middle, the networks on the right: each one through the server or behind a client,
+  with who reaches it ("every client", names, or "nobody yet"), and the internet (which
+  clients send all traffic through the VPN). A LAN behind a client without a server `route`
+  is orange with *needs route*. Click a client or a network to edit it. On phones the
+  networks are a list.
+- **Needs attention**, each with a button: a LAN behind a client without a server route
+  (*Add the route* writes `route <net> <mask>` into `server.conf`, checked and backed up like
+  the Server page), a LAN nobody reaches (*Give it to clients*), a server route no client has
+  behind it. Saved `server.conf` changes show *Apply and restart*: every client reconnects,
+  and the previous config comes back if OpenVPN does not start.
+- Tabs (also as `?tab=` in the address):
+  - **Clients**: every client's VPN address, whether all its traffic goes through the VPN,
+    what it reaches (own routes, named networks, routes for everyone) and what is behind it.
+  - **Routing**: all traffic through the VPN for every client, client-to-client, the networks
+    every client reaches (`push "route …"`) and the networks the server sends into the VPN
+    (`route …`), each with where it is (behind which client, or through the server).
+    Addresses are normalised (`192.168.1.5/24` → `192.168.1.0/24`); networks inside the VPN
+    subnet are refused. Saved to `server.conf`; OpenVPN uses it after a restart.
+  - **Named networks**: the list, and *Manage*.
+
+For WireGuard / AmneziaWG the page lists every client's address, networks behind it, allowed
+IPs and DNS.
 
 ## Access rules
 

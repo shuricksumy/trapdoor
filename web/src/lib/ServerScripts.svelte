@@ -86,7 +86,7 @@
         <label class="check"><input type="checkbox" bind:checked={f.block_dot} /><span>Block DNS-over-TLS and DNS-over-QUIC (port 853)</span></label>
         <span class="hint">Apps fall back to plain DNS, which the setting above redirects.</span>
         <label class="check"><input type="checkbox" bind:checked={f.isolate} /><span>Clients cannot reach each other</span></label>
-        {#if isOVPN}<span class="hint">With <code>client-to-client</code> in server.conf, OpenVPN passes that traffic itself: remove it there for this to work.</span>{/if}
+        {#if isOVPN}<span class="hint">With <code>client-to-client</code> on, OpenVPN passes that traffic itself: turn it off under Network → Routing for this to work.</span>{/if}
       </fieldset>
 
       <fieldset>
