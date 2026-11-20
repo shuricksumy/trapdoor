@@ -700,6 +700,36 @@ its own key has nothing to send.
 `TD_PUBLIC_URL` (e.g. `https://vpn-admin.example.com`) adds a link to the web UI under the
 notifications. The last email's error is shown on the Account page and in the web log.
 
+## Telegram
+
+Account → *Telegram*: the same admin notifications as email, from your own bot. Create the bot
+with `@BotFather`, send it a message (a bot cannot start a chat), and put your chat id in
+*Chat ids* (e.g. from `@userinfobot`); a group: add the bot and use the group's id (it starts
+with `-100`); a channel: `@name`, with the bot as an admin there. Each kind of notification
+can be turned on or off separately from email. *Save and send a test* checks it. The token is
+kept in the web database, never shown again, and never written to the log (errors leave it
+out). The web process needs to reach `api.telegram.org`.
+
+## Client online / offline
+
+A message when a client connects or disconnects, by email and / or Telegram:
+
+- **Per client**: *More* → *Online / offline messages: on* (or *off*) on the Clients page
+  (OpenVPN and WireGuard / AmneziaWG). A 🔔 next to the name shows it is on.
+- **Where they go** (Account → *Client online / offline*): one email address and / or one
+  Telegram chat, the same for every client; empty means none. They are sent through the
+  Email and Telegram settings, which must be on.
+- **Offline after** (default 2 minutes): a client is reported offline once it has stayed away
+  this long, so a quick reconnect (a new IP, a phone waking up) stays quiet, and so does its
+  "online" afterwards. A client that comes back after its "offline" was sent is reported
+  online, with where it connects from; an "offline" says how long it was online.
+- It follows the session history, checked every 15 seconds: OpenVPN reports a disconnect
+  within seconds; WireGuard counts a client as gone 3 minutes after its last handshake, so its
+  "offline" comes later. The first check after the web process starts only learns who is
+  connected.
+- Messages use the client's display name and the server's name, e.g. *🟢 Anna's phone (anna) is
+  online on OpenVPN since Nov 20 14:02 from 203.0.113.45.*
+
 ## Admin login and security
 
 Create admins with the CLI (`trapdoor user add <name>`, also `passwd`, `del`, `list`); the

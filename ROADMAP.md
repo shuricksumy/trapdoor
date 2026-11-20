@@ -109,6 +109,9 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
 - [x] Network page for every server type: map of who reaches what, *Needs attention* with
       fixes (missing route, LAN nobody reaches, overlapping LANs), tabs for clients, routing
       (moved from the Server page) and named networks; WireGuard client network in place
+- [x] Telegram notifications (own bot): the admin notifications; client online / offline
+      messages by email and / or Telegram, per client, quiet for quick reconnects
+- [ ] Uptime history per client: when it was online, as bars and a calendar
 - [ ] Audit log
 - [ ] easyrsa `vars` in the native PKI: certificate name fields (`EASYRSA_DN` org mode:
       country, province, city, org, email, OU), key type and size, digest, CA / certificate /

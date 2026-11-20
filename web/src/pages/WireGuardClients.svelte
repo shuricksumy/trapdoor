@@ -16,10 +16,22 @@
 
   // Clients' email addresses (to send them their config).
   let emails = $state({});
+  let notify = $state({}); // name → true: online / offline messages on
+  async function setNotify(name, on) {
+    try {
+      await api(`/notify/${encodeURIComponent(name)}`, { method: 'PUT', body: { on } });
+      notify = { ...notify, [name]: on || undefined };
+      toast(on ? 'Online / offline messages on.' : 'Online / offline messages off.');
+    } catch (e) {
+      toast(e.message, 'bad');
+    }
+  }
+
   async function load() {
     try {
       peers = await api('/peers');
       api('/emails').then((m) => (emails = m)).catch(() => {});
+      api('/notify').then((m) => (notify = m)).catch(() => {});
       loadError = '';
     } catch (e) {
       loadError = e.message;
@@ -259,7 +271,7 @@
             <tr class:old={p.disabled}>
               <td class="c-name">
                 <div class="nm">
-                  <span class="name">{p.name}{#if emails[p.name]}<span class="faint small email">{emails[p.name]}</span>{/if}</span>
+                  <span class="name">{p.name}{#if notify[p.name]}<span class="bell" title="Online / offline messages on">🔔</span>{/if}{#if emails[p.name]}<span class="faint small email">{emails[p.name]}</span>{/if}</span>
                   {#if p.notes}<span class="faint small">{p.notes}</span>{/if}
                   {#if p.expires_at}<span class="small" class:faint={!p.expired} class:bad-text={p.expired}>{p.expired ? 'Ended' : 'Until'} {until(p.expires_at)}</span>{/if}
 
@@ -287,6 +299,7 @@
                       {#if !p.own_key}<button onclick={(e) => { e.currentTarget.closest('details').open = false; emailConfig(p.name); }}>Email the config</button>{/if}
                     {/if}
                     <button onclick={(e) => { e.currentTarget.closest('details').open = false; openEdit(p); }}>Edit</button>
+                    <button onclick={(e) => { e.currentTarget.closest('details').open = false; setNotify(p.name, !notify[p.name]); }}>{notify[p.name] ? 'Online / offline messages: off' : 'Online / offline messages: on'}</button>
                     <button class="danger" onclick={(e) => { e.currentTarget.closest('details').open = false; confirm = { open: true, name: p.name }; }}>Delete</button>
                   </div>
                 </details>
@@ -448,6 +461,7 @@
 </Dialog>
 
 <style>
+  .bell { margin-left: 4px; font-size: 12px; cursor: help; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-5); }
   .head p { margin-top: var(--space-1); }
   .banner { margin-bottom: var(--space-3); }

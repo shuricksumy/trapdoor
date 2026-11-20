@@ -19,6 +19,7 @@
   let mailing = $state({ open: false, name: '' });
 
   let certs = $state([]);
+  let notify = $state({}); // name → true: online / offline messages on
   let online = $state(new Set());
   let loadError = $state('');
   let loaded = $state(false);
@@ -26,6 +27,16 @@
   let search = $state(route.query.get('q') ?? '');
   let filter = $state(route.query.get('show') ?? 'all');
   let showHistory = $state(false);
+
+  async function setNotify(name, on) {
+    try {
+      await api(`/notify/${encodeURIComponent(name)}`, { method: 'PUT', body: { on } });
+      notify = { ...notify, [name]: on || undefined };
+      toast(on ? 'Online / offline messages on.' : 'Online / offline messages off.');
+    } catch (e) {
+      toast(e.message, 'bad');
+    }
+  }
 
   async function load() {
     try {
@@ -37,6 +48,7 @@
       loaded = true;
     }
     api('/emails').then((m) => (emails = m)).catch(() => {});
+    api('/notify').then((m) => (notify = m)).catch(() => {});
     try {
       staticIPs = (await api('/network')).static_ips ?? {};
     } catch {
@@ -311,6 +323,7 @@
                 <span class="name">
                   {#if online.has(c.name) && c.current}<i class="dot" title="Connected now"></i>{/if}
                   {c.notes || c.name}
+                  {#if c.current && notify[c.name]}<span class="bell" title="Online / offline messages on">🔔</span>{/if}
                 </span>
                 {#if c.notes}<span class="mono faint small ip" title="Login (certificate name)">{c.name}</span>{/if}
                 {#if !c.current}<span class="faint small">replaced</span>{/if}
@@ -347,6 +360,7 @@
                       {/if}
                       {#if c.status !== 'revoked'}
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; openNaming(c.name); }}>Display name</button>
+                        <button onclick={(e) => { e.currentTarget.closest('details').open = false; setNotify(c.name, !notify[c.name]); }}>{notify[c.name] ? 'Online / offline messages: off' : 'Online / offline messages: on'}</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; network = { open: true, name: c.name }; }}>Network</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; twoFactor = { open: true, name: c.name }; }}>Two-factor login</button>
                         <button onclick={() => ask('renew', c.name)}>Renew</button>
@@ -456,6 +470,7 @@
 <SendProfile bind:open={mailing.open} name={mailing.name} email={emails[mailing.name] ?? ''} onsent={(to) => (emails = { ...emails, [mailing.name]: to })} />
 
 <style>
+  .bell { margin-left: 4px; font-size: 12px; cursor: help; }
   .head-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-5); }
   .head p { margin-top: var(--space-1); }

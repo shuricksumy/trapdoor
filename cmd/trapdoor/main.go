@@ -225,6 +225,7 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 	go srv.WatchExpiry(ctx)
 	go srv.RunBackups(ctx)
 	go srv.WatchNodes(ctx)
+	go srv.WatchPresence(ctx)
 	log.Info("listening", "addr", cfg.Listen, "agent", cfg.AgentURL, "db", cfg.DBPath,
 		"tz", cfg.Location.String(), "version", version.Version)
 	return httpx.Serve(ctx, l, srv.Handler())

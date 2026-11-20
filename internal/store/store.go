@@ -148,6 +148,13 @@ var migrations = []string{
 	// failed to) as "UNDEF"; such rows were stored as sessions before.
 	`DELETE FROM sessions WHERE name IN ('UNDEF', '');
 	DELETE FROM traffic_hourly WHERE name IN ('UNDEF', '');`,
+
+	// 9: the clients whose online / offline changes are sent
+	`CREATE TABLE IF NOT EXISTS client_notify (
+		agent  TEXT NOT NULL,
+		client TEXT NOT NULL,
+		PRIMARY KEY (agent, client)
+	) WITHOUT ROWID;`,
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -329,4 +336,82 @@ func (db *DB) SetClientEmail(ctx context.Context, agent, client, email string) e
 	_, err := db.ExecContext(ctx, `INSERT INTO client_emails (agent, client, email) VALUES (?, ?, ?)
 		ON CONFLICT (agent, client) DO UPDATE SET email = excluded.email`, agent, client, email)
 	return err
+}
+
+// ClientNotify returns the clients whose online / offline changes are sent,
+// by server id and client name; agent "" returns every server.
+func (db *DB) ClientNotify(ctx context.Context, agent string) (map[string]map[string]bool, error) {
+	q := `SELECT agent, client FROM client_notify`
+	args := []any{}
+	if agent != "" {
+		q += ` WHERE agent = ?`
+		args = append(args, agent)
+	}
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]map[string]bool{}
+	for rows.Next() {
+		var a, c string
+		if err := rows.Scan(&a, &c); err != nil {
+			return nil, err
+		}
+		if out[a] == nil {
+			out[a] = map[string]bool{}
+		}
+		out[a][c] = true
+	}
+	return out, rows.Err()
+}
+
+// SetClientNotify turns a client's online / offline messages on or off.
+func (db *DB) SetClientNotify(ctx context.Context, agent, client string, on bool) error {
+	if !on {
+		_, err := db.ExecContext(ctx, `DELETE FROM client_notify WHERE agent = ? AND client = ?`, agent, client)
+		return err
+	}
+	_, err := db.ExecContext(ctx, `INSERT INTO client_notify (agent, client) VALUES (?, ?) ON CONFLICT DO NOTHING`, agent, client)
+	return err
+}
+
+// Presence is a client with an open session (connected now, as far as the
+// history knows).
+type Presence struct {
+	Agent, Name string
+	Since       time.Time
+	From        string // real address
+}
+
+// Online lists the clients with an open session, one row per client (the
+// latest session).
+func (db *DB) Online(ctx context.Context) ([]Presence, error) {
+	rows, err := db.QueryContext(ctx, `SELECT agent, name, MAX(connected_at), real_address
+		FROM sessions WHERE disconnected_at IS NULL GROUP BY agent, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Presence
+	for rows.Next() {
+		var p Presence
+		var since int64
+		if err := rows.Scan(&p.Agent, &p.Name, &since, &p.From); err != nil {
+			return nil, err
+		}
+		p.Since = time.Unix(since, 0).UTC()
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// LastDisconnect is when a client's latest closed session ended (zero if none).
+func (db *DB) LastDisconnect(ctx context.Context, agent, name string) (time.Time, error) {
+	var ts sql.NullInt64
+	err := db.QueryRowContext(ctx, `SELECT MAX(disconnected_at) FROM sessions WHERE agent = ? AND name = ?`, agent, name).Scan(&ts)
+	if err != nil || !ts.Valid {
+		return time.Time{}, err
+	}
+	return time.Unix(ts.Int64, 0).UTC(), nil
 }
