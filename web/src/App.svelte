@@ -1,5 +1,5 @@
 <script>
-  import { route, session, navigate, toasts, toast, settings, servers, setServers, selectServer, currentServer } from './lib/state.svelte.js';
+  import { route, session, navigate, toasts, toast, settings, servers, setServers, selectServer, currentServer, repoURL, versionURL, shortVersion } from './lib/state.svelte.js';
   import { api, reloadServers } from './lib/api.js';
   import { machines, typeNames, where } from './lib/location.js';
 
@@ -100,6 +100,7 @@
     api('/status')
       .then((st) => {
         if (st.expiry_warn_days) settings.expiryWarnDays = st.expiry_warn_days;
+        settings.version = st.web_version ?? '';
         setServers(st.agent?.servers ?? [], st.agent?.hosts ?? [], st.agent?.containers ?? null, st.agent ?? {});
       })
       .catch(() => {});
@@ -125,7 +126,7 @@
   $effect(() => {
     const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup', '/servers/new': 'Add a server', '/nodes': 'Nodes', '/hosts': 'Nodes', '/servers': 'Servers' };
     const name = titles[route.path] ?? navPages.find((p) => p.path === route.path)?.label ?? 'Overview';
-    document.title = `${name} · trapdoor`;
+    document.title = `${name} · Trapdoor`;
   });
 </script>
 
@@ -136,12 +137,12 @@
 {:else}
   <div class="shell">
     <nav class="rail" aria-label="Main">
-      <a class="brand" href="/" aria-label="trapdoor overview">
+      <a class="brand" href="/" aria-label="Trapdoor overview">
         <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
           <path d="M5 22c0-6 5-11 11-11s11 5 11 11" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" />
           <path d="M10.5 22c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5" fill="none" stroke="var(--upload)" stroke-width="3" stroke-linecap="round" />
         </svg>
-        <span>trapdoor</span>
+        <span>Trapdoor</span>
       </a>
       <ul>
         {#each navPages as p (p.path)}
@@ -161,6 +162,9 @@
           <span class="avatar" aria-hidden="true">{session.user.username.slice(0, 1).toUpperCase()}</span>
           <span>{session.user.username}</span>
         </a>
+        <p class="about">
+          {#if settings.version}<a href={versionURL(settings.version)} target="_blank" rel="noopener noreferrer" title={settings.version}>{shortVersion(settings.version)}</a><span aria-hidden="true">·</span>{/if}<a href={repoURL} target="_blank" rel="noopener noreferrer">GitHub</a>
+        </p>
       </div>
     </nav>
 
@@ -253,6 +257,9 @@
     letter-spacing: -0.01em;
   }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .about { display: flex; gap: 6px; white-space: nowrap; margin: var(--space-2) 0 0; padding: 0 var(--space-3); font-size: var(--step--1); color: var(--ink-3, var(--ink-2)); }
+  .about a { color: inherit; text-decoration: none; }
+  .about a:hover { color: var(--accent); text-decoration: underline; }
   ul a, .who {
     display: flex;
     align-items: center;
@@ -347,7 +354,7 @@
       background: var(--surface);
       z-index: 40;
     }
-    .brand, .rail-foot :global(.theme) { display: none; }
+    .brand, .about, .rail-foot :global(.theme) { display: none; }
     /* Up to 7 items: equal columns that may shrink; the account stays visible. */
     ul { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); flex: 1; min-width: 0; }
     ul a, .who {
