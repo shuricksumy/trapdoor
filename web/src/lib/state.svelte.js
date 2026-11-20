@@ -79,7 +79,13 @@ export function setServers(list, hosts = [], containers = null, own = {}) {
 }
 
 // Server-side settings shown in the UI (from /api/v1/status).
-export const settings = $state({ expiryWarnDays: 30, setupNeeded: false });
+export const settings = $state({ expiryWarnDays: 30, setupNeeded: false, version: '' });
+
+export const repoURL = 'https://github.com/shuricksumy/trapdoor';
+// Release notes for a release build (v1.2.3), the project page otherwise.
+// Short form for builds between releases: v0.4.1-3-gabc1234 → v0.4.1+.
+export const shortVersion = (v) => (/^v\d+\.\d+\.\d+-/.test(v) ? v.replace(/-.*/, '') + '+' : v);
+export const versionURL = (v) => (/^v\d+\.\d+\.\d+$/.test(v) ? `${repoURL}/releases/tag/${v}` : repoURL);
 
 // Theme: 'light' | 'dark' | 'auto'
 const media = matchMedia('(prefers-color-scheme: dark)');

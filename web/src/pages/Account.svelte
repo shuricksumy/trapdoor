@@ -1,6 +1,6 @@
 <script>
   import { api, download } from '../lib/api.js';
-  import { session, navigate, toast } from '../lib/state.svelte.js';
+  import { session, navigate, toast, settings, repoURL, versionURL, shortVersion } from '../lib/state.svelte.js';
   import ThemeSwitch from '../lib/ThemeSwitch.svelte';
   import ScheduledBackups from '../lib/ScheduledBackups.svelte';
   import EmailSettings from '../lib/EmailSettings.svelte';
@@ -68,6 +68,10 @@
 <header class="head">
   <h1>Account</h1>
   <p class="muted">Signed in as <strong>{session.user?.username}</strong>.</p>
+  <p class="muted small">
+    Trapdoor {#if settings.version}<a href={versionURL(settings.version)} target="_blank" rel="noopener noreferrer" title={settings.version}>{shortVersion(settings.version)}</a>{/if}
+    · <a href={repoURL} target="_blank" rel="noopener noreferrer">GitHub</a>
+  </p>
 </header>
 
 <div class="grid">
