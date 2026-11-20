@@ -1,0 +1,236 @@
+<script>
+  // What the access settings mean, drawn: a client, the server's filter and
+  // where traffic goes. It follows the unsaved policy and edits it: clicking a
+  // destination switches it between allowed and blocked for every client.
+  //
+  // A destination's switch is a plain rule for all clients, any protocol, to
+  // that network ("quick rule"), kept after the rules for single clients so
+  // those still win. The internet is everything no rule matches, so its switch
+  // is the default; the other destinations keep their state when it flips.
+  // type: openvpn | wireguard | amneziawg; net: the Access page's network;
+  // fwMode: direct | file | off (TD_FIREWALL); c2c: OpenVPN client-to-client is on.
+  let { policy, type = 'openvpn', id = '', subnet = '', net = null, fwMode = 'direct', c2c = false } = $props();
+
+  const wg = $derived(type === 'wireguard' || type === 'amneziawg');
+  const kind = $derived(type === 'amneziawg' ? 'AmneziaWG' : wg ? 'WireGuard' : 'OpenVPN');
+  const device = $derived(wg ? id : 'tun');
+  const chain = $derived(wg ? `TD-${id}` : 'TD-FWD');
+  const clientIp = $derived(subnet ? subnet.replace(/\.\d+\/\d+$/, '.6') : '');
+  const on = $derived(policy.enabled);
+  // client-to-client: OpenVPN passes traffic between clients itself, past the rules
+  const bypass = $derived(c2c && !wg);
+  const allowed = (action) => action === 'allow';
+
+  const routed = $derived([...new Set([...(net?.routes ?? []), ...Object.values(net?.client_lans ?? {}).flat()])]);
+  const targets = $derived([
+    { key: 'server', name: 'This server', to: net?.server_ip ? [net.server_ip] : [], sub: net?.server_ip || 'address not known' },
+    { key: 'clients', name: 'Other VPN clients', to: subnet ? [subnet] : [], sub: subnet || 'the VPN network' },
+    { key: 'routed', name: 'Networks it routes', to: routed, sub: routed.length ? routed.join(', ') : 'none set up' },
+  ]);
+
+  // the agent saves one address as a /32
+  const same = (to, t) => !!t && to.some((x) => x.replace(/\/32$/, '') === t.replace(/\/32$/, ''));
+  const isQuick = (r) => !r.client && (!r.proto || r.proto === 'any') && !r.ports;
+  const quickFor = (to) => policy.rules.filter((r) => isQuick(r) && same(to, r.to));
+  // Other rules that also decide about a destination (single clients, ports, "anywhere").
+  const othersFor = (to) => policy.rules.filter((r) => !(isQuick(r) && same(to, r.to)) && (!r.to || same(to, r.to))).length;
+  const stateOf = (to) => {
+    const q = quickFor(to);
+    if (q.length) return allowed(q[0].action);
+    // the server's address is inside the VPN network: a rule for that covers it
+    if (subnet && to.length === 1 && to[0] === net?.server_ip && !bypass) return stateOf([subnet]);
+    return allowed(policy.default);
+  };
+
+  const dests = $derived([
+    ...targets.map((t) => {
+      const by = t.key === 'clients' && bypass;
+      return { ...t, ok: by || stateOf(t.to), more: othersFor(t.to), usable: t.to.length > 0 && !by, bypass: by, sub: by ? 'client-to-client is on' : t.sub };
+    }),
+    { key: 'internet', name: 'Internet', sub: 'and everything else', ok: allowed(policy.default), more: policy.rules.filter((r) => !r.to).length, usable: true },
+  ]);
+
+  // Rewrite the quick rules for the wanted state of each destination. They go
+  // in a fixed order: the server's address lies inside the VPN network, so its
+  // rule comes first and is written whenever the VPN network has one.
+  function apply(want) {
+    const def = allowed(policy.default);
+    const all = targets.flatMap((t) => t.to);
+    const quick = [];
+    // keep the notes written on these rules in the editor
+    const notes = Object.fromEntries(policy.rules.filter((r) => isQuick(r) && r.note && same(all, r.to)).map((r) => [r.to.replace(/\/32$/, ''), r.note]));
+    for (const t of targets) {
+      if (t.key === 'clients' && bypass) continue; // OpenVPN passes it itself
+      const need = want[t.key] !== def || (t.key === 'server' && !bypass && want.clients !== def);
+      if (need) for (const to of t.to) quick.push({ action: want[t.key] ? 'allow' : 'deny', to, ...(notes[to] ? { note: notes[to] } : {}) });
+    }
+    const keep = policy.rules.filter((r) => !(isQuick(r) && same(all, r.to)));
+    // after the rules for single clients, before any rule for "anywhere"
+    const at = keep.findIndex((r) => !r.to);
+    policy.rules = at < 0 ? [...keep, ...quick] : [...keep.slice(0, at), ...quick, ...keep.slice(at)];
+  }
+  const current = () => Object.fromEntries(targets.map((t) => [t.key, stateOf(t.to)]));
+
+  function toggle(d) {
+    if (!on || !d.usable) return;
+    const want = current();
+    // The internet is the default; the other destinations keep what they do now.
+    if (d.key === 'internet') policy.default = d.ok ? 'deny' : 'allow';
+    else want[d.key] = !d.ok;
+    apply(want);
+  }
+  const key = (e, d) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle(d));
+
+  const verdict = (d) => (!on ? 'reachable' : d.bypass ? 'not filtered' : !d.usable ? '–' : d.ok ? 'allowed' : 'blocked');
+  const tone = (d) => (!on || d.ok ? 'yes' : !d.usable ? 'na' : 'no');
+  const label = (d) => `${d.name}: ${verdict(d)}${on && d.usable ? `. Click to ${d.ok ? 'block' : 'allow'} for every client` : ''}`;
+  const extra = (d) => (on && d.more ? ` · ${d.more} more rule${d.more === 1 ? '' : 's'}` : '');
+  const gate = $derived(
+    !on
+      ? ['No filtering', 'trapdoor adds no rules']
+      : [policy.rules.length ? `${policy.rules.length} rule${policy.rules.length === 1 ? '' : 's'}, first match decides` : 'No rules yet', `no match → ${policy.default === 'allow' ? 'allow' : 'block'}`],
+  );
+  const rowY = (i) => 14 + i * 50;
+</script>
+
+<figure class="diagram" aria-label="What the access settings do">
+  <svg viewBox="0 0 800 214">
+    <title>{kind} clients pass {on ? `through chain ${chain}` : 'without filtering'} to the server, other clients, routed networks and the internet</title>
+    <defs>
+      <marker id="ad-yes" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" class="f-yes" /></marker>
+      <marker id="ad-na" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" class="f-na" /></marker>
+      <marker id="ad-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" class="f-no" /></marker>
+    </defs>
+
+    <!-- client -->
+    <rect x="1" y="72" width="150" height="70" rx="10" class="box" />
+    <text x="76" y="98" class="t b" text-anchor="middle">{kind} client</text>
+    <text x="76" y="118" class="t s m mono" text-anchor="middle">{clientIp || 'VPN address'}</text>
+    <path d="M152 107 H206" class="wire yes" marker-end="url(#ad-yes)" />
+    <text x="179" y="99" class="t xs m" text-anchor="middle">{device}</text>
+
+    <!-- the filter -->
+    <rect x="210" y="62" width="200" height="90" rx="10" class="box gate" class:on />
+    <text x="310" y="86" class="t b" text-anchor="middle">{on ? `Chain ${chain}` : 'Access rules off'}</text>
+    <text x="310" y="108" class="t s" text-anchor="middle">{gate[0]}</text>
+    <text x="310" y="128" class="t s m" text-anchor="middle">{gate[1]}</text>
+
+    <!-- destinations: click to switch -->
+    {#each dests as d, i (d.key)}
+      {@const y = rowY(i)}
+      <path d="M411 107 C 450 107, 445 {y + 20}, 494 {y + 20}" class="wire {tone(d)}" marker-end="url(#ad-{tone(d)})" />
+      <g
+        class="dest {tone(d)}"
+        class:click={on && d.usable}
+        role="switch"
+        aria-checked={d.ok}
+        aria-disabled={!on || !d.usable}
+        aria-label={label(d)}
+        tabindex={on && d.usable ? 0 : undefined}
+        onclick={() => toggle(d)}
+        onkeydown={(e) => key(e, d)}
+      >
+        <title>{label(d)}</title>
+        <rect x="498" y={y} width="301" height="40" rx="8" class="box" />
+        <text x="512" y={y + 17} class="t s b">{d.name}</text>
+        <text x="512" y={y + 32} class="t xs m">{d.sub.length > 34 ? d.sub.slice(0, 33) + '…' : d.sub}{extra(d)}</text>
+        {#if on && d.usable}
+          <rect x="712" y={y + 10} width="78" height="20" rx="10" class="pill {tone(d)}" />
+          <text x="751" y={y + 24} class="t xs v {tone(d)}" text-anchor="middle">{verdict(d)}</text>
+        {:else}
+          <text x="788" y={y + 25} class="t xs v {tone(d)}" text-anchor="end">{verdict(d)}</text>
+        {/if}
+      </g>
+    {/each}
+  </svg>
+
+  <!-- phones: the same, stacked -->
+  <div class="stack">
+    <div class="sbox"><strong>{kind} client</strong> <span class="mono faint">{clientIp}</span></div>
+    <div class="arrow">↓ <span class="mono faint">{device}</span></div>
+    <div class="sbox" class:on><strong>{on ? `Chain ${chain}` : 'Access rules off'}</strong><span class="faint">{gate[0]}; {gate[1]}</span></div>
+    <div class="arrow">↓</div>
+    {#each dests as d (d.key)}
+      <button type="button" class="sbox row {tone(d)}" disabled={!on || !d.usable} role="switch" aria-checked={d.ok} aria-label={label(d)} onclick={() => toggle(d)}>
+        <span><strong>{d.name}</strong> <span class="faint">{d.sub}{extra(d)}</span></span>
+        <span class="v {tone(d)}">{verdict(d)}</span>
+      </button>
+    {/each}
+  </div>
+
+  <figcaption class="hint">
+    {#if !on}
+      Clients reach whatever the server routes for them. Turn the rules on to limit it.
+    {:else}
+      Click a destination to allow or block it for every client; it becomes a rule below. Rules for single clients come first and win.
+      {#if wg}Rules apply to traffic coming in on <span class="mono">{device}</span>.{:else}Rules apply to traffic coming in on every OpenVPN tun device.{/if}
+    {/if}
+  </figcaption>
+</figure>
+
+<aside class="needs" aria-label="What the rules need">
+  <strong>Good to know</strong>
+  <ul>
+    {#if fwMode === 'off'}
+      <li>The agent does not manage the firewall (<span class="mono">TD_FIREWALL=off</span>). Set it to <span class="mono">direct</span> or <span class="mono">file</span> to use these rules.</li>
+    {/if}
+    <li>Rules only limit. A client reaches a network only if the server routes it there too: {wg ? 'the allowed IPs on the Network page' : 'routes on the Server and Network pages'}.</li>
+    <li>A rule for one client needs a fixed VPN address{wg ? ' (every WireGuard client has one)' : ': Network → Edit, or the button that shows up here'}.</li>
+    {#if !wg}
+      <li class:warn={c2c}>
+        {c2c ? 'Clients can reach each other is on' : 'Clients can reach each other is off'} on the Server page (<span class="mono">client-to-client</span>).
+        {c2c ? 'OpenVPN then passes traffic between clients itself, so these rules cannot block it. Turn it off to control Other VPN clients here.' : 'Good: traffic between clients goes through these rules.'}
+      </li>
+    {/if}
+  </ul>
+</aside>
+
+<style>
+  .diagram { margin: 0; display: grid; gap: var(--space-2); }
+  svg { width: 100%; height: auto; max-height: 230px; }
+  .box { fill: var(--sunken); stroke: var(--line); stroke-width: 1.2; }
+  .gate.on { stroke: var(--accent); stroke-width: 1.6; }
+  .dest.no .box { stroke-dasharray: 4 4; }
+  .dest.click { cursor: pointer; }
+  .dest.click:hover .box, .dest.click:focus-visible .box { stroke: var(--accent); stroke-width: 1.8; stroke-dasharray: none; }
+  .dest:focus { outline: none; }
+  .t { fill: var(--ink); font-family: inherit; font-size: 14px; }
+  .b { font-weight: 600; }
+  .s { font-size: 13px; }
+  .xs { font-size: 11.5px; }
+  .m { fill: var(--ink-3); }
+  .mono { font-family: var(--font-mono, ui-monospace, monospace); }
+  .v { font-weight: 600; }
+  .v.yes { fill: var(--ok); }
+  .v.no { fill: var(--bad); }
+  .pill.yes { fill: var(--ok-soft); }
+  .pill.no { fill: var(--bad-soft); }
+  .wire { fill: none; stroke-width: 2; }
+  .wire.yes { stroke: var(--ok); }
+  .wire.no { stroke: var(--bad); stroke-dasharray: 6 5; }
+  .f-yes { fill: var(--ok); }
+  .f-no { fill: var(--bad); }
+  .f-na { fill: var(--ink-3); }
+  .wire.na { stroke: var(--ink-3); stroke-dasharray: 3 5; }
+  .v.na { fill: var(--ink-3); }
+  .dest.na .box { stroke-dasharray: 4 4; }
+  figcaption { margin: 0; }
+  .needs { margin-top: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-s); font-size: var(--step--1); color: var(--ink-2); }
+  .needs ul { margin: var(--space-1) 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+  .needs li.warn { color: var(--warn); }
+
+  .stack { display: none; gap: 6px; font-size: var(--step--1); }
+  .sbox { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--sunken); color: var(--ink); font: inherit; text-align: left; }
+  .sbox.on { border-color: var(--accent); }
+  .sbox.row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+  button.sbox:not(:disabled) { cursor: pointer; }
+  .sbox.row.no { border-style: dashed; }
+  .stack .v { font-weight: 600; white-space: nowrap; }
+  .stack .v.yes { color: var(--ok); }
+  .stack .v.no { color: var(--bad); }
+  .arrow { padding-left: 12px; color: var(--ink-3); }
+  @media (max-width: 640px) {
+    svg { display: none; }
+    .stack { display: grid; }
+  }
+</style>

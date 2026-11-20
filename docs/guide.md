@@ -248,6 +248,17 @@ clients) to a network or address, optionally limited to TCP/UDP ports or ping, c
 the top; the first match decides, then the default (allow or block). Replies to allowed
 traffic always pass.
 
+A diagram at the top shows what that means for a client: this server, other VPN clients, the
+networks the server routes, and the internet (everything else), each allowed or blocked. It
+follows unsaved changes and doubles as a switch board: clicking a destination allows or blocks
+it for every client by writing a plain rule (all clients, any protocol, to that network) into
+the list, after the rules for single clients so those still win. The internet's switch is the
+default; flipping it keeps the other destinations as they were. Editing such a rule in the list
+(one client, ports) makes it an ordinary rule again; the destination then shows "1 more rule".
+With `client-to-client` on, *Other VPN clients* shows "not filtered". A *Good to know* box lists
+what the rules need: routes (rules only limit), fixed addresses for rules about one client,
+`client-to-client` off for OpenVPN, and `TD_FIREWALL` other than `off`.
+
 The agent renders them into the iptables chain `TD-FWD`, jumped to from `INPUT` and
 `FORWARD` for traffic from `tun` devices, so they cover the server itself and everything
 behind it. Rules match a client by its fixed VPN address; the page assigns free addresses

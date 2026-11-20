@@ -140,3 +140,20 @@ func TestFirewallFile(t *testing.T) {
 		t.Errorf("get = %+v", st)
 	}
 }
+
+// The UI needs to know about client-to-client while the rules are still off.
+func TestFirewallClientToClient(t *testing.T) {
+	c, dir := firewallClient(t, config.Agent{Firewall: "off"})
+	ctx := context.Background()
+	if st, err := c.Firewall(ctx); err != nil || st.ClientToClient {
+		t.Fatalf("without client-to-client: %+v %v", st, err)
+	}
+	conf := filepath.Join(dir, "server.conf")
+	b, _ := os.ReadFile(conf)
+	if err := os.WriteFile(conf, append(b, "client-to-client\n"...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := c.Firewall(ctx); err != nil || !st.ClientToClient || st.Policy.Enabled {
+		t.Fatalf("with client-to-client: %+v %v", st, err)
+	}
+}
