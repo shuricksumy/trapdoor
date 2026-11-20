@@ -10,7 +10,6 @@
   import { where } from '../lib/location.js';
 
   let cfg = $state(null); // last loaded server config
-  let net = $state(null); // client LANs (for route suggestions)
   let loadError = $state('');
   let tab = $state(route.query.get('tab') ?? 'settings');
   $effect(() => setQuery({ tab: tab === 'settings' ? '' : tab }));
@@ -51,26 +50,11 @@
     } catch (e) {
       loadError = e.message;
     }
-    try {
-      net = await api('/network');
-    } catch {
-      net = null;
-    }
   }
   onMount(load);
 
   const dirtySettings = $derived(cfg && form && JSON.stringify(form) !== JSON.stringify(cfg.settings));
   const dirtyRaw = $derived(cfg && raw !== cfg.raw);
-
-  // LANs behind clients that have no server route yet.
-  const missingRoutes = $derived.by(() => {
-    if (!net || !form) return [];
-    const out = [];
-    for (const [client, lans] of Object.entries(net.client_lans ?? {})) {
-      for (const l of lans) if (!form.routes.includes(l)) out.push({ client, lan: l });
-    }
-    return out;
-  });
 
   async function check(source) {
     busy = true;
@@ -142,7 +126,7 @@
   }
 
   // List editing helpers
-  let add = $state({ dns: '', routes: '', push_routes: '' });
+  let add = $state({ dns: '' });
   function addTo(key, pattern, msg) {
     const v = add[key].trim();
     if (!v) return;
@@ -154,7 +138,6 @@
     add[key] = '';
   }
   const ipRe = /^[0-9a-fA-F:.]+$/;
-  const cidrRe = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/;
   const portChanged = $derived(cfg && form && (form.port !== cfg.settings.port || form.proto !== cfg.settings.proto));
 </script>
 
@@ -224,8 +207,6 @@
           </select>
         </label>
       </div>
-      <label class="check"><input type="checkbox" bind:checked={form.full_tunnel} /> Send all internet traffic of every client through the VPN</label>
-      <label class="check"><input type="checkbox" bind:checked={form.client_to_client} /> Clients can reach each other</label>
       <label class="check"><input type="checkbox" bind:checked={form.duplicate_cn} /> Allow one certificate on several devices at the same time</label>
     </section>
 
@@ -242,33 +223,8 @@
     </section>
 
     <section>
-      <h2>Routes</h2>
-      <h3>Networks behind clients</h3>
-      <p class="hint">The server sends traffic for these networks into the VPN (<code>route</code>). Each also needs a client with it under "Networks behind this client".</p>
-      <div class="chips">
-        {#each form.routes as r (r)}<span class="chip mono">{r}<button type="button" aria-label="Remove {r}" onclick={() => (form.routes = form.routes.filter((x) => x !== r))}>×</button></span>{/each}
-      </div>
-      {#if missingRoutes.length}
-        <div class="suggest">
-          {#each missingRoutes as m (m.lan)}
-            <button type="button" class="btn small" onclick={() => (form.routes = [...form.routes, m.lan])}>Add {m.lan} (behind {m.client})</button>
-          {/each}
-        </div>
-      {/if}
-      <div class="add">
-        <input bind:value={add.routes} placeholder="192.168.50.0/24" aria-label="Add a network behind a client" onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), addTo('routes', cidrRe, 'Enter a network like 192.168.50.0/24'))} />
-        <button type="button" class="btn small" onclick={() => addTo('routes', cidrRe, 'Enter a network like 192.168.50.0/24')}>Add</button>
-      </div>
-
-      <h3>Networks every client can reach</h3>
-      <p class="hint">Sent to all clients as routes (<code>push "route …"</code>), e.g. the server's LAN.</p>
-      <div class="chips">
-        {#each form.push_routes as r (r)}<span class="chip mono">{r}<button type="button" aria-label="Remove {r}" onclick={() => (form.push_routes = form.push_routes.filter((x) => x !== r))}>×</button></span>{/each}
-      </div>
-      <div class="add">
-        <input bind:value={add.push_routes} placeholder="192.168.1.0/24" aria-label="Add a network for all clients" onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), addTo('push_routes', cidrRe, 'Enter a network like 192.168.1.0/24'))} />
-        <button type="button" class="btn small" onclick={() => addTo('push_routes', cidrRe, 'Enter a network like 192.168.1.0/24')}>Add</button>
-      </div>
+      <h2>Routing</h2>
+      <p class="hint">Routes, all traffic through the VPN and client-to-client are on the <a href="/network">Network</a> page, next to the map of who reaches what.</p>
     </section>
 
     {#if saveError}<div class="banner bad" role="alert">{saveError}</div>{/if}
@@ -408,7 +364,6 @@
 
   .settings { display: grid; }
   .settings section { display: grid; gap: var(--space-3); padding: var(--space-5); border-bottom: 1px solid var(--line); }
-  .settings h3 { margin-top: var(--space-2); font-size: var(--step--1); color: var(--ink-2); font-weight: 500; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); }
   .narrow { max-width: 280px; }
   .check { display: flex; gap: var(--space-2); align-items: center; }
@@ -420,7 +375,6 @@
   .chip button:hover { background: var(--line); color: var(--ink); }
   .add { display: flex; gap: var(--space-2); max-width: 420px; }
   .add input { flex: 1; }
-  .suggest { display: flex; flex-wrap: wrap; gap: var(--space-2); }
   .actions { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-5); }
   .settings .banner { margin: 0; }
 

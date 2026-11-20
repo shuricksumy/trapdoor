@@ -64,9 +64,10 @@ same two-factor logins.
   year, CSV export
 - **Network per client**: fixed VPN address, routes, networks behind a client (site-to-site),
   all traffic through the VPN; named networks (e.g. "Office LAN") given to several clients at once;
-  a Network page with what every client can reach
+  a Network page with a map of who reaches what, one-click fixes for missing routes, and all
+  of the server's routing in one place
 - **Access rules**: which client may reach which network or port; everything else allowed or
-  blocked
+  blocked; a diagram with a switch per destination
 - **Server settings** in a form or as raw `server.conf`, checked by OpenVPN before saving,
   with a preview of the changes, backups and restart with automatic rollback
 
