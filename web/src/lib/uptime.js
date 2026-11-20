@@ -7,12 +7,34 @@ export function bucketSpan(start, step, now, next) {
   return Math.max(0, (Math.min(end, now.getTime()) - s) / 1000);
 }
 
-/** A status bar segment: 'future', 'none', 'part' or 'full' (online almost all of it). */
-export function level(seconds, span) {
+/**
+ * A client's status bar segment:
+ * - 'future': not yet;
+ * - 'full' / 'part': online (almost) all of it / part of it;
+ * - 'off': not connected while the server was up (red);
+ * - 'out': the server was down (an outage: no color);
+ * - 'none': not connected, and whether the server was up is unknown (before
+ *   the server's record began, or when server is undefined).
+ * server: seconds the server was up in the segment; known: the server's
+ * record covers the segment.
+ */
+export function level(seconds, span, server, known = false) {
   if (span <= 0) return 'future';
-  if (!seconds) return 'none';
-  return seconds / span >= 0.95 ? 'full' : 'part';
+  if (seconds) return seconds / span >= 0.95 ? 'full' : 'part';
+  if (!known || server === undefined) return 'none';
+  return server >= Math.min(60, span * 0.05) ? 'off' : 'out';
 }
+
+/** The server's own segment: 'full' (up), 'part', 'out' (down), 'none' (unknown), 'future'. */
+export function serverLevel(server, span, known) {
+  if (span <= 0) return 'future';
+  if (!known) return 'none';
+  if (server >= span * 0.95) return 'full';
+  return server > 0 ? 'part' : 'out';
+}
+
+/** Whether the server's record covers a bucket: it began before the bucket ended. */
+export const known = (tracked, bucketEnd) => !!tracked && new Date(tracked) < new Date(bucketEnd);
 
 /** Share of the period so far the client was online, 0-100 with one decimal. */
 export function uptimePct(onlineSec, report, now) {

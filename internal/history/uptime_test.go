@@ -166,3 +166,64 @@ func TestEvents(t *testing.T) {
 		t.Errorf("empty period: %v", err)
 	}
 }
+
+// The poller records when the server answers; a gap in its answers is an
+// outage, and the uptime report shows it per bucket.
+func TestServerUp(t *testing.T) {
+	base := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
+	e := newEnv(t, base)
+	ctx := context.Background()
+	spans := func() []string {
+		rows, err := e.db.Query(`SELECT start, end FROM server_up WHERE agent = 'default' ORDER BY start`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = rows.Close() }()
+		var out []string
+		for rows.Next() {
+			var a, b int64
+			_ = rows.Scan(&a, &b)
+			out = append(out, time.Unix(a, 0).UTC().Format("15:04")+"-"+time.Unix(b, 0).UTC().Format("15:04"))
+		}
+		return out
+	}
+	// No record before the first poll: unknown, not an outage.
+	r, err := e.stat.Uptime(ctx, base.Add(-time.Hour), base.Add(time.Hour), StepHour, time.UTC, base)
+	if err != nil || r.Tracked != nil || r.ServerSec != 0 {
+		t.Fatalf("before tracking: %+v %v", r, err)
+	}
+	// Up 10:00-10:30 (a poll every 30 s), the server does not answer 10:30-10:50, up again.
+	for at := base; !at.After(base.Add(30 * time.Minute)); at = at.Add(30 * time.Second) {
+		e.poll(at)
+	}
+	e.src.err = errors.New("management interface unavailable")
+	for at := base.Add(30*time.Minute + 30*time.Second); at.Before(base.Add(50 * time.Minute)); at = at.Add(30 * time.Second) {
+		e.now = at
+		if err := e.col.Poll(ctx); err == nil {
+			t.Fatal("poll should fail")
+		}
+	}
+	e.src.err = nil
+	for at := base.Add(50 * time.Minute); !at.After(base.Add(70 * time.Minute)); at = at.Add(30 * time.Second) {
+		e.poll(at)
+	}
+	if got := strings.Join(spans(), ","); got != "10:00-10:30,10:50-11:10" {
+		t.Fatalf("spans: %s", got)
+	}
+	now := base.Add(70*time.Minute + 20*time.Second) // the last poll was 20 s ago: up until now
+	r, err = e.stat.Uptime(ctx, base, base.Add(2*time.Hour), StepHour, time.UTC, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Tracked == nil || !r.Tracked.Equal(base) {
+		t.Errorf("tracked: %v", r.Tracked)
+	}
+	if r.Server[0] != 40*60 || r.Server[1] != 10*60+20 || r.ServerSec != 50*60+20 {
+		t.Errorf("server up: %v (%d)", r.Server, r.ServerSec)
+	}
+	// Long after the last poll the server is no longer counted as up.
+	r, _ = e.stat.Uptime(ctx, base, base.Add(2*time.Hour), StepHour, time.UTC, base.Add(100*time.Minute))
+	if r.Server[1] != 10*60 {
+		t.Errorf("after polling stopped: %v", r.Server)
+	}
+}

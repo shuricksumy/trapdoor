@@ -7,7 +7,7 @@
   import { currentServer, route, setQuery } from '../lib/state.svelte.js';
   import { clientName, loadClientNames } from '../lib/names.svelte.js';
   import { duration, relative, dateTime } from '../lib/format.js';
-  import { bucketSpan, level, monthGrid, pageList, preset, presetOf, sortClients, uptimePct } from '../lib/uptime.js';
+  import { bucketSpan, known as recordedBy, level, monthGrid, pageList, preset, presetOf, serverLevel, sortClients, uptimePct } from '../lib/uptime.js';
 
   const isWG = ['wireguard', 'amneziawg'].includes(currentServer()?.type);
   const presets = [['today', 'Today'], ['7d', '7 days'], ['30d', '30 days'], ['this_month', 'This month'], ['last_month', 'Last month'], ['this_year', 'This year']];
@@ -116,7 +116,32 @@
     report.step === 'day'
       ? new Date(s).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
       : new Date(s).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  const tip = (c, i) => `${fmtStart(report.starts[i])}: ${spans[i] <= 0 ? 'not yet' : c.buckets[i] ? `online ${duration(c.buckets[i])}` : 'offline'}`;
+  // whether the server's record covers bucket i (before it: unknown)
+  const covered = $derived(report ? report.starts.map((s, i) => recordedBy(report.tracked, report.starts[i + 1] ?? report.to)) : []);
+  const down = (i) => Math.max(0, spans[i] - (report.server?.[i] ?? 0));
+  const tip = (c, i) => {
+    const when = fmtStart(report.starts[i]);
+    if (spans[i] <= 0) return `${when}: not yet`;
+    const lv = level(c.buckets[i], spans[i], report.server?.[i], covered[i]);
+    const out = covered[i] && down(i) >= 60 ? ` · server down ${duration(down(i))}` : '';
+    if (lv === 'full' || lv === 'part') return `${when}: online ${duration(c.buckets[i])}${out}`;
+    if (lv === 'off') return `${when}: not connected (the server was up)${out}`;
+    if (lv === 'out') return `${when}: the server was down`;
+    return `${when}: not connected (server state not recorded yet)`;
+  };
+  const serverTip = (i) => {
+    const when = fmtStart(report.starts[i]);
+    if (spans[i] <= 0) return `${when}: not yet`;
+    if (!covered[i]) return `${when}: not recorded yet`;
+    return down(i) >= 60 ? `${when}: down ${duration(down(i))}` : `${when}: up`;
+  };
+  // the server's uptime over the part of the period it was recorded
+  const serverPct = $derived.by(() => {
+    if (!report?.tracked) return null;
+    const start = Math.max(new Date(report.from).getTime(), new Date(report.tracked).getTime());
+    const end = Math.min(new Date(report.to).getTime(), now.getTime());
+    return end > start ? Math.round(Math.min(100, (report.server_seconds / ((end - start) / 1000)) * 100) * 10) / 10 : null;
+  });
 
   // Summary of the period
   const summary = $derived.by(() => {
@@ -267,20 +292,31 @@
     <p class="panel-body muted">No clients.</p>
   {:else}
     <ul class="rows">
+      <li class="srv">
+        <span class="who static"><i class="dot" class:on={currentServer()?.running !== false}></i><span class="name">Server</span></span>
+        <div class="bars" role="img" aria-label="The server: up {serverPct ?? '–'}% of the recorded time">
+          {#each report.starts as _, i (i)}<i class="b {serverLevel(report.server?.[i] ?? 0, spans[i], covered[i])}" title={serverTip(i)}></i>{/each}
+        </div>
+        <span class="pct">{serverPct === null ? '–' : `${serverPct}%`}</span>
+        <span class="seen faint small">{report.tracked ? `since ${new Date(report.tracked).toLocaleDateString([], { day: 'numeric', month: 'short' })}` : 'not recorded yet'}</span>
+      </li>
       {#each rows as c (c.name)}
         <li>
           <button class="who" onclick={() => openCal(c.name)} title="Calendar of {clientName(c.name)}">
             <i class="dot" class:on={c.online}></i><span class="name">{clientName(c.name)}</span>
           </button>
           <div class="bars" role="img" aria-label="{clientName(c.name)}: online {uptimePct(c.online_seconds, report, now)}% of the period">
-            {#each c.buckets as sec, i (i)}<i class="b {level(sec, spans[i])}" title={tip(c, i)}></i>{/each}
+            {#each c.buckets as sec, i (i)}<i class="b {level(sec, spans[i], report.server?.[i], covered[i])}" title={tip(c, i)}></i>{/each}
           </div>
           <span class="pct">{uptimePct(c.online_seconds, report, now)}%</span>
           <span class="seen faint small">{c.online ? 'online now' : c.last_seen ? `seen ${relative(c.last_seen)}` : 'never seen'}</span>
         </li>
       {/each}
     </ul>
-    <p class="panel-body hint legend"><i class="b full"></i> online <i class="b part"></i> part of the {report.step} <i class="b none"></i> offline · click a client for its calendar</p>
+    <p class="panel-body hint legend">
+      <i class="b full"></i> online <i class="b part"></i> part of the {report.step} <i class="b off"></i> not connected, server up
+      <i class="b out"></i> server down <i class="b none"></i> not recorded yet · click a client for its calendar
+    </p>
   {/if}
 </section>
 
@@ -366,6 +402,11 @@
   .b.full { background: var(--ok); }
   .b.part { background: color-mix(in srgb, var(--ok) 45%, var(--sunken)); }
   .b.none { background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line); }
+  .b.off { background: color-mix(in srgb, var(--bad) 70%, var(--sunken)); }
+  .b.out { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+  .srv { border-bottom: 1px dashed var(--line); }
+  .who.static { cursor: default; }
+  .who.static:hover .name { text-decoration: none; }
   .b.future { background: transparent; box-shadow: inset 0 0 0 1px var(--line); opacity: 0.4; }
   .pct { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
   .seen { text-align: right; }

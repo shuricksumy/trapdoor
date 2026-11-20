@@ -155,6 +155,15 @@ var migrations = []string{
 		client TEXT NOT NULL,
 		PRIMARY KEY (agent, client)
 	) WITHOUT ROWID;`,
+
+	// 10: when each server answered the history poll (it was up); the gaps
+	// between spans are outages
+	`CREATE TABLE IF NOT EXISTS server_up (
+		agent TEXT    NOT NULL,
+		start INTEGER NOT NULL, -- unix seconds
+		end   INTEGER NOT NULL,
+		PRIMARY KEY (agent, start)
+	) WITHOUT ROWID;`,
 }
 
 func (db *DB) migrate(ctx context.Context) error {
