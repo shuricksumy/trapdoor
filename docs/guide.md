@@ -245,7 +245,8 @@ For OpenVPN everything about routing is on one page (menu → Network):
   the middle, the networks on the right: each one through the server or behind a client,
   with who reaches it ("every client", names, or "nobody yet"), and the internet (which
   clients send all traffic through the VPN). A LAN behind a client without a server `route`
-  is orange with *needs route*. Click a client or a network to edit it. On phones the
+  is orange with *needs route* (not with `client-to-client`: OpenVPN then carries client
+  traffic to it without one). Click a client or a network to edit it. On phones the
   networks are a list.
 - **Needs attention**, each with a button: a LAN behind a client without a server route
   (*Add the route* writes `route <net> <mask>` into `server.conf`, checked and backed up like

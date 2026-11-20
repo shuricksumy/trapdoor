@@ -99,3 +99,14 @@ test('normalize and overlaps', () => {
   assert.ok(overlaps('10.8.0.0/24', '10.8.0.0/16'));
   assert.ok(!overlaps('10.8.0.0/24', '10.9.0.0/24'));
 });
+
+test('client-to-client: a LAN without a server route is fine for clients, noted for the server', () => {
+  const m = buildMap({ srv, clients, c2c: true });
+  const office = byKey(m)['lan:192.168.50.0/24'];
+  assert.equal(office.ok, true);
+  assert.deepEqual(office.missingRoute, []);
+  assert.deepEqual(office.serverOnly, ['192.168.50.0/24']);
+  assert.ok(!m.problems.some((p) => p.kind === 'route'));
+  // nobody reaching it is still worth saying
+  assert.ok(m.problems.some((p) => p.kind === 'unreached' && p.network === 'lan:192.168.50.0/24'));
+});

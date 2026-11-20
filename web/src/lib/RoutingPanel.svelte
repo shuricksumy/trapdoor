@@ -116,7 +116,10 @@
 
     <fieldset>
       <legend>The server sends into the VPN <span class="faint small">route</span></legend>
-      <span class="hint">Networks behind clients (site-to-site). Each needs a client that has it behind it: Edit → Networks behind this client.</span>
+      <span class="hint">
+        Networks behind clients (site-to-site). Each needs a client that has it behind it: Edit → Networks behind this client.
+        {#if draft.client_to_client}With client-to-client on, clients reach those networks without a route here; a route is only needed for traffic from the server itself.{/if}
+      </span>
       <ul class="routes">
         {#each draft.routes as r (r)}
           {@const via = behind(r)}

@@ -8,6 +8,9 @@
 //   nets:    named networks ([{ name, description, networks, via, clients }])
 //   pushed:  routes server.conf pushes to every client
 //   online:  Set of client names connected now
+//   c2c:     server.conf has client-to-client: OpenVPN carries traffic from clients to
+//            LANs behind other clients itself, so a server "route" is only needed for
+//            traffic from the server; a missing one is then not a problem
 // }
 
 /** IPv4 CIDR (or bare address = /32) → [network as uint32, bits], or null. */
@@ -46,7 +49,7 @@ const anyCovers = (list, cidr) => (list ?? []).some((r) => covers(r, cidr));
 const uniq = (xs) => [...new Set(xs)];
 
 /** The map: clients, networks, the internet and the problems, in display order. */
-export function buildMap({ srv, clients = [], nets = [], pushed = [], online = new Set() }) {
+export function buildMap({ srv, clients = [], nets = [], pushed = [], online = new Set(), c2c = false }) {
   const routes = srv?.routes ?? [];
   const named = nets.map((n) => ({ ...n, networks: n.networks ?? [], clients: n.clients ?? [] }));
   const inNamed = (cidr) => named.some((n) => n.networks.includes(cidr));
@@ -75,7 +78,10 @@ export function buildMap({ srv, clients = [], nets = [], pushed = [], online = n
   for (const n of networks) {
     n.reachedBy = reachedBy(n.cidrs, n.via);
     // a LAN behind a client needs a server.conf "route" so the server sends it into the VPN
-    n.missingRoute = n.via ? n.cidrs.filter((x) => !anyCovers(routes, x)) : [];
+    const missing = n.via ? n.cidrs.filter((x) => !anyCovers(routes, x)) : [];
+    n.missingRoute = c2c ? [] : missing;
+    // with client-to-client: clients reach it, the server itself does not
+    n.serverOnly = c2c ? missing : [];
     n.ok = n.missingRoute.length === 0;
   }
 

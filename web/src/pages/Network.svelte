@@ -57,7 +57,7 @@
   });
 
   const netOf = (n) => nets.find((x) => x.name === n);
-  const map = $derived(srv ? buildMap({ srv, clients, nets, pushed, online }) : null);
+  const map = $derived(srv ? buildMap({ srv, clients, nets, pushed, online, c2c: !!cfg?.settings?.client_to_client }) : null);
   // the missing-route warnings are in "Needs attention", with a button
   const warnings = $derived([...new Set(clients.flatMap((c) => c.warnings ?? []))].filter((w) => !w.startsWith('server.conf needs "route')));
 
