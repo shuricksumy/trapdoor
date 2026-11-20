@@ -7,6 +7,7 @@
   import Dialog from '../lib/Dialog.svelte';
   import { placeMenu } from '../lib/menu.js';
   import SendProfile from '../lib/SendProfile.svelte';
+  import ClientNotify from '../lib/ClientNotify.svelte';
 
   const app = currentServer()?.type === 'amneziawg' ? 'AmneziaWG' : 'WireGuard';
 
@@ -16,10 +17,13 @@
 
   // Clients' email addresses (to send them their config).
   let emails = $state({});
+  let notify = $state({}); // name → { email, telegram }: online / offline messages
+  let notifying = $state({ open: false, name: '' });
   async function load() {
     try {
       peers = await api('/peers');
       api('/emails').then((m) => (emails = m)).catch(() => {});
+      api('/notify').then((m) => (notify = m)).catch(() => {});
       loadError = '';
     } catch (e) {
       loadError = e.message;
@@ -259,7 +263,7 @@
             <tr class:old={p.disabled}>
               <td class="c-name">
                 <div class="nm">
-                  <span class="name">{p.name}{#if emails[p.name]}<span class="faint small email">{emails[p.name]}</span>{/if}</span>
+                  <span class="name">{p.name}{#if notify[p.name]?.email || notify[p.name]?.telegram}<span class="bell" title="Online / offline messages: {[notify[p.name].email && 'email', notify[p.name].telegram && 'Telegram'].filter(Boolean).join(', ')}">🔔</span>{/if}{#if emails[p.name]}<span class="faint small email">{emails[p.name]}</span>{/if}</span>
                   {#if p.notes}<span class="faint small">{p.notes}</span>{/if}
                   {#if p.expires_at}<span class="small" class:faint={!p.expired} class:bad-text={p.expired}>{p.expired ? 'Ended' : 'Until'} {until(p.expires_at)}</span>{/if}
 
@@ -287,6 +291,7 @@
                       {#if !p.own_key}<button onclick={(e) => { e.currentTarget.closest('details').open = false; emailConfig(p.name); }}>Email the config</button>{/if}
                     {/if}
                     <button onclick={(e) => { e.currentTarget.closest('details').open = false; openEdit(p); }}>Edit</button>
+                    <button onclick={(e) => { e.currentTarget.closest('details').open = false; notifying = { open: true, name: p.name }; }}>Online / offline messages</button>
                     <button class="danger" onclick={(e) => { e.currentTarget.closest('details').open = false; confirm = { open: true, name: p.name }; }}>Delete</button>
                   </div>
                 </details>
@@ -437,6 +442,7 @@
   {/snippet}
 </Dialog>
 
+<ClientNotify bind:open={notifying.open} name={notifying.name} flags={notify[notifying.name]} onsaved={(f) => (notify = { ...notify, [notifying.name]: f })} />
 <SendProfile bind:open={mailing.open} name={mailing.name} qr={mailing.qr} email={emails[mailing.name] ?? ''} onsent={(to) => (emails = { ...emails, [mailing.name]: to })} />
 
 <Dialog bind:open={confirm.open} title="Delete this client?">
@@ -448,6 +454,7 @@
 </Dialog>
 
 <style>
+  .bell { margin-left: 4px; font-size: 12px; cursor: help; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-5); }
   .head p { margin-top: var(--space-1); }
   .banner { margin-bottom: var(--space-3); }

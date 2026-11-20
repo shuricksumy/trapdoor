@@ -80,19 +80,24 @@ func (s *Server) sendMail(ctx context.Context, c mail.Config, m mail.Message) er
 	return err
 }
 
-// notify emails the admins when email is set up and the kind is chosen.
-// It does not wait for the server and does not fail the caller.
+// notify tells the admins by email and Telegram, each when it is set up and
+// the kind is chosen there. It does not wait and does not fail the caller.
 func (s *Server) notify(ctx context.Context, want func(Notify) bool, subject, text string) {
-	es, err := s.emailSettings(ctx)
-	if err != nil || !es.on() || len(es.Admins) == 0 || !want(es.Notify) {
-		return
+	if es, err := s.emailSettings(ctx); err == nil && es.on() && len(es.Admins) > 0 && want(es.Notify) {
+		s.mailWG.Add(1)
+		go func() {
+			defer s.mailWG.Done()
+			_ = s.sendMail(context.WithoutCancel(ctx), es.Config, mail.Message{To: es.Admins, Subject: "trapdoor: " + subject,
+				Text: text + "\n\n-- \ntrapdoor" + s.baseURLLine()})
+		}()
 	}
-	s.mailWG.Add(1)
-	go func() {
-		defer s.mailWG.Done()
-		_ = s.sendMail(context.WithoutCancel(ctx), es.Config, mail.Message{To: es.Admins, Subject: "trapdoor: " + subject,
-			Text: text + "\n\n-- \ntrapdoor" + s.baseURLLine()})
-	}()
+	if ts, err := s.telegramSettings(ctx); err == nil && ts.on() && len(ts.Chats) > 0 && want(ts.Notify) {
+		s.mailWG.Add(1)
+		go func() {
+			defer s.mailWG.Done()
+			_ = s.sendTelegram(context.WithoutCancel(ctx), ts.Token, ts.Chats, "trapdoor: "+subject+"\n\n"+text+s.baseURLLine())
+		}()
+	}
 }
 
 func (s *Server) baseURLLine() string {

@@ -4,6 +4,8 @@
   import ThemeSwitch from '../lib/ThemeSwitch.svelte';
   import ScheduledBackups from '../lib/ScheduledBackups.svelte';
   import EmailSettings from '../lib/EmailSettings.svelte';
+  import TelegramSettings from '../lib/TelegramSettings.svelte';
+  import PresenceSettings from '../lib/PresenceSettings.svelte';
 
   let current = $state('');
   let next = $state('');
@@ -135,6 +137,8 @@
 <div class="scheduled">
   <ScheduledBackups />
   <EmailSettings />
+  <TelegramSettings />
+  <PresenceSettings />
 </div>
 
 <style>

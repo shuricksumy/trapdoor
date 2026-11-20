@@ -10,6 +10,7 @@
   import { placeMenu } from '../lib/menu.js';
   import SendProfile from '../lib/SendProfile.svelte';
   import Lifetime from '../lib/Lifetime.svelte';
+  import ClientNotify from '../lib/ClientNotify.svelte';
 
   let twoFactor = $state({ open: false, name: '' });
   let network = $state({ open: false, name: '' });
@@ -19,6 +20,8 @@
   let mailing = $state({ open: false, name: '' });
 
   let certs = $state([]);
+  let notify = $state({}); // name → { email, telegram }: online / offline messages
+  let notifying = $state({ open: false, name: '' });
   let online = $state(new Set());
   let loadError = $state('');
   let loaded = $state(false);
@@ -37,6 +40,7 @@
       loaded = true;
     }
     api('/emails').then((m) => (emails = m)).catch(() => {});
+    api('/notify').then((m) => (notify = m)).catch(() => {});
     try {
       staticIPs = (await api('/network')).static_ips ?? {};
     } catch {
@@ -311,6 +315,7 @@
                 <span class="name">
                   {#if online.has(c.name) && c.current}<i class="dot" title="Connected now"></i>{/if}
                   {c.notes || c.name}
+                  {#if c.current && (notify[c.name]?.email || notify[c.name]?.telegram)}<span class="bell" title="Online / offline messages: {[notify[c.name].email && 'email', notify[c.name].telegram && 'Telegram'].filter(Boolean).join(', ')}">🔔</span>{/if}
                 </span>
                 {#if c.notes}<span class="mono faint small ip" title="Login (certificate name)">{c.name}</span>{/if}
                 {#if !c.current}<span class="faint small">replaced</span>{/if}
@@ -347,6 +352,7 @@
                       {/if}
                       {#if c.status !== 'revoked'}
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; openNaming(c.name); }}>Display name</button>
+                        <button onclick={(e) => { e.currentTarget.closest('details').open = false; notifying = { open: true, name: c.name, label: c.notes }; }}>Online / offline messages</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; network = { open: true, name: c.name }; }}>Network</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; twoFactor = { open: true, name: c.name }; }}>Two-factor login</button>
                         <button onclick={() => ask('renew', c.name)}>Renew</button>
@@ -438,6 +444,8 @@
   {/snippet}
 </Dialog>
 
+<ClientNotify bind:open={notifying.open} name={notifying.name} label={notifying.label} flags={notify[notifying.name]} onsaved={(f) => (notify = { ...notify, [notifying.name]: f })} />
+
 <Dialog bind:open={naming.open} title="Display name">
   <form id="naming" class="form" onsubmit={saveNaming}>
     {#if naming.error}<div class="banner bad" role="alert">{naming.error}</div>{/if}
@@ -456,6 +464,7 @@
 <SendProfile bind:open={mailing.open} name={mailing.name} email={emails[mailing.name] ?? ''} onsent={(to) => (emails = { ...emails, [mailing.name]: to })} />
 
 <style>
+  .bell { margin-left: 4px; font-size: 12px; cursor: help; }
   .head-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-5); }
   .head p { margin-top: var(--space-1); }

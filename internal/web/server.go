@@ -110,6 +110,8 @@ type Deps struct {
 	PublicURL string
 	// SendMail sends an email (nil = mail.Send; replaced in tests).
 	SendMail func(context.Context, mail.Config, mail.Message) error
+	// SendTelegram sends a Telegram message (nil = telegram.Send; replaced in tests).
+	SendTelegram func(ctx context.Context, token, chat, text string) error
 	// Stats is the history database; its Agent field is set per request to
 	// the server in the URL.
 	Stats   *history.Stats
@@ -131,9 +133,10 @@ type Deps struct {
 // Server is the web HTTP server.
 type Server struct {
 	Deps
-	backups backupRunner
-	nodes   nodeWatch
-	mailWG  sync.WaitGroup // emails being sent (tests wait for them)
+	backups  backupRunner
+	nodes    nodeWatch
+	mailWG   sync.WaitGroup // emails being sent (tests wait for them)
+	presence presenceWatch
 }
 
 // New returns a web server.
@@ -168,6 +171,8 @@ func (s *Server) Handler() http.Handler {
 	s.registerBackupRoutes(api)
 	s.registerScheduleRoutes(api)
 	s.registerEmailRoutes(api)
+	s.registerTelegramRoutes(api)
+	s.registerPresenceRoutes(api)
 	s.registerServerControlRoutes(api)
 
 	mux := http.NewServeMux()

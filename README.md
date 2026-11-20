@@ -56,9 +56,11 @@ same two-factor logins.
 - **Client lifetimes**: OpenVPN certificates from 30 days to 10 years or until a date, a
   default per server; WireGuard / AmneziaWG clients with an end date (e.g. guests), taken
   off the server when it passes
-- **Email**: send a client its profile or WireGuard config (with QR code) and how to set it
-  up; notifications when a backup fails, a node stops answering or certificates expire
-  ([how](docs/guide.md#email))
+- **Email and Telegram**: send a client its profile or WireGuard config (with QR code) and how
+  to set it up; notifications when a backup fails, a node stops answering or certificates
+  expire, by email and / or your own Telegram bot ([how](docs/guide.md#email))
+- **Online / offline messages** for the clients you pick: when they connect or disconnect, by
+  email and / or Telegram, quiet for quick reconnects ([how](docs/guide.md#client-online--offline))
 
 **OpenVPN**
 
