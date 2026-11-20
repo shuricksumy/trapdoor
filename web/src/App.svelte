@@ -21,6 +21,7 @@
   import Nodes from './pages/Nodes.svelte';
   import Servers from './pages/Servers.svelte';
   import Network from './pages/Network.svelte';
+  import WireGuardServer from './pages/WireGuardServer.svelte';
 
   const pages = [
     { path: '/', label: 'Overview', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', component: Dashboard },
@@ -39,6 +40,7 @@
     pages[3],
     pages[4],
     pages[5],
+    { path: '/server', label: 'Server', icon: pages[6].icon, component: WireGuardServer },
   ];
 
   // WireGuard and AmneziaWG servers share their pages.
@@ -168,7 +170,7 @@
         {#if servers.list.length > 1}
           <label class="server-switch">
             <span>Server</span>
-            <select value={servers.current} onchange={(e) => { selectServer(e.currentTarget.value); navigate('/statistics'); }}>
+            <select value={servers.current} onchange={(e) => { selectServer(e.currentTarget.value); navigate('/'); }}>
               {#if servers.hosts.length}
                 {#each machines().flatMap((m) => m.nodes) as g (g.key)}
                   {@const list = servers.list.filter((sv) => (sv.host ?? '') === g.key)}

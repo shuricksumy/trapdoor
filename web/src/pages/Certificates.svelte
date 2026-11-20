@@ -69,7 +69,7 @@
       .filter((c) => showHistory || c.current)
       .map((c) => ({ ...c, st: certState(c, settings.expiryWarnDays) }))
       .filter((c) => filter === 'all' || c.st.key === filter)
-      .filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
+      .filter((c) => !search || `${c.name} ${c.notes ?? ''}`.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => a.name.localeCompare(b.name) || (b.current - a.current)),
   );
   const counts = $derived.by(() => {
@@ -135,7 +135,7 @@
 
   // Create
   let createOpen = $state(false);
-  let form = $state({ name: '', passphrase: '', validity: 825, makeDefault: false });
+  let form = $state({ name: '', notes: '', passphrase: '', validity: 825, makeDefault: false });
   let presetLife = $state(true);
   let showPass = $state(false);
   let busy = $state(false);
@@ -143,7 +143,7 @@
   const nameOk = $derived(/^[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}$/.test(form.name) && form.name !== 'ca');
 
   function openCreate() {
-    form = { name: '', passphrase: '', validity: defaultDays, makeDefault: false };
+    form = { name: '', notes: '', passphrase: '', validity: defaultDays, makeDefault: false };
     formError = '';
     showPass = false;
     createOpen = true;
@@ -156,6 +156,7 @@
     try {
       const body = { name: form.name, validity_days: Number(form.validity) };
       if (form.passphrase) body.passphrase = form.passphrase;
+      if (form.notes.trim()) body.notes = form.notes.trim();
       await api('/certs', { method: 'POST', body });
       if (form.makeDefault && presetLife && Number(form.validity) !== defaultDays) {
         await api('/cert-defaults', { method: 'PUT', body: { validity_days: Number(form.validity) } });
@@ -168,6 +169,27 @@
       formError = err.message;
     } finally {
       busy = false;
+    }
+  }
+
+  // Readable name ("Anna's phone"); the certificate name stays the login.
+  let naming = $state({ open: false, name: '', notes: '', busy: false, error: '' });
+  function openNaming(name) {
+    naming = { open: true, name, notes: certs.find((c) => c.name === name && c.current)?.notes ?? '', busy: false, error: '' };
+  }
+  async function saveNaming(e) {
+    e.preventDefault();
+    naming.busy = true;
+    naming.error = '';
+    try {
+      await api(`/certs/${encodeURIComponent(naming.name)}/notes`, { method: 'PUT', body: { notes: naming.notes.trim() } });
+      naming.open = false;
+      toast(naming.notes.trim() ? `Renamed ${naming.name} to “${naming.notes.trim()}”.` : `Removed the display name of ${naming.name}.`);
+      await load();
+    } catch (err) {
+      naming.error = err.message;
+    } finally {
+      naming.busy = false;
     }
   }
 
@@ -288,8 +310,9 @@
               <td class="c-name">
                 <span class="name">
                   {#if online.has(c.name) && c.current}<i class="dot" title="Connected now"></i>{/if}
-                  {c.name}
+                  {c.notes || c.name}
                 </span>
+                {#if c.notes}<span class="mono faint small ip" title="Login (certificate name)">{c.name}</span>{/if}
                 {#if !c.current}<span class="faint small">replaced</span>{/if}
                 {#if c.current && staticIPs[c.name]}<span class="mono faint small ip">{staticIPs[c.name]}</span>{/if}
                 {#if c.current && emails[c.name]}<span class="faint small ip">{emails[c.name]}</span>{/if}
@@ -323,6 +346,7 @@
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; mailing = { open: true, name: c.name }; }}>Email the profile</button>
                       {/if}
                       {#if c.status !== 'revoked'}
+                        <button onclick={(e) => { e.currentTarget.closest('details').open = false; openNaming(c.name); }}>Display name</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; network = { open: true, name: c.name }; }}>Network</button>
                         <button onclick={(e) => { e.currentTarget.closest('details').open = false; twoFactor = { open: true, name: c.name }; }}>Two-factor login</button>
                         <button onclick={() => ask('renew', c.name)}>Renew</button>
@@ -351,7 +375,12 @@
     <label class="field">
       <span>Name</span>
       <input bind:value={form.name} placeholder="e.g. alice-phone" autocomplete="off" autocapitalize="none" spellcheck="false" required />
-      <span class="hint" class:bad={form.name && !nameOk}>Letters, digits, dot, dash, underscore or @. Starts with a letter or digit.</span>
+      <span class="hint" class:bad={form.name && !nameOk}>The login and certificate name, can't be changed later. Letters, digits, dot, dash, underscore or @.</span>
+    </label>
+    <label class="field">
+      <span>Display name (optional)</span>
+      <input bind:value={form.notes} placeholder="e.g. Alice's phone" maxlength="200" autocomplete="off" />
+      <span class="hint">Shown in the list instead of the login. You can change it any time.</span>
     </label>
     {#key createOpen}<Lifetime bind:days={form.validity} bind:preset={presetLife} {defaultDays} />{/key}
     {#if presetLife && Number(form.validity) !== defaultDays}
@@ -406,6 +435,21 @@
     <button class="btn {confirm.kind === 'renew' ? 'primary' : 'danger solid'}" onclick={() => act(confirm.kind, confirm.name)}>
       {confirmText[confirm.kind]?.button}
     </button>
+  {/snippet}
+</Dialog>
+
+<Dialog bind:open={naming.open} title="Display name">
+  <form id="naming" class="form" onsubmit={saveNaming}>
+    {#if naming.error}<div class="banner bad" role="alert">{naming.error}</div>{/if}
+    <label class="field">
+      <span>Display name of <span class="mono">{naming.name}</span></span>
+      <input bind:value={naming.notes} placeholder="e.g. Alice's phone" maxlength="200" autocomplete="off" />
+      <span class="hint">Shown in the list instead of the login. The login stays {naming.name}; profiles keep working. Leave empty to show the login.</span>
+    </label>
+  </form>
+  {#snippet actions()}
+    <button class="btn" onclick={() => (naming.open = false)}>Cancel</button>
+    <button class="btn primary" form="naming" type="submit" disabled={naming.busy}>{naming.busy ? 'Saving…' : 'Save'}</button>
   {/snippet}
 </Dialog>
 

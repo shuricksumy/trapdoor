@@ -193,3 +193,57 @@ func TestProfileDownload(t *testing.T) {
 		t.Errorf("unknown: err = %v, want 404", err)
 	}
 }
+
+func TestCertNotes(t *testing.T) {
+	s, err := pki.Init(filepath.Join(t.TempDir(), "pki"), pki.InitOptions{}, pki.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	cfg := config.Agent{Token: "secret", CCDDir: dir}
+	srv := httptest.NewServer(serve(New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), s)))
+	t.Cleanup(srv.Close)
+	c := NewClient(srv.URL, "secret", 10*time.Second).Server(DefaultServerID)
+	ctx := context.Background()
+
+	got, err := c.IssueCert(ctx, api.IssueCertRequest{Name: "anna", Notes: "Anna's phone"})
+	if err != nil || got.Notes != "Anna's phone" {
+		t.Fatalf("issue: %+v, %v", got, err)
+	}
+	// Lines of 2FA (openvpn-ui format) in the same file are kept.
+	f := filepath.Join(dir, "anna")
+	b, _ := os.ReadFile(f)
+	if err := os.WriteFile(f, append(b, "#2FA_KEY: 3132\n"...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = c.SetCertNotes(ctx, "anna", "Anna's laptop"); err != nil || got.Notes != "Anna's laptop" {
+		t.Fatalf("set: %+v, %v", got, err)
+	}
+	list, err := c.ListCerts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range list {
+		if x.Name == "anna" && x.Notes != "Anna's laptop" {
+			t.Errorf("list notes = %q", x.Notes)
+		}
+	}
+	if one, _ := c.GetCert(ctx, "anna"); one.Notes != "Anna's laptop" {
+		t.Errorf("get notes = %q", one.Notes)
+	}
+	if b, _ := os.ReadFile(f); !strings.Contains(string(b), "#2FA_KEY: 3132") {
+		t.Errorf("2FA line lost: %q", b)
+	}
+	if _, err := c.SetCertNotes(ctx, "anna", "a\nb"); !IsStatus(err, http.StatusBadRequest) {
+		t.Errorf("two lines: err = %v, want 400", err)
+	}
+	if _, err := c.SetCertNotes(ctx, "nobody", "x"); !IsStatus(err, http.StatusNotFound) {
+		t.Errorf("unknown: err = %v, want 404", err)
+	}
+	if _, err := c.SetCertNotes(ctx, "anna", ""); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(f); string(b) != "#2FA_KEY: 3132\n" {
+		t.Errorf("after clearing: %q", b)
+	}
+}

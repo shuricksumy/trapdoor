@@ -24,6 +24,7 @@ func (s *Server) registerCertRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/servers/{server}/certs/{name}/unrevoke", s.handleUnrevokeCert)
 	mux.HandleFunc("POST /api/v1/servers/{server}/certs/{name}/renew", s.handleRenewCert)
 	mux.HandleFunc("GET /api/v1/servers/{server}/certs/{name}/ovpn", s.handleProfile)
+	mux.HandleFunc("PUT /api/v1/servers/{server}/certs/{name}/notes", s.handleSetCertNotes)
 	mux.HandleFunc("DELETE /api/v1/servers/{server}/certs/{name}/sessions", s.handleKillName)
 	mux.HandleFunc("DELETE /api/v1/servers/{server}/sessions/{id}", s.handleKillSession)
 	mux.HandleFunc("GET /api/v1/servers/{server}/certs/{name}/auth", s.handleGetClientAuth)
@@ -227,6 +228,25 @@ func (s *Server) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "cert.issue", c.Name)
 	httpx.WriteJSON(w, http.StatusCreated, c)
+}
+
+// handleSetCertNotes sets an OpenVPN client's readable name.
+func (s *Server) handleSetCertNotes(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.name(w, r)
+	if !ok {
+		return
+	}
+	var req api.CertNotes
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	c, err := s.agent(r).SetCertNotes(r.Context(), name, req.Notes)
+	if err != nil {
+		s.agentError(w, err)
+		return
+	}
+	s.audit(r, "cert.notes", name)
+	httpx.WriteJSON(w, http.StatusOK, c)
 }
 
 func (s *Server) handleRevokeCert(w http.ResponseWriter, r *http.Request) {

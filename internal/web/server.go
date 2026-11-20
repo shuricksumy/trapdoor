@@ -46,6 +46,7 @@ type AgentClient interface {
 	UnrevokeCert(ctx context.Context, name string) (api.Cert, error)
 	RenewCert(ctx context.Context, name string, validityDays int) (api.Cert, error)
 	RemoveCert(ctx context.Context, name string) error
+	SetCertNotes(ctx context.Context, name, notes string) (api.Cert, error)
 	Profile(ctx context.Context, name string) ([]byte, error)
 	KillSession(ctx context.Context, clientID int64) error
 	KillName(ctx context.Context, name string) (int, error)

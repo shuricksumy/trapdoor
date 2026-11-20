@@ -102,6 +102,8 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
       WireGuard / AmneziaWG end dates enforced by the agent
 - [x] Scripts and extra rules per server: presets (DNS redirect, block 853, isolate clients) and
       own start / stop scripts run by the vpn container; editable in the UI with `TD_SCRIPTS=on`
+- [x] Display names for OpenVPN clients (`#TD_NOTE:` in ccd); the same Overview and Server
+      pages for every server type, Overview opens after switching servers
 - [ ] Audit log
 - [ ] easyrsa `vars` in the native PKI: certificate name fields (`EASYRSA_DN` org mode:
       country, province, city, org, email, OU), key type and size, digest, CA / certificate /

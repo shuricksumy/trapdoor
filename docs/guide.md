@@ -94,6 +94,15 @@ Then make a backup in trapdoor (Account → Backup, with a passphrase) and resto
 production machine (`trapdoor restore`, see [Backup and restore](#backup-and-restore)), or
 copy the edited directory there.
 
+## Display names
+
+A client's certificate name (`anna`) is its login and cannot change, but it can have a
+display name ("Anna's phone"): set it in *New client* or later with Clients → More →
+*Display name*. The list shows it instead of the login (the login stays next to it, and
+search finds both). It is a `#TD_NOTE:` line in the client's `ccd` file, next to the
+network and two-factor lines, so it moves with the server, its backups and copies;
+OpenVPN and openvpn-ui ignore it. One line, at most 200 characters.
+
 ## Client profiles
 
 `.ovpn` files are built like openvpn-ui did, so existing servers produce the same files:
@@ -260,7 +269,7 @@ restores them when it starts.
 
 ## Scripts and extra rules
 
-Each server's page (Server for OpenVPN, Overview for WireGuard and AmneziaWG) has *Scripts
+Each server's Server page has *Scripts
 and extra rules*. They run in the server's `vpn` container, as root, while its interface is
 up, and are undone when it goes down, the server is stopped or removed, or the container
 stops. A change runs the old stop scripts, then the new start scripts, without restarting
@@ -373,6 +382,12 @@ management interface.
 
 ## WireGuard servers
 
+Every server type has the same pages. *Overview* shows today (connected now, traffic,
+sessions and a timeline), who is connected and what needs attention: certificates that
+expire soon for OpenVPN, clients whose end date is near for WireGuard and AmneziaWG.
+*Server* holds the server's own settings: address and key, client defaults, obfuscation,
+scripts, backup and removal. Picking another server in the server bar opens its Overview.
+
 Next to OpenVPN, the agent can run WireGuard servers (so far through the
 [agent API](api.md#wireguard)). In the web UI, use "Add a server" to create one; its Clients page adds devices, shows the config with a QR code and disables or deletes them. Each server is a network
 interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/24`:
@@ -395,7 +410,7 @@ interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/2
   off the interface (the agent checks every minute, also when the web UI is down) and shown
   as *Expired*. A later date, or none, brings it back at once; nothing else changes. With
   email set up, the admins hear about it three days before.
-- **Settings and client defaults** (Overview): name, the public address and port clients
+- **Settings and client defaults** (Server page): name, the public address and port clients
   connect to, and the defaults for every client's config: DNS, allowed IPs, MTU,
   keepalive, preshared key for new clients. A client's own settings win. Devices need the
   new config (QR code) after a change.
@@ -427,8 +442,8 @@ AmneziaWG in *Add a server*.
 
 - Each server gets random obfuscation values, inside the limits the AmneziaWG
   documentation gives (`Jc` 4–12, `Jmin` < `Jmax`, `S1`/`S2` 15–150 with S1 + 56 ≠ S2,
-  four distinct `H1`–`H4`). Every client config carries the same values; the Overview
-  shows them.
+  four distinct `H1`–`H4`). Every client config carries the same values; the Server
+  page shows them.
 - **Strongest** (AmneziaWG 2.0, the default) adds `S3`/`S4` and `H1`–`H4` ranges; every
   device needs a current AmneziaWG app. **Most compatible** (1.5) leaves those out and
   also works with older apps and the kernel module.
@@ -522,7 +537,7 @@ on a schedule.
 
 ### One server
 
-Every server's page (Server for OpenVPN, Overview for WireGuard and AmneziaWG) has
+Every server's Server page has
 *Backup*: a file with that server only, its keys and certificates, clients, settings,
 access rules and traffic history (`POST /api/v1/servers/{server}/backup` with
 `{"passphrase": "…"}`; the passphrase works as for the full backup below).

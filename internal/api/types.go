@@ -392,6 +392,14 @@ type Cert struct {
 	RevokeReason string    `json:"revoke_reason,omitempty"`
 	Current      bool      `json:"current"`
 	Kind         string    `json:"kind,omitempty"` // "client" or "server"
+	// Notes is the client's readable name ("Anna's phone"), kept in its ccd
+	// file; the certificate name stays the login.
+	Notes string `json:"notes,omitempty"`
+}
+
+// CertNotes is the body of PUT /v1/certs/{name}/notes.
+type CertNotes struct {
+	Notes string `json:"notes"`
 }
 
 // IssueCertRequest is the body of POST /v1/certs.
@@ -400,6 +408,8 @@ type IssueCertRequest struct {
 	Kind         string `json:"kind,omitempty"`       // "client" (default) or "server"
 	Passphrase   string `json:"passphrase,omitempty"` // encrypts the private key
 	ValidityDays int    `json:"validity_days,omitempty"`
+	// Notes: a readable name for the client (optional).
+	Notes string `json:"notes,omitempty"`
 }
 
 // RenewCertRequest is the body of POST /v1/certs/{name}/renew.
