@@ -28,6 +28,7 @@ server). Below, `…` stands for that prefix.
 | GET, DELETE | `…/certs/{name}` | get / delete |
 | POST | `…/certs/{name}/revoke`, `/unrevoke`, `/renew` | |
 | GET | `…/certs/{name}/ovpn` | download the `.ovpn` profile |
+| PUT | `…/certs/{name}/notes` | display name: `{"notes"}` (empty removes it) |
 | DELETE | `…/certs/{name}/sessions`, `…/sessions/{client_id}` | disconnect |
 | GET | `…/network` | VPN subnet, topology, server routes, static addresses in use |
 | GET, PUT | `…/certs/{name}/network` | `{"static_ip","full_tunnel","routes":[cidr],"lan":[cidr]}`: the client's own settings; response adds `warnings` and `named` (`[{"name","as":"route"\|"lan"}]`, the named networks it is part of) |
@@ -115,13 +116,14 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 | POST | `…/firewall/addresses` | `{"names":[...]}` | gives clients fixed VPN addresses |
 | POST | `…/setup` | wizard answers (`public_host`, `port`, `proto`, `subnet`, `dns`, `tls`, …) | creates PKI, keys, `server.conf`; 409 when it exists |
 | GET | `…/certs` | – | all entries (history included; `current` marks the newest per name) |
-| POST | `…/certs` | `{"name","kind"?,"passphrase"?,"validity_days"?}` | 201 cert |
+| POST | `…/certs` | `{"name","kind"?,"passphrase"?,"validity_days"?,"notes"?}` | 201 cert (`notes`: display name) |
 | GET | `…/certs/{name}` | – | current cert |
 | POST | `…/certs/{name}/revoke` | – | cert |
 | POST | `…/certs/{name}/unrevoke` | – | cert |
 | POST | `…/certs/{name}/renew` | `{"validity_days"?}` | new cert (same key; old one revoked as superseded) |
 | DELETE | `…/certs/{name}` | – | 204; revokes and deletes key material, stays in CRL |
 | GET | `…/certs/{name}/ovpn` | – | `.ovpn` profile (409 unless the cert is valid) |
+| PUT | `…/certs/{name}/notes` | `{"notes"}` | cert; sets the display name (`#TD_NOTE:` in the ccd file, empty removes it) |
 | POST | `…/crl` | – | 204; regenerates `crl.pem` |
 | GET | `…/sessions` | – | connected clients + server traffic counters |
 | DELETE | `…/sessions/{client_id}` | – | 204; disconnects one session |

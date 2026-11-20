@@ -117,3 +117,51 @@ func writeKeepMode(path string, data []byte) error {
 	}
 	return os.Rename(tmp, path)
 }
+
+// A client's readable name ("Anna's phone") is a comment line in its file,
+// next to the network and 2FA lines; OpenVPN ignores it.
+const notePrefix = "#TD_NOTE:"
+
+// MaxNote is the longest readable name.
+const MaxNote = 200
+
+// Note returns the readable name in a client's file content ("" if none).
+func Note(content string) string {
+	for _, l := range strings.Split(content, "\n") {
+		if strings.HasPrefix(l, notePrefix) {
+			return strings.TrimSpace(strings.TrimPrefix(l, notePrefix))
+		}
+	}
+	return ""
+}
+
+// SetNote returns content with the readable name replaced (or removed when
+// note is empty); every other line is kept.
+func SetNote(content, note string) string {
+	var out []string
+	for _, l := range strings.Split(content, "\n") {
+		if !strings.HasPrefix(l, notePrefix) {
+			out = append(out, l)
+		}
+	}
+	s := strings.TrimRight(strings.Join(out, "\n"), "\n")
+	if note = strings.TrimSpace(note); note != "" {
+		line := notePrefix + " " + note
+		if s == "" {
+			return line + "\n"
+		}
+		return line + "\n" + s + "\n"
+	}
+	if s == "" {
+		return ""
+	}
+	return s + "\n"
+}
+
+// CheckNote validates a readable name.
+func CheckNote(note string) error {
+	if len(note) > MaxNote || strings.ContainsAny(note, "\r\n") {
+		return fmt.Errorf("name: one line, at most %d characters", MaxNote)
+	}
+	return nil
+}

@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shuricksumy/trapdoor/internal/ccd"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/shuricksumy/trapdoor/internal/api"
@@ -29,6 +31,7 @@ func (s *Server) registerCertRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /certs/{name}/unrevoke", s.withPKI(s.handleUnrevokeCert))
 	mux.HandleFunc("POST /certs/{name}/renew", s.withPKI(s.handleRenewCert))
 	mux.HandleFunc("GET /certs/{name}/ovpn", s.withPKI(s.handleProfile))
+	mux.HandleFunc("PUT /certs/{name}/notes", s.withPKI(s.handleSetCertNotes))
 	mux.HandleFunc("POST /crl", s.withPKI(s.handleGenCRL))
 }
 
@@ -49,11 +52,39 @@ func (s *Server) handleListCerts(w http.ResponseWriter, r *http.Request) {
 		s.pkiError(w, err)
 		return
 	}
+	files, _ := s.ccd.All() // readable names; the list works without them
 	out := make([]api.Cert, 0, len(certs))
 	for _, c := range certs {
-		out = append(out, toAPICert(c))
+		ac := toAPICert(c)
+		ac.Notes = ccd.Note(files[c.Name])
+		out = append(out, ac)
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// handleSetCertNotes sets a client's readable name (empty removes it).
+func (s *Server) handleSetCertNotes(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	var req api.CertNotes
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	if err := ccd.CheckNote(req.Notes); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	c, err := s.PKI().Get(r.Context(), name)
+	if err != nil {
+		s.pkiError(w, err)
+		return
+	}
+	if err := s.ccd.Edit(name, func(cur string) (string, error) { return ccd.SetNote(cur, req.Notes), nil }); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	ac := toAPICert(c)
+	ac.Notes = strings.TrimSpace(req.Notes)
+	httpx.WriteJSON(w, http.StatusOK, ac)
 }
 
 func (s *Server) handleGetCert(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +93,11 @@ func (s *Server) handleGetCert(w http.ResponseWriter, r *http.Request) {
 		s.pkiError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, toAPICert(c))
+	ac := toAPICert(c)
+	if cur, err := s.ccd.Read(c.Name); err == nil {
+		ac.Notes = ccd.Note(cur)
+	}
+	httpx.WriteJSON(w, http.StatusOK, ac)
 }
 
 func (s *Server) handleIssueCert(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +107,10 @@ func (s *Server) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 	}
 	validity, err := validityFromDays(req.ValidityDays)
 	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := ccd.CheckNote(req.Notes); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -91,7 +130,15 @@ func (s *Server) handleIssueCert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("certificate issued", "name", c.Name, "serial", c.Serial)
-	httpx.WriteJSON(w, http.StatusCreated, toAPICert(c))
+	ac := toAPICert(c)
+	if strings.TrimSpace(req.Notes) != "" {
+		if err := s.ccd.Edit(c.Name, func(cur string) (string, error) { return ccd.SetNote(cur, req.Notes), nil }); err != nil {
+			s.log.Warn("readable name not saved", "name", c.Name, "err", err)
+		} else {
+			ac.Notes = strings.TrimSpace(req.Notes)
+		}
+	}
+	httpx.WriteJSON(w, http.StatusCreated, ac)
 }
 
 func (s *Server) handleRevokeCert(w http.ResponseWriter, r *http.Request) {

@@ -332,6 +332,12 @@ printf '#2FA OTP and/or static pass for auth.\n#2FA_KEY:%s\n#2FA_USER:dan\n#STAT
 connect "$(profile2fa dan dan "danpin$(totp "$HEXKEY" hex)")" "$WORK/c2fa-legacy.log" || fail "openvpn-ui style ccd login failed"
 log "openvpn-ui style 2FA entry (hex key, plain static password) still works"
 
+curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT -d '{"notes":"Dan'"'"'s laptop"}' "$WEB/api/v1/servers/openvpn/certs/dan/notes" | grep -q '"notes":"Dan'"'"'s laptop"' || fail "set display name"
+grep -q "^#TD_NOTE: Dan's laptop$" "$WORK/ccd/dan" && grep -q "^#2FA_KEY:$HEXKEY$" "$WORK/ccd/dan" && grep -q '^#STATIC_PASS:danpin$' "$WORK/ccd/dan" || fail "display name: ccd lines lost: $(cat "$WORK/ccd/dan")"
+connect "$(profile2fa dan dan "danpin$(totp "$HEXKEY" hex)")" "$WORK/c2fa-note.log" || fail "login failed after setting a display name"
+curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/certs" | grep -q '"notes":"Dan'"'"'s laptop"' || fail "display name not in the client list"
+log "display name kept in ccd next to the 2FA lines; OpenVPN and auth-verify ignore it"
+
 log "session history: alice's sessions and traffic were recorded"
 sleep 6
 curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/stats?preset=today" >"$WORK/stats.json" # as logged-in admin

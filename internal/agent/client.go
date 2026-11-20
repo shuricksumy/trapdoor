@@ -292,6 +292,13 @@ func (c *Client) SetFirewall(ctx context.Context, p api.FirewallPolicy) (api.Fir
 	return out, err
 }
 
+// SetCertNotes sets an OpenVPN client's readable name.
+func (c *Client) SetCertNotes(ctx context.Context, name, notes string) (api.Cert, error) {
+	var out api.Cert
+	err := c.doJSON(ctx, http.MethodPut, c.path("/certs/"+url.PathEscape(name)+"/notes"), api.CertNotes{Notes: notes}, &out)
+	return out, err
+}
+
 // Scripts returns the server's presets and own start / stop scripts.
 func (c *Client) Scripts(ctx context.Context) (api.Scripts, error) {
 	var out api.Scripts
