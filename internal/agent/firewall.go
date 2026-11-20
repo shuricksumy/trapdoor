@@ -71,7 +71,7 @@ func (s *Server) firewallState(p firewall.Policy) (api.Firewall, firewall.Result
 		return api.Firewall{}, firewall.Result{}, err
 	}
 	res := firewall.RenderChain(s.fwChain, p, firewall.Clients{IPs: ips, ClientToClient: srv.ClientToClient})
-	st := api.Firewall{Policy: p, Mode: s.firewallMode(), Warnings: res.Warnings, Missing: res.Missing, Rules: res.Rules}
+	st := api.Firewall{Policy: p, Mode: s.firewallMode(), Warnings: res.Warnings, Missing: res.Missing, Rules: res.Rules, ClientToClient: srv.ClientToClient}
 	if st.Warnings == nil {
 		st.Warnings = []string{}
 	}

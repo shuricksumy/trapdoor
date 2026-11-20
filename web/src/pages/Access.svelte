@@ -3,6 +3,7 @@
   import { api } from '../lib/api.js';
   import { toast, currentServer } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
+  import AccessDiagram from '../lib/AccessDiagram.svelte';
   import { setClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
 
   let state = $state(null); // last answer from the agent
@@ -173,6 +174,7 @@
         <span><strong>Block</strong><span class="hint">Clients reach only what a rule allows. Replies to allowed traffic always pass.</span></span>
       </label>
     </fieldset>
+    <AccessDiagram {policy} type={currentServer()?.type} id={currentServer()?.id} subnet={state.subnet} {net} fwMode={state.mode} c2c={state.client_to_client} />
     {#if policy.enabled && policy.default === 'deny' && saved && JSON.parse(saved).default !== 'deny'}
       <p class="banner warn">If you open this page through the VPN, add a rule that allows it first, or you lock yourself out.</p>
     {/if}
@@ -187,7 +189,7 @@
       <button class="btn small" onclick={assign} disabled={busy || dirty} title={dirty ? 'Save your changes first' : ''}>Give fixed addresses</button>
     </div>
   {/if}
-  {#each state.warnings.filter((w) => !w.includes('no fixed VPN address')) as w (w)}
+  {#each state.warnings.filter((w) => !w.includes('no fixed VPN address') && !w.includes('client-to-client')) as w (w)}
     <p class="banner warn">{w}</p>
   {/each}
 

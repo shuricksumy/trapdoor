@@ -112,7 +112,7 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 | GET | `/v1/backup` | – | tar of the agent's directories (`openvpn/`, `wireguard/`, `amneziawg/`, and `pki/`, `ccd/`, `openvpn-servers/` when they are elsewhere) |
 | GET | `…/info` | – | id, type, name, dirs, `pki_ready`, CA, OpenVPN version |
 | GET | `…/setup` | – | `needed`, `has_pki`, defaults, container-fixed port/proto |
-| GET / PUT | `…/firewall` | access rules `{enabled, default, rules[]}` | rules, generated iptables text, `applied`, warnings |
+| GET / PUT | `…/firewall` | access rules `{enabled, default, rules[]}` | rules, generated iptables text, `applied`, warnings, `client_to_client` (OpenVPN passes traffic between clients itself) |
 | POST | `…/firewall/addresses` | `{"names":[...]}` | gives clients fixed VPN addresses |
 | POST | `…/setup` | wizard answers (`public_host`, `port`, `proto`, `subnet`, `dns`, `tls`, …) | creates PKI, keys, `server.conf`; 409 when it exists |
 | GET | `…/certs` | – | all entries (history included; `current` marks the newest per name) |

@@ -681,6 +681,9 @@ type Firewall struct {
 	Missing  []string       `json:"missing"` // clients in rules without a fixed VPN address
 	Subnet   string         `json:"subnet,omitempty"`
 	Rules    string         `json:"rules"` // the generated iptables rules
+	// ClientToClient: OpenVPN's server.conf has client-to-client, so traffic
+	// between clients bypasses the rules (reported also while they are off).
+	ClientToClient bool `json:"client_to_client,omitempty"`
 }
 
 // AssignAddresses asks for fixed VPN addresses for clients.
