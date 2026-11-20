@@ -710,6 +710,20 @@ can be turned on or off separately from email. *Save and send a test* checks it.
 kept in the web database, never shown again, and never written to the log (errors leave it
 out). The web process needs to reach `api.telegram.org`.
 
+## Uptime
+
+Connected → *Uptime*: every client like a status page, from the session history.
+
+- A bar per hour (*24 hours*, *7 days*) or per day (*30 days*): dark green when the client was
+  online (almost) all of it, light green for part of it, grey when offline. Hover for the time
+  online. Next to it the share of the period it was online and when it was last seen.
+- Clients that never connected are listed too; connected ones come first.
+- Click a client for its calendar: a month, each day shaded by its time online (relative to
+  its busiest day) with the hours, earlier months with ←. A day lists its sessions: from, to,
+  how long, from which address.
+- Days are days in `TD_TZ`. WireGuard / AmneziaWG count a client as gone 3 minutes after its
+  last handshake, so their sessions end a little later than the device went away.
+
 ## Client online / offline
 
 A message when a client connects or disconnects, by email and / or Telegram:

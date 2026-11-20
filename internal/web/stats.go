@@ -105,3 +105,45 @@ func (s *Server) queryError(w http.ResponseWriter, err error) {
 	s.Log.Error("stats", "err", err)
 	httpx.WriteError(w, http.StatusInternalServerError, "internal error")
 }
+
+// handleUptime is GET /api/v1/servers/{server}/history/uptime: every
+// client's time online by hour (range=24h, 7d) or by day (range=30d, or
+// month=YYYY-MM for a calendar), in the web's time zone.
+func (s *Server) handleUptime(w http.ResponseWriter, r *http.Request) {
+	loc := s.Location
+	if loc == nil {
+		loc = time.UTC
+	}
+	now := s.Now().In(loc)
+	q := r.URL.Query()
+	var from, to time.Time
+	step := history.StepHour
+	if m := q.Get("month"); m != "" {
+		first, err := time.ParseInLocation("2006-01", m, loc)
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "month: like 2026-11")
+			return
+		}
+		from, to, step = first, first.AddDate(0, 1, 0), history.StepDay
+	} else {
+		nextHour := now.Truncate(time.Hour).Add(time.Hour)
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		switch q.Get("range") {
+		case "", "24h":
+			from, to = nextHour.Add(-24*time.Hour), nextHour
+		case "7d":
+			from, to = nextHour.Add(-7*24*time.Hour), nextHour
+		case "30d":
+			from, to, step = today.AddDate(0, 0, -29), today.AddDate(0, 0, 1), history.StepDay
+		default:
+			httpx.WriteError(w, http.StatusBadRequest, "range: 24h, 7d or 30d")
+			return
+		}
+	}
+	rep, err := s.stats(r).Uptime(r.Context(), from, to, step, loc, s.Now())
+	if err != nil {
+		s.queryError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, rep)
+}

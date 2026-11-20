@@ -164,6 +164,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/servers/{server}/stats", s.handleStats)
 	api.HandleFunc("GET /api/v1/servers/{server}/stats.csv", s.handleStatsCSV)
 	api.HandleFunc("GET /api/v1/servers/{server}/history/sessions", s.handleHistorySessions)
+	api.HandleFunc("GET /api/v1/servers/{server}/history/uptime", s.handleUptime)
 	s.registerCertRoutes(api)
 	s.registerServerRoutes(api)
 	s.registerWireGuardRoutes(api)

@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { api, poll } from '../lib/api.js';
   import { bytes, duration, dateTime } from '../lib/format.js';
-  import { toast, currentServer } from '../lib/state.svelte.js';
+  import { toast, currentServer, route, setQuery } from '../lib/state.svelte.js';
+  import UptimeView from '../lib/UptimeView.svelte';
   import { loadClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
 
   const kickable = $derived(!['wireguard', 'amneziawg'].includes(currentServer()?.type));
@@ -39,6 +40,10 @@
       toast(e.message, 'bad');
     }
   }
+
+  // Now: who is connected; Uptime: when every client was online (?tab=uptime)
+  let tab = $state(route.query.get('tab') === 'uptime' ? 'uptime' : 'now');
+  $effect(() => setQuery({ tab: tab === 'now' ? '' : tab }));
 </script>
 
 <header class="head">
@@ -46,6 +51,14 @@
   <p class="muted">Live from {kickable ? 'OpenVPN' : (currentServer()?.type === 'amneziawg' ? 'AmneziaWG' : 'WireGuard') + ' (a client counts as connected while its last handshake is recent)'}, refreshed every 10 seconds.</p>
 </header>
 
+<div class="tabs" role="tablist" aria-label="View">
+  <button role="tab" aria-selected={tab === 'now'} onclick={() => (tab = 'now')}>Now</button>
+  <button role="tab" aria-selected={tab === 'uptime'} onclick={() => (tab = 'uptime')}>Uptime</button>
+</div>
+
+{#if tab === 'uptime'}
+  <UptimeView />
+{:else}
 {#if error}<div class="banner bad" role="alert">Live sessions are unavailable: {error}</div>{/if}
 
 <section class="panel">
@@ -119,9 +132,14 @@
     </div>
   </section>
 {/if}
+{/if}
 
 <style>
-  .head { margin-bottom: var(--space-5); }
+  .head { margin-bottom: var(--space-4); }
+  .tabs { display: flex; gap: 2px; margin-bottom: var(--space-4); }
+  .tabs button { height: 34px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-s); background: transparent; color: var(--ink-2); font: inherit; font-weight: 500; cursor: pointer; }
+  .tabs button:hover { background: var(--sunken); color: var(--ink); }
+  .tabs button[aria-selected='true'] { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
   .head p { margin-top: var(--space-1); }
   .banner { margin-bottom: var(--space-3); }
   .act { text-align: right; }
