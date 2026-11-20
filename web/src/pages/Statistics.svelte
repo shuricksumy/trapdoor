@@ -3,6 +3,7 @@
   import { bytes, duration } from '../lib/format.js';
   import { route, setQuery } from '../lib/state.svelte.js';
   import BarChart from '../lib/BarChart.svelte';
+  import { setClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
 
   const presets = [
     { key: 'last_30_days', label: 'Last 30 days' },
@@ -59,7 +60,10 @@
 
   $effect(() => {
     api('/certs')
-      .then((cs) => (clients = [...new Set(cs.filter((c) => c.kind !== 'server').map((c) => c.name))].sort()))
+      .then((cs) => {
+        setClientNames(cs);
+        clients = [...new Set(cs.filter((c) => c.kind !== 'server').map((c) => c.name))].sort((a, b) => clientName(a).localeCompare(clientName(b)));
+      })
       .catch(() => {});
   });
 
@@ -112,7 +116,7 @@
       <span>Client</span>
       <select bind:value={name}>
         <option value="">All clients</option>
-        {#each clients as c (c)}<option value={c}>{c}</option>{/each}
+        {#each clients as c (c)}<option value={c}>{clientName(c)}</option>{/each}
       </select>
     </label>
   </div>
@@ -159,7 +163,7 @@
             <tbody>
               {#each report.users as u (u.name)}
                 <tr>
-                  <td><button class="link" onclick={() => (name = u.name)} title="Show only {u.name}">{u.name}</button></td>
+                  <td><button class="link" onclick={() => (name = u.name)} title="Show only {clientName(u.name)}{clientName(u.name) !== u.name ? ` (${u.name})` : ''}">{clientName(u.name)}</button></td>
                   <td class="num hide-s">{bytes(u.download)}</td>
                   <td class="num hide-s">{bytes(u.upload)}</td>
                   <td class="num nowrap"><strong>{bytes(u.upload + u.download)}</strong></td>

@@ -3,6 +3,7 @@
   import { api, poll } from '../lib/api.js';
   import { bytes, duration, dateTime } from '../lib/format.js';
   import { toast, currentServer } from '../lib/state.svelte.js';
+  import { loadClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
 
   const kickable = $derived(!['wireguard', 'amneziawg'].includes(currentServer()?.type));
   let live = $state(null);
@@ -24,12 +25,15 @@
       /* history is optional here */
     }
   }
-  onMount(() => poll(load, 10000));
+  onMount(() => {
+    loadClientNames();
+    return poll(load, 10000);
+  });
 
   async function kick(s) {
     try {
       await api(`/sessions/${s.client_id}`, { method: 'DELETE' });
-      toast(`Disconnected ${s.name}. Their client reconnects on its own unless you revoke it.`);
+      toast(`Disconnected ${clientName(s.name)}. Their client reconnects on its own unless you revoke it.`);
       await load();
     } catch (e) {
       toast(e.message, 'bad');
@@ -65,7 +69,7 @@
         <tbody>
           {#each live.sessions as s (s.client_id)}
             <tr>
-              <td><span class="pill ok">{s.name}</span></td>
+              <td><span class="pill ok" title={clientTitle(s.name)}>{clientName(s.name)}</span></td>
               <td class="mono">{s.virtual_address}</td>
               <td class="mono hide-s faint">{s.real_address}</td>
               <td title={dateTime(s.connected_since)}>{duration((now - new Date(s.connected_since)) / 1000)}</td>
@@ -102,7 +106,7 @@
         <tbody>
           {#each recent.slice(0, 20) as s, i (i)}
             <tr>
-              <td>{s.name}</td>
+              <td title={clientTitle(s.name)}>{clientName(s.name)}</td>
               <td>{dateTime(s.connected_at)}</td>
               <td>{dateTime(s.disconnected_at)}</td>
               <td>{duration(s.duration_seconds)}</td>

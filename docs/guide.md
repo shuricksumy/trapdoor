@@ -98,8 +98,10 @@ copy the edited directory there.
 
 A client's certificate name (`anna`) is its login and cannot change, but it can have a
 display name ("Anna's phone"): set it in *New client* or later with Clients → More →
-*Display name*. The list shows it instead of the login (the login stays next to it, and
-search finds both). It is a `#TD_NOTE:` line in the client's `ccd` file, next to the
+*Display name*. Every page shows it instead of the login: the client list (with the login
+next to it; search finds both), the Overview, Connected, Traffic, Network and Access (the
+login in the tooltip). Clients without one show their login. CSV exports and the API keep
+the login. It is a `#TD_NOTE:` line in the client's `ccd` file, next to the
 network and two-factor lines, so it moves with the server, its backups and copies;
 OpenVPN and openvpn-ui ignore it. One line, at most 200 characters.
 

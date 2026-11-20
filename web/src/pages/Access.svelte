@@ -3,6 +3,7 @@
   import { api } from '../lib/api.js';
   import { toast, currentServer } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
+  import { setClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
 
   let state = $state(null); // last answer from the agent
   let policy = $state(null); // edited copy
@@ -37,12 +38,14 @@
       if (isWG) {
         const [fw, peers] = await Promise.all([api('/firewall'), api('/peers').catch(() => [])]);
         take(fw);
+        setClientNames([]);
         clients = peers.filter((p) => !p.disabled).map((p) => p.name).sort();
         net = wgNetwork(peers, fw);
       } else {
         const [fw, cs, n] = await Promise.all([api('/firewall'), api('/certs').catch(() => []), api('/network').catch(() => null)]);
         take(fw);
-        clients = cs.filter((c) => c.current && c.kind !== 'server' && c.status !== 'revoked').map((c) => c.name).sort();
+        setClientNames(cs);
+        clients = cs.filter((c) => c.current && c.kind !== 'server' && c.status !== 'revoked').map((c) => c.name).sort((a, b) => clientName(a).localeCompare(clientName(b)));
         net = n;
       }
       loadError = '';
@@ -200,7 +203,7 @@
           <span class="action {r.action}">{r.action === 'allow' ? 'Allow' : 'Block'}</span>
           <span class="desc">
             <span class="who">
-              {#if r.client}<strong>{r.client}</strong>{#if ipOf(r.client)}<span class="tag mono faint">{ipOf(r.client)}</span>{:else}<span class="tag warn-text">no fixed address</span>{/if}{:else}<strong>All clients</strong>{/if}
+              {#if r.client}<strong title={clientTitle(r.client)}>{clientName(r.client)}</strong>{#if ipOf(r.client)}<span class="tag mono faint">{ipOf(r.client)}</span>{:else}<span class="tag warn-text">no fixed address</span>{/if}{:else}<strong>All clients</strong>{/if}
             </span>
             <span class="muted">to <span class="mono">{r.to ? r.to.replace(/\/32$/, '') : 'anywhere'}</span>, {what(r)}</span>
             {#if r.note}<span class="note">{r.note}</span>{/if}
@@ -251,8 +254,8 @@
       <span>From</span>
       <select bind:value={edit.rule.client}>
         <option value="">All clients</option>
-        {#each clients as c (c)}<option value={c}>{c}</option>{/each}
-        {#if edit.rule.client && !clients.includes(edit.rule.client)}<option value={edit.rule.client}>{edit.rule.client}</option>{/if}
+        {#each clients as c (c)}<option value={c}>{clientName(c)}</option>{/each}
+        {#if edit.rule.client && !clients.includes(edit.rule.client)}<option value={edit.rule.client}>{clientName(edit.rule.client)}</option>{/if}
       </select>
       {#if edit.rule.client && !ipOf(edit.rule.client)}<span class="hint">This client needs a fixed VPN address; you can give it one after saving.</span>{/if}
     </label>

@@ -1,4 +1,5 @@
 <script>
+  import { clientName } from './names.svelte.js';
   import { api } from './api.js';
   import { toast } from './state.svelte.js';
   import Dialog from './Dialog.svelte';
@@ -120,7 +121,7 @@
   }
 </script>
 
-<Dialog bind:open title="Network for {name}">
+<Dialog bind:open title="Network for {clientName(name)}">
   {#if error}<div class="banner bad" role="alert">{error}</div>{/if}
   {#if !form && !error}
     <p class="muted">Loading…</p>
@@ -182,7 +183,7 @@
         {#if canBehind.length}
           <select class="named-pick" value="" onchange={(e) => { const v = e.currentTarget.value; e.currentTarget.value = ''; if (v) joinBehind(v); }}>
             <option value="">Add a named network behind this client…</option>
-            {#each canBehind as n (n.name)}<option value={n.name}>{n.name} ({n.networks.join(', ')}){n.via ? ` · behind ${n.via}` : ''}</option>{/each}
+            {#each canBehind as n (n.name)}<option value={n.name}>{n.name} ({n.networks.join(', ')}){n.via ? ` · behind ${clientName(n.via)}` : ''}</option>{/each}
           </select>
         {/if}
         <div class="add">

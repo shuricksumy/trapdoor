@@ -5,6 +5,7 @@
   import { settings, toast, servers } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
   import TodayTrace from '../lib/TodayTrace.svelte';
+  import { setClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
 
   let status = $state(null);
 
@@ -27,7 +28,10 @@
     if (st.status === 'fulfilled') status = st.value;
     if (hs.status === 'fulfilled') history = hs.value;
     if (rep.status === 'fulfilled') today = rep.value;
-    if (cs.status === 'fulfilled') certs = cs.value;
+    if (cs.status === 'fulfilled') {
+      certs = cs.value;
+      setClientNames(certs);
+    }
     try {
       live = await api('/sessions');
       liveError = '';
@@ -107,7 +111,7 @@
     <a class="small" href="/statistics?preset=today">Traffic details</a>
   </div>
   <div class="panel-body">
-    <TodayTrace sessions={history} {now} />
+    <TodayTrace sessions={history} {now} label={clientName} />
   </div>
 </section>
 
@@ -125,7 +129,7 @@
       <ul class="list">
         {#each live.sessions as s (s.client_id)}
           <li>
-            <span class="pill ok">{s.name}</span>
+            <span class="pill ok" title={clientTitle(s.name)}>{clientName(s.name)}</span>
             <span class="mono faint">{s.virtual_address}</span>
             <span class="muted small right">{duration((now - new Date(s.connected_since)) / 1000)}, {bytes(s.bytes_sent + s.bytes_received)}</span>
           </li>
@@ -151,7 +155,7 @@
         {/if}
         {#each attention as { c, st } (c.serial)}
           <li>
-            <span class="pill {st.tone}">{c.name}</span>
+            <span class="pill {st.tone}" title={clientTitle(c.name)}>{clientName(c.name)}</span>
             {#if c.kind === 'server'}<span class="faint small">server certificate</span>{/if}
             <span class="muted small right">{st.key === 'expired' ? 'Expired' : 'Expires'} {relative(c.not_after)}</span>
             {#if c.kind === 'server'}
