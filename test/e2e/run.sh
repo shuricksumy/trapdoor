@@ -263,6 +263,7 @@ c = json.load(open(sys.argv[1]))
 s = c["settings"]
 s["dns"] = ["9.9.9.9"]
 s["push_routes"] = ["192.168.77.0/24"]
+s["routes"] = s.get("routes", []) + ["192.168.78.0/24"]  # Network → Routing: into the VPN
 print(json.dumps({"base_version": c["version"], "settings": s}))
 PY
 webj -X PUT -d @"$WORK/sc-new.json" "$WEB/api/v1/servers/openvpn/server/config" >"$WORK/sc-saved.json" || fail "save server config"
@@ -274,7 +275,27 @@ grep -q '"ok":true' "$WORK/restart.json" || fail "restart: $(cat "$WORK/restart.
 connect "$WORK/alice.ovpn" "$WORK/client-pushed.log" || fail "alice could not connect after restart"
 grep -q "dhcp-option DNS 9.9.9.9" "$WORK/client-pushed.log" || fail "DNS not pushed"
 grep -q "192.168.77.0" "$WORK/client-pushed.log" || fail "route not pushed"
-log "OpenVPN restarted with the new config; alice got DNS 9.9.9.9 and 192.168.77.0/24"
+ip route show 192.168.78.0/24 | grep -q "dev tun" || fail "no kernel route into the VPN for 192.168.78.0/24: $(ip route)"
+log "OpenVPN restarted with the new config; alice got DNS 9.9.9.9 and 192.168.77.0/24; the server routes 192.168.78.0/24 into the tunnel"
+# Network → Routing's switches, rendered without saving (a full tunnel would move this host's default route)
+python3 - "$WORK/sc-saved.json" >"$WORK/sc-switches.json" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1]))
+s = c["settings"]
+s["full_tunnel"] = True
+s["client_to_client"] = True
+print(json.dumps({"settings": s}))
+PY
+webj -X POST -d @"$WORK/sc-switches.json" "$WEB/api/v1/servers/openvpn/server/config/check" >"$WORK/sc-check.json" || fail "check config"
+python3 - "$WORK/sc-check.json" <<'PY' || fail "routing switches not rendered: $(cat "$WORK/sc-check.json")"
+import json, sys
+raw = json.load(open(sys.argv[1]))["raw"]
+assert 'push "redirect-gateway def1' in raw, raw
+assert "\nclient-to-client" in raw, raw
+assert 'route 192.168.78.0 255.255.255.0' in raw and 'push "route 192.168.77.0 255.255.255.0"' in raw, raw
+PY
+! grep -q "^client-to-client" "$WORK/server.conf" || fail "a check changed server.conf"
+log "full tunnel and client-to-client render into server.conf; a check saves nothing"
 code=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT \
 	-d "{\"base_version\":\"$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$WORK/sc.json")\",\"raw\":\"port 1\\n\"}" "$WEB/api/v1/servers/openvpn/server/config")
 [[ $code == 422 || $code == 409 ]] || fail "broken/stale config accepted ($code)"
@@ -419,6 +440,31 @@ PY
 	wgfw '{"enabled":false,"default":"deny","rules":[]}' >/dev/null
 	wait_for 5 wgping || fail "ping blocked although the rules are off"
 	iptables -S TD-FWD | grep -q -- "-j RETURN" || fail "OpenVPN chain changed by WireGuard rules"
+	log "WireGuard routing: the default allowed IPs reach new configs; a client's network changes the interface at once"
+	api "$API/v1/servers/tdwg0/settings" >"$WORK/wg-settings.json"
+	python3 - "$WORK/wg-settings.json" >"$WORK/wg-settings-new.json" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1]))
+s["allowed_ips"] = s["allowed_ips"] + ["192.168.79.0/24"]  # Network → Routing
+print(json.dumps(s))
+PY
+	api -X PUT -d @"$WORK/wg-settings-new.json" "$API/v1/servers/tdwg0/settings" >/dev/null || fail "save WireGuard defaults"
+	api "$API/v1/servers/tdwg0/peers/wgalice/conf" | grep -q "^AllowedIPs = .*192.168.79.0/24" || fail "default allowed IPs not in the client config"
+	# The Network page's client dialog: a LAN behind her plus her own settings, sent back whole.
+	api -X PUT -d '{"lan":["192.168.80.0/24"],"settings":{"notes":"e2e router","dns":["9.9.9.9"]}}' "$API/v1/servers/tdwg0/peers/wgalice" >/dev/null || fail "set wgalice's network"
+	key=$(api "$API/v1/servers/tdwg0/peers/wgalice" | python3 -c 'import json,sys; print(json.load(sys.stdin)["public_key"])')
+	wg show tdwg0 allowed-ips | grep -F "$key" | grep -q "192.168.80.0/24" || fail "LAN not on the interface: $(wg show tdwg0 allowed-ips)"
+	api -X PUT -d '{"lan":[],"settings":{"notes":"e2e router","dns":["9.9.9.9"],"allowed_ips":["10.97.0.0/24"]}}' "$API/v1/servers/tdwg0/peers/wgalice" >"$WORK/wg-peer.json" || fail "change wgalice's network"
+	python3 - "$WORK/wg-peer.json" <<'PY' || fail "wgalice after the change: $(cat "$WORK/wg-peer.json")"
+import json, sys
+p = json.load(open(sys.argv[1]))
+assert p["notes"] == "e2e router" and p["dns"] == ["9.9.9.9"] and p["allowed_ips"] == ["10.97.0.0/24"], p
+assert not p.get("lan"), p
+PY
+	! wg show tdwg0 allowed-ips | grep -q "192.168.80.0/24" || fail "removed LAN still on the interface"
+	wait_for 5 wgping || fail "wgalice lost the tunnel after her network changed"
+	api -X PUT -d '{"lan":[],"settings":{"notes":""}}' "$API/v1/servers/tdwg0/peers/wgalice" >/dev/null
+	api -X PUT -d @"$WORK/wg-settings.json" "$API/v1/servers/tdwg0/settings" >/dev/null || fail "restore WireGuard defaults"
 	log "wgalice connected and shows up live; disable cuts her off without restarting the interface"
 	port_before=$(wg show tdwg0 listen-port)
 	api -X PUT -d '{"disabled":true}' "$API/v1/servers/tdwg0/peers/wgalice" >/dev/null || fail "disable"

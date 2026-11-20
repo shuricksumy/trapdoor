@@ -7,7 +7,7 @@
   import { api } from './api.js';
   import { toast } from './state.svelte.js';
   import { clientName } from './names.svelte.js';
-  import { normalize, overlaps, covers } from './networkMap.js';
+  import { checkNetwork, covers } from './networkMap.js';
 
   // cfg: GET /server/config; srv: GET /network; map: buildMap(); onsaved(cfg)
   let { cfg, srv, map, onsaved } = $props();
@@ -29,18 +29,12 @@
   let error = $state({ push_routes: '', routes: '' });
   let note = $state({ push_routes: '', routes: '' }); // e.g. "Added as …" when the host bits were cleared
   function add(kind) {
-    const raw = input[kind].trim();
-    if (!raw) return;
-    note[kind] = '';
-    const n = normalize(raw);
-    if (!n) return (error[kind] = `${raw} is not an IPv4 network like 192.168.1.0/24`);
-    if (n === '0.0.0.0/0') return (error[kind] = 'For all traffic use "Send all internet traffic" above');
-    if (srv?.subnet && overlaps(n, srv.subnet)) return (error[kind] = `${n} overlaps the VPN network ${srv.subnet}`);
-    if (draft[kind].includes(n)) return (error[kind] = `${n} is already there`);
-    draft[kind] = [...draft[kind], n];
+    const r = checkNetwork(input[kind], { list: draft[kind], subnet: srv?.subnet });
+    error[kind] = r.error ?? '';
+    note[kind] = r.note ?? '';
+    if (!r.value) return;
+    draft[kind] = [...draft[kind], r.value];
     input[kind] = '';
-    error[kind] = '';
-    note[kind] = raw.includes('/') && n !== raw ? `Added as ${n}` : '';
   }
   const remove = (kind, r) => (draft[kind] = draft[kind].filter((x) => x !== r));
   const keydown = (e, kind) => e.key === 'Enter' && (e.preventDefault(), add(kind));
