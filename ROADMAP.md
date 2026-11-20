@@ -104,6 +104,11 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
       own start / stop scripts run by the vpn container; editable in the UI with `TD_SCRIPTS=on`
 - [x] Display names for OpenVPN clients (`#TD_NOTE:` in ccd); the same Overview and Server
       pages for every server type, Overview opens after switching servers
+- [x] Display names on every page (Overview, Connected, Traffic, Network, Access)
+- [x] Access diagram: what the rules mean per destination, a switch for each (writes the rule)
+- [x] Network page for every server type: map of who reaches what, *Needs attention* with
+      fixes (missing route, LAN nobody reaches, overlapping LANs), tabs for clients, routing
+      (moved from the Server page) and named networks; WireGuard client network in place
 - [ ] Audit log
 - [ ] easyrsa `vars` in the native PKI: certificate name fields (`EASYRSA_DN` org mode:
       country, province, city, org, email, OU), key type and size, digest, CA / certificate /

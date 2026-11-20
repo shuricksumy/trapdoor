@@ -241,6 +241,8 @@ and `phone`. Manage them under Clients → Named networks, or with
 
 Everything about routing is on one page (menu → Network), the same for every server type:
 
+<img src="screenshots/network.png" width="720">
+
 - **Map**: clients on the left (routers first, online ones with a green line), the server in
   the middle, the networks on the right: each one through the server or behind a client,
   with who reaches it ("every client", names, or "nobody yet"), and the internet (which
