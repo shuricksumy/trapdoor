@@ -1,12 +1,10 @@
 <script>
+  import { destinations, toggle as flip } from './accessRules.js';
   // What the access settings mean, drawn: a client, the server's filter and
   // where traffic goes. It follows the unsaved policy and edits it: clicking a
   // destination switches it between allowed and blocked for every client.
   //
-  // A destination's switch is a plain rule for all clients, any protocol, to
-  // that network ("quick rule"), kept after the rules for single clients so
-  // those still win. The internet is everything no rule matches, so its switch
-  // is the default; the other destinations keep their state when it flips.
+  // How a switch turns into rules: accessRules.js.
   // type: openvpn | wireguard | amneziawg; net: the Access page's network;
   // fwMode: direct | file | off (TD_FIREWALL); c2c: OpenVPN client-to-client is on.
   let { policy, type = 'openvpn', id = '', subnet = '', net = null, fwMode = 'direct', c2c = false } = $props();
@@ -19,65 +17,23 @@
   const on = $derived(policy.enabled);
   // client-to-client: OpenVPN passes traffic between clients itself, past the rules
   const bypass = $derived(c2c && !wg);
-  const allowed = (action) => action === 'allow';
-
   const routed = $derived([...new Set([...(net?.routes ?? []), ...Object.values(net?.client_lans ?? {}).flat()])]);
-  const targets = $derived([
-    { key: 'server', name: 'This server', to: net?.server_ip ? [net.server_ip] : [], sub: net?.server_ip || 'address not known' },
-    { key: 'clients', name: 'Other VPN clients', to: subnet ? [subnet] : [], sub: subnet || 'the VPN network' },
-    { key: 'routed', name: 'Networks it routes', to: routed, sub: routed.length ? routed.join(', ') : 'none set up' },
-  ]);
-
-  // the agent saves one address as a /32
-  const same = (to, t) => !!t && to.some((x) => x.replace(/\/32$/, '') === t.replace(/\/32$/, ''));
-  const isQuick = (r) => !r.client && (!r.proto || r.proto === 'any') && !r.ports;
-  const quickFor = (to) => policy.rules.filter((r) => isQuick(r) && same(to, r.to));
-  // Other rules that also decide about a destination (single clients, ports, "anywhere").
-  const othersFor = (to) => policy.rules.filter((r) => !(isQuick(r) && same(to, r.to)) && (!r.to || same(to, r.to))).length;
-  const stateOf = (to) => {
-    const q = quickFor(to);
-    if (q.length) return allowed(q[0].action);
-    // the server's address is inside the VPN network: a rule for that covers it
-    if (subnet && to.length === 1 && to[0] === net?.server_ip && !bypass) return stateOf([subnet]);
-    return allowed(policy.default);
+  const ctx = $derived({ serverIp: net?.server_ip, subnet, routed, bypass });
+  const info = {
+    server: { name: 'This server', sub: () => net?.server_ip || 'address not known' },
+    clients: { name: 'Other VPN clients', sub: () => subnet || 'the VPN network' },
+    routed: { name: 'Networks it routes', sub: () => (routed.length ? routed.join(', ') : 'none set up') },
+    internet: { name: 'Internet', sub: () => 'and everything else' },
   };
-
-  const dests = $derived([
-    ...targets.map((t) => {
-      const by = t.key === 'clients' && bypass;
-      return { ...t, ok: by || stateOf(t.to), more: othersFor(t.to), usable: t.to.length > 0 && !by, bypass: by, sub: by ? 'client-to-client is on' : t.sub };
-    }),
-    { key: 'internet', name: 'Internet', sub: 'and everything else', ok: allowed(policy.default), more: policy.rules.filter((r) => !r.to).length, usable: true },
-  ]);
-
-  // Rewrite the quick rules for the wanted state of each destination. They go
-  // in a fixed order: the server's address lies inside the VPN network, so its
-  // rule comes first and is written whenever the VPN network has one.
-  function apply(want) {
-    const def = allowed(policy.default);
-    const all = targets.flatMap((t) => t.to);
-    const quick = [];
-    // keep the notes written on these rules in the editor
-    const notes = Object.fromEntries(policy.rules.filter((r) => isQuick(r) && r.note && same(all, r.to)).map((r) => [r.to.replace(/\/32$/, ''), r.note]));
-    for (const t of targets) {
-      if (t.key === 'clients' && bypass) continue; // OpenVPN passes it itself
-      const need = want[t.key] !== def || (t.key === 'server' && !bypass && want.clients !== def);
-      if (need) for (const to of t.to) quick.push({ action: want[t.key] ? 'allow' : 'deny', to, ...(notes[to] ? { note: notes[to] } : {}) });
-    }
-    const keep = policy.rules.filter((r) => !(isQuick(r) && same(all, r.to)));
-    // after the rules for single clients, before any rule for "anywhere"
-    const at = keep.findIndex((r) => !r.to);
-    policy.rules = at < 0 ? [...keep, ...quick] : [...keep.slice(0, at), ...quick, ...keep.slice(at)];
-  }
-  const current = () => Object.fromEntries(targets.map((t) => [t.key, stateOf(t.to)]));
+  const dests = $derived(
+    destinations(policy, ctx).map((d) => ({ ...d, name: info[d.key].name, sub: d.bypass ? 'client-to-client is on' : info[d.key].sub() })),
+  );
 
   function toggle(d) {
     if (!on || !d.usable) return;
-    const want = current();
-    // The internet is the default; the other destinations keep what they do now.
-    if (d.key === 'internet') policy.default = d.ok ? 'deny' : 'allow';
-    else want[d.key] = !d.ok;
-    apply(want);
+    const next = flip(policy, ctx, d.key);
+    policy.default = next.default;
+    policy.rules = next.rules;
   }
   const key = (e, d) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle(d));
 

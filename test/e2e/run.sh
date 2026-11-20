@@ -237,6 +237,16 @@ iptables -S TD-FWD | grep -q -- "-s 10.99.0.50/32 -d 10.99.0.1/32 -p icmp -j ACC
 wait_for 5 nsping || fail "allowed ping blocked"
 fw '{"enabled":true,"default":"allow","rules":[{"client":"alice","proto":"icmp","action":"deny"}]}' >/dev/null
 ! nsping || fail "ping passes although alice's ICMP is blocked"
+# The Access page's switches write rules for all clients (no client, any protocol); the
+# server's address comes before the VPN network's because it lies inside it.
+fw '{"enabled":true,"default":"allow","rules":[{"to":"10.99.0.1","action":"deny"}]}' >/dev/null
+iptables -S TD-FWD | grep -q -- "-d 10.99.0.1/32 -j REJECT" || fail "rule for all clients missing: $(iptables -S TD-FWD)"
+! nsping || fail "ping passes although the server is blocked for all clients"
+fw '{"enabled":true,"default":"allow","rules":[{"to":"10.99.0.0/24","action":"deny"}]}' >/dev/null
+! nsping || fail "ping passes although the VPN network (with the server in it) is blocked"
+fw '{"enabled":true,"default":"deny","rules":[{"to":"10.99.0.1","action":"allow"},{"to":"10.99.0.0/24","action":"deny"}]}' >/dev/null
+wait_for 5 nsping || fail "the server's allow rule ahead of the VPN network's block does not win"
+log "switch-style rules for all clients: server, VPN network, default"
 fw '{"enabled":false,"default":"deny","rules":[]}' >/dev/null
 wait_for 5 nsping || fail "ping blocked although the rules are off"
 [[ $(iptables -S TD-FWD | tail -1) == "-A TD-FWD -j RETURN" ]] || fail "disabled chain: $(iptables -S TD-FWD)"
@@ -402,6 +412,10 @@ PY
 	wgfw '{"enabled":true,"default":"deny","rules":[{"client":"wgalice","to":"10.97.0.1","proto":"icmp","action":"allow"}]}' >"$WORK/wgfw2.json"
 	iptables -S TD-tdwg0 | grep -q -- "-s 10.97.0.2/32 -d 10.97.0.1/32 -p icmp -j ACCEPT" || fail "wgalice's rule missing: $(iptables -S TD-tdwg0)"
 	wait_for 5 wgping || fail "allowed ping blocked"
+	wgfw '{"enabled":true,"default":"allow","rules":[{"to":"10.97.0.1","action":"deny"}]}' >/dev/null
+	! wgping || fail "ping passes although the server is blocked for all WireGuard clients"
+	wgfw '{"enabled":true,"default":"deny","rules":[{"to":"10.97.0.1","action":"allow"},{"to":"10.97.0.0/24","action":"deny"}]}' >/dev/null
+	wait_for 5 wgping || fail "the server's allow rule ahead of the VPN network's block does not win"
 	wgfw '{"enabled":false,"default":"deny","rules":[]}' >/dev/null
 	wait_for 5 wgping || fail "ping blocked although the rules are off"
 	iptables -S TD-FWD | grep -q -- "-j RETURN" || fail "OpenVPN chain changed by WireGuard rules"
