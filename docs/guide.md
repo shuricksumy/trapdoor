@@ -721,9 +721,15 @@ the first record (trapdoor never deletes the session history).
   quiet time of the online / offline messages into one session.
 - **Summary**: clients online now, average uptime, time online, sessions, ups and downs.
 - **Status**: a bar per client, by hour up to 3 days and by day beyond. Dark green: online
-  (almost) all of it, light green: part of it, grey: offline; hover for the time online. The
-  share of the period it was online and when it was last seen; clients never seen are listed
-  too, connected ones first.
+  (almost) all of it; light green: part of it; **red**: not connected while the server was up;
+  **empty**: the server was down (an outage); grey: not connected, before the server's own
+  record began. Hover for the details. The share of the period it was online and when it was
+  last seen; clients never seen are listed too, connected ones first.
+- **Server** row on top: when the server itself was up, and its uptime over the recorded time.
+  The history poll records it: every answer (every 30 seconds) extends a span, a server that
+  does not answer (OpenVPN's management interface, a WireGuard interface the container does not
+  report) leaves a gap. While the web process itself is stopped nothing is recorded, so that
+  time shows as an outage too.
 - **Calendar**: click a client for a month, each day shaded by its time online (relative to its
   busiest day), earlier months with ←; a day lists its ups and downs.
 - **Ups and downs**: every connect and disconnect in the period, newest first, in pages of 25,

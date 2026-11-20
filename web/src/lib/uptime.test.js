@@ -14,12 +14,27 @@ test('bucket span: whole step, the current one up to now, the future empty', () 
   assert.equal(bucketSpan('2026-11-19T00:00:00Z', 'day', now, '2026-11-19T23:00:00Z'), 23 * 3600);
 });
 
-test('level of a segment', () => {
+test('level of a segment: online, offline while the server was up, outage, unknown', async () => {
+  const { serverLevel, known } = await import('./uptime.js');
+  assert.equal(level(600, 3600, 3600, true), 'part');
+  assert.equal(level(3500, 3600, 3600, true), 'full');
+  assert.equal(level(1200, 1200, 1200, true), 'full'); // the current hour so far
+  assert.equal(level(0, 0, 0, true), 'future');
+  assert.equal(level(0, 3600, 3600, true), 'off'); // server up, client not connected
+  assert.equal(level(0, 3600, 600, true), 'off'); // up part of the hour
+  assert.equal(level(0, 3600, 0, true), 'out'); // the server was down
+  assert.equal(level(0, 3600, 20, true), 'out'); // a few seconds of answers do not count
+  assert.equal(level(0, 3600, 3600, false), 'none'); // before the server's record
   assert.equal(level(0, 3600), 'none');
-  assert.equal(level(600, 3600), 'part');
-  assert.equal(level(3500, 3600), 'full');
-  assert.equal(level(1200, 1200), 'full'); // the current hour so far
-  assert.equal(level(0, 0), 'future');
+  // a client online counts even when the server's record has a gap
+  assert.equal(level(900, 3600, 0, true), 'part');
+  assert.equal(serverLevel(3600, 3600, true), 'full');
+  assert.equal(serverLevel(1800, 3600, true), 'part');
+  assert.equal(serverLevel(0, 3600, true), 'out');
+  assert.equal(serverLevel(0, 3600, false), 'none');
+  assert.equal(known('2026-11-20T10:30:00Z', '2026-11-20T11:00:00Z'), true);
+  assert.equal(known('2026-11-20T11:30:00Z', '2026-11-20T11:00:00Z'), false);
+  assert.equal(known(null, '2026-11-20T11:00:00Z'), false);
 });
 
 test('uptime percent counts the period up to now', () => {

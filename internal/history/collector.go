@@ -151,7 +151,29 @@ func (c *Collector) Poll(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := markUp(ctx, tx, c.Agent, now.Unix(), int64(3*c.interval()/time.Second)); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+// markUp records that the server answered at now: it extends the latest span
+// when that ended within gap, or starts a new one (the time between is an
+// outage).
+func markUp(ctx context.Context, tx *sql.Tx, agent string, now, gap int64) error {
+	gap = max(gap, 90)
+	res, err := tx.ExecContext(ctx, `UPDATE server_up SET end = ? WHERE agent = ?
+		AND start = (SELECT MAX(start) FROM server_up WHERE agent = ?) AND end >= ? AND end <= ?`,
+		now, agent, agent, now-gap, now)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO server_up (agent, start, end) VALUES (?, ?, ?)
+		ON CONFLICT (agent, start) DO UPDATE SET end = MAX(end, excluded.end)`, agent, now, now)
+	return err
 }
 
 func loadActive(ctx context.Context, tx *sql.Tx, agent string) (map[sessionKey]activeRow, error) {

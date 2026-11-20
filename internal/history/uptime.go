@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"time"
@@ -33,6 +34,12 @@ type UptimeReport struct {
 	Step    Step           `json:"step"`
 	Starts  []time.Time    `json:"starts"` // the start of each bucket
 	Clients []ClientUptime `json:"clients"`
+	// Server is how long the server was up (answered the history poll) per
+	// bucket; ServerSec in all. Tracked is when that record begins (nil: not
+	// yet): before it, whether the server was up is unknown.
+	Server    []int64    `json:"server"`
+	ServerSec int64      `json:"server_seconds"`
+	Tracked   *time.Time `json:"tracked,omitempty"`
 }
 
 // Uptime reports when clients were online in [from, to). Days are days in
@@ -130,12 +137,56 @@ func (s *Stats) Uptime(ctx context.Context, from, to time.Time, step Step, loc *
 	if err := last.Err(); err != nil {
 		return UptimeReport{}, err
 	}
-	out := UptimeReport{From: from, To: to, Step: step, Starts: starts, Clients: []ClientUptime{}}
+	out := UptimeReport{From: from, To: to, Step: step, Starts: starts, Clients: []ClientUptime{}, Server: make([]int64, len(starts))}
+	if err := s.serverUp(ctx, &out, bounds, nowU); err != nil {
+		return UptimeReport{}, err
+	}
 	for _, c := range by {
 		out.Clients = append(out.Clients, *c)
 	}
 	sort.Slice(out.Clients, func(i, j int) bool { return out.Clients[i].Name < out.Clients[j].Name })
 	return out, nil
+}
+
+// upGap is how recent the last poll must be for the server to count as up
+// until now (a few poll intervals).
+const upGap = 90
+
+// serverUp fills the server's time up per bucket from its spans.
+func (s *Stats) serverUp(ctx context.Context, out *UptimeReport, bounds []int64, now int64) error {
+	var first sql.NullInt64
+	if err := s.DB.QueryRowContext(ctx, `SELECT MIN(start) FROM server_up WHERE agent = ?`, s.Agent).Scan(&first); err != nil {
+		return err
+	}
+	if !first.Valid {
+		return nil
+	}
+	t := time.Unix(first.Int64, 0).UTC()
+	out.Tracked = &t
+	lo, hi := bounds[0], bounds[len(bounds)-1]
+	rows, err := s.DB.QueryContext(ctx, `SELECT start, end FROM server_up WHERE agent = ? AND start < ? AND end >= ? ORDER BY start`,
+		s.Agent, hi, lo-upGap)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var a, b int64
+		if err := rows.Scan(&a, &b); err != nil {
+			return err
+		}
+		if b >= now-upGap { // polled just now: up until now
+			b = now
+		}
+		a, b = max(a, lo), min(b, hi)
+		for i := 0; i+1 < len(bounds); i++ {
+			if l, h := max(a, bounds[i]), min(b, bounds[i+1]); h > l {
+				out.Server[i] += h - l
+				out.ServerSec += h - l
+			}
+		}
+	}
+	return rows.Err()
 }
 
 // Event is a client going up (connected) or down (disconnected).
