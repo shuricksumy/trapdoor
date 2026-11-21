@@ -172,12 +172,11 @@
   .pick-title { padding-top: 5px; color: var(--ink-3); font-size: var(--step--1); }
   /* same-size chips in aligned columns: name left, address right */
   .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; min-width: 0; }
-  .chip { display: flex; align-items: stretch; min-width: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1); line-height: 1.2; text-align: left; cursor: pointer; overflow: hidden; white-space: nowrap; }
-  .chip > span { padding: 5px 8px; }
-  .chip-name { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
-  .chip-ip { flex: none; width: 118px; border-left: 1px solid var(--line); background: var(--sunken); color: var(--ink-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
-  .chip:hover { border-color: var(--accent); }
-  .chip.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .chip { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); min-width: 0; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--radius-s); background: var(--sunken); color: var(--ink); font: inherit; font-size: var(--step--1); line-height: 1.2; text-align: left; cursor: pointer; white-space: nowrap; transition: border-color 0.12s, background 0.12s; }
+  .chip-name { min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+  .chip-ip { flex: none; max-width: 55%; color: var(--ink-3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+  .chip:hover { border-color: var(--line); background: var(--accent-soft); }
+  .chip.on { border-color: var(--accent); background: var(--accent-soft); }
   .chip.online .chip-name::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--ok); vertical-align: 1px; }
   .run-card { overflow: hidden; }
   .run-head { display: flex; align-items: center; gap: var(--space-3); width: 100%; padding: var(--space-3) var(--space-5); border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; flex-wrap: wrap; }
