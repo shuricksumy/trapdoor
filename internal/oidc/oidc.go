@@ -17,6 +17,8 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	_ "crypto/sha512" // SHA-384 / SHA-512 for RS384, ES512, …
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -46,6 +48,10 @@ type Config struct {
 	// client_secret_post.
 	AuthMethod string
 	HTTP       *http.Client // nil: a client with a 10 s timeout
+	// RootCAs: certificates to trust for the provider besides the system's
+	// (e.g. a reverse proxy's own or Cloudflare Origin certificate when
+	// trapdoor reaches the provider directly, not through Cloudflare).
+	RootCAs []byte // PEM
 	// UserAgent of the requests to the provider (default "trapdoor"): Go's
 	// own is blocked by some proxies in front of providers (Cloudflare's
 	// bot protection answers the token request with 403).
@@ -125,7 +131,18 @@ func New(cfg Config) (*Provider, error) {
 		return nil, fmt.Errorf("token endpoint auth method %q: client_secret_basic or client_secret_post", cfg.AuthMethod)
 	}
 	if cfg.HTTP == nil {
-		cfg.HTTP = &http.Client{Timeout: 10 * time.Second}
+		tr := http.DefaultTransport.(*http.Transport).Clone()
+		if len(cfg.RootCAs) > 0 {
+			pool, err := x509.SystemCertPool()
+			if err != nil || pool == nil {
+				pool = x509.NewCertPool()
+			}
+			if !pool.AppendCertsFromPEM(cfg.RootCAs) {
+				return nil, errors.New("CA file: no PEM certificate in it")
+			}
+			tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+		}
+		cfg.HTTP = &http.Client{Timeout: 10 * time.Second, Transport: tr}
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now

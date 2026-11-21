@@ -220,7 +220,7 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 	if cfg.OIDCIssuer != "" {
 		p, err := oidc.New(oidc.Config{Issuer: cfg.OIDCIssuer, ClientID: cfg.OIDCClientID, ClientSecret: cfg.OIDCClientSecret,
 			RedirectURL: cfg.PublicURL + "/api/v1/auth/oidc/callback", Scopes: cfg.OIDCScopes, Groups: cfg.OIDCGroups,
-			AuthMethod: cfg.OIDCAuthMethod, UserAgent: "trapdoor/" + version.Version})
+			AuthMethod: cfg.OIDCAuthMethod, UserAgent: "trapdoor/" + version.Version, RootCAs: cfg.OIDCCA})
 		if err != nil {
 			return fmt.Errorf("TD_OIDC_*: %w", err)
 		}
