@@ -314,6 +314,18 @@ limits POST /clients/alice/reset >/dev/null || fail "reset alice"
 wait_for 5 nsping || fail "alice still blocked after the reset"
 limits PUT /clients/alice '{}' >/dev/null
 log "over her usage limit alice is blocked (still connected); reset lets her through again"
+# Usage limit again, now slowing her down instead: 1 MB at full speed, then 2 Mbit/s.
+limits POST /clients/alice/reset >/dev/null || fail "reset alice"
+limits PUT /clients/alice '{"quota_mb":1,"period":"day","block":false,"slow_down":2000,"slow_up":2000}' >/dev/null || fail "save alice's slow-down"
+speed down >/dev/null || fail "download before the limit"
+slowed() { limits GET "" | python3 -c "import json, sys; d = json.load(sys.stdin); sys.exit(0 if any(r['name'] == 'alice' and r['state'] == 'slowed' for r in d['clients']) else 1)"; }
+wait_for 20 slowed || fail "alice not slowed over 1 MB: $(limits GET "")"
+limits PUT /clients/alice '{"quota_mb":1,"period":"day","block":false,"slow_down":2000,"slow_up":2000}' >"$WORK/lim3.json" # applied now
+grep -q '"applied":true' "$WORK/lim3.json" || fail "slow-down not applied: $(cat "$WORK/lim3.json")"
+over=$(speed down) || fail "download while slowed"
+python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) >= 3 else 1)" "$over" || fail "over her limit 1 MB took ${over}s (expected about 4s at 2 Mbit/s)"
+limits PUT /clients/alice '{}' >/dev/null
+log "over her usage limit alice is slowed to 2 Mbit/s: 1 MB took ${over}s"
 kill "$NSCLIENT"; wait "$NSCLIENT" 2>/dev/null || true
 wait_for 15 offline alice || fail "alice still online"
 log "rules block and allow alice's real traffic; off means pass-through"
@@ -509,6 +521,25 @@ PY
 	wgfw '{"enabled":false,"default":"deny","rules":[]}' >/dev/null
 	wait_for 5 wgping || fail "ping blocked although the rules are off"
 	iptables -S TD-FWD | grep -q -- "-j RETURN" || fail "OpenVPN chain changed by WireGuard rules"
+	log "WireGuard speed limits: wgalice's real download and upload through tc on tdwg0 (IFB for uploads)"
+	python3 "$WORK/speed.py" serve 10.97.0.1 >/dev/null 2>&1 &
+	PIDS+=($!)
+	sleep 0.5
+	wgspeed() { ip netns exec twc python3 "$WORK/speed.py" "$1" 10.97.0.1; }
+	wglimits() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X PUT -d "$1" "$WEB/api/v1/servers/tdwg0/limits/clients/wgalice"; }
+	wgfast=$(wgspeed down) || fail "no download through WireGuard"
+	wglimits '{"down":2000,"up":2000}' >"$WORK/wglim.json" || fail "save wgalice's speed"
+	grep -q '"applied":true' "$WORK/wglim.json" || fail "WireGuard speed not applied: $(cat "$WORK/wglim.json")"
+	tc class show dev tdwg0 | grep -q "rate 2Mbit" || fail "no HTB class on tdwg0: $(tc class show dev tdwg0)"
+	wgdown=$(wgspeed down) || fail "WireGuard download with a limit"
+	wgup=$(wgspeed up) || fail "WireGuard upload with a limit"
+	python3 -c "import sys; d, u = float(sys.argv[1]), float(sys.argv[2]); sys.exit(0 if d >= 3 and u >= 3 else 1)" "$wgdown" "$wgup" ||
+		fail "WireGuard: 1 MB at 2 Mbit/s took ${wgdown}s down / ${wgup}s up (unlimited: ${wgfast}s)"
+	wglimits '{}' >"$WORK/wglim2.json" || fail "clear wgalice's speed"
+	grep -q '"applied":true' "$WORK/wglim2.json" || fail "WireGuard clearing not applied: $(cat "$WORK/wglim2.json")"
+	wgagain=$(wgspeed down)
+	python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) < 2 else 1)" "$wgagain" || fail "WireGuard still slow without a limit: ${wgagain}s"
+	log "WireGuard 1 MB at 2 Mbit/s: ${wgdown}s down, ${wgup}s up; without a limit ${wgagain}s"
 	log "WireGuard routing: the default allowed IPs reach new configs; a client's network changes the interface at once"
 	api "$API/v1/servers/tdwg0/settings" >"$WORK/wg-settings.json"
 	python3 - "$WORK/wg-settings.json" >"$WORK/wg-settings-new.json" <<'PY'
