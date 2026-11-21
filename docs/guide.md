@@ -201,6 +201,10 @@ start with it.
 - Renewing the **server** certificate keeps the old one valid (moved to `renewed/issued/`, as
   easyrsa does): OpenVPN uses it until it is restarted with the new one.
 
+Long tables (Clients, Connected → recently disconnected, Traffic → by client, Limits, the
+Network page's clients) show 15 rows per page; *Rows* under a table switches to 25, 50 or 100,
+and the browser remembers it for every table.
+
 ## Client network settings
 
 Per client, in the UI (Clients → More → Network) or `PUT /api/v1/servers/openvpn/certs/{name}/network`:

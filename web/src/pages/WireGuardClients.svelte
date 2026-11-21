@@ -7,6 +7,8 @@
   import Dialog from '../lib/Dialog.svelte';
   import { placeMenu } from '../lib/menu.js';
   import SendProfile from '../lib/SendProfile.svelte';
+  import Pager from '../lib/Pager.svelte';
+  import { paginate, savedSize } from '../lib/pager.js';
 
   const app = currentServer()?.type === 'amneziawg' ? 'AmneziaWG' : 'WireGuard';
 
@@ -51,6 +53,9 @@
   });
 
   const rows = $derived([...peers].sort((a, b) => a.name.localeCompare(b.name)));
+  let page = $state(1);
+  let size = $state(savedSize());
+  const shown = $derived(paginate(rows, page, size));
 
   function status(p) {
     if (p.disabled) return { tone: 'off', label: 'Disabled' };
@@ -266,7 +271,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each rows as p (p.name)}
+          {#each shown.rows as p (p.name)}
             {@const st = status(p)}
             <tr class:old={p.disabled}>
               <td class="c-name">
@@ -309,6 +314,7 @@
         </tbody>
       </table>
     </div>
+    <Pager bind:page bind:size info={shown} label="Pages of clients" />
   {/if}
 </section>
 

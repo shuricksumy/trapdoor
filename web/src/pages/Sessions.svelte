@@ -4,11 +4,16 @@
   import { bytes, duration, dateTime } from '../lib/format.js';
   import { toast, currentServer } from '../lib/state.svelte.js';
   import { loadClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
+  import Pager from '../lib/Pager.svelte';
+  import { paginate, savedSize } from '../lib/pager.js';
 
   const kickable = $derived(!['wireguard', 'amneziawg'].includes(currentServer()?.type));
   let live = $state(null);
   let error = $state('');
   let recent = $state([]);
+  let page = $state(1);
+  let size = $state(savedSize());
+  const shown = $derived(paginate(recent, page, size));
   let now = $state(new Date());
 
   async function load() {
@@ -20,7 +25,7 @@
       error = e.message;
     }
     try {
-      recent = (await api('/history/sessions?preset=last_30_days&limit=50')).filter((s) => s.disconnected_at);
+      recent = (await api('/history/sessions?preset=last_30_days&limit=500')).filter((s) => s.disconnected_at);
     } catch {
       /* history is optional here */
     }
@@ -104,7 +109,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each recent.slice(0, 20) as s, i (i)}
+          {#each shown.rows as s, i (i)}
             <tr>
               <td title={clientTitle(s.name)}>{clientName(s.name)}</td>
               <td>{dateTime(s.connected_at)}</td>
@@ -117,6 +122,7 @@
         </tbody>
       </table>
     </div>
+    <Pager bind:page bind:size info={shown} label="Pages of disconnected sessions" />
   </section>
 {/if}
 
