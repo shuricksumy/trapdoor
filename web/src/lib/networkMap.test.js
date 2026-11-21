@@ -1,7 +1,7 @@
 // node --test: the OpenVPN network map.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMap, buildWGMap, checkNetwork, covers, normalize, overlaps, parse } from './networkMap.js';
+import { buildMap, buildWGMap, checkNetwork, covers, fold, normalize, overlaps, parse } from './networkMap.js';
 
 const srv = { subnet: '10.8.0.0/24', server_ip: '10.8.0.1', pushes_full_tunnel: false, routes: ['192.168.1.0/24'] };
 const clients = [
@@ -196,4 +196,12 @@ test('an openvpn-ui style server: no route warnings, routers, names, who reaches
   // the same server without client-to-client needs a route for every LAN
   const m2 = buildMap({ srv: s, clients: cs, nets, c2c: false });
   assert.equal(m2.problems.filter((p) => p.kind === 'route').length, 4);
+});
+
+test('fold', () => {
+  const l = [1, 2, 3, 4, 5, 6, 7, 8];
+  assert.deepEqual(fold(l, false), { shown: [1, 2, 3, 4], more: 4 });
+  assert.deepEqual(fold(l, true), { shown: l, more: 0 });
+  assert.deepEqual(fold([1, 2, 3, 4, 5], false), { shown: [1, 2, 3, 4, 5], more: 0 }); // no "+1 more"
+  assert.deepEqual(fold([], false), { shown: [], more: 0 });
 });
