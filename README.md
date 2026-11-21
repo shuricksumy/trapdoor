@@ -34,6 +34,10 @@ same two-factor logins.
 | --- | --- |
 | <img src="docs/screenshots/network-routing-dark.png" width="400"> | <img src="docs/screenshots/network-wireguard-dark.png" width="400"> |
 
+| Uptime: status bars with outages, every up and down | Tools (dark) |
+| --- | --- |
+| <img src="docs/screenshots/uptime.png" width="400"> | <img src="docs/screenshots/tools-dark.png" width="400"> |
+
 | Clients | Traffic | Access rules |
 | --- | --- | --- |
 | <img src="docs/screenshots/clients.png" width="300"> | <img src="docs/screenshots/traffic-dark.png" width="300"> | <img src="docs/screenshots/access.png" width="300"> |
