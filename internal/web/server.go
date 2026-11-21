@@ -111,6 +111,11 @@ type Deps struct {
 	BackupDir, BackupPassphrase string
 	// PublicURL is this web UI's address, for links in emails (TD_PUBLIC_URL).
 	PublicURL string
+	// OIDC signs admins in with a provider such as Authelia (nil = off);
+	// OIDCName is its button's name, OIDCUser the local admin it signs in
+	// as (empty: the first admin).
+	OIDC               OIDC
+	OIDCName, OIDCUser string
 	// SendMail sends an email (nil = mail.Send; replaced in tests).
 	SendMail func(context.Context, mail.Config, mail.Message) error
 	// SendTelegram sends a Telegram message (nil = telegram.Send; replaced in tests).
@@ -189,6 +194,7 @@ func (s *Server) Handler() http.Handler {
 		httpx.WriteJSON(w, http.StatusOK, apiHealth())
 	})
 	s.registerAuthRoutes(mux, api)
+	s.registerOIDCRoutes(mux)
 	mux.HandleFunc("POST /api/v1/nodes/join", s.handleJoin) // a node, with its join token
 	mux.Handle("/api/", s.requireAuth(api))
 	ui := webui.Handler(s.FrameAncestors...)

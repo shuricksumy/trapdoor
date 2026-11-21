@@ -2,6 +2,8 @@ package config
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -124,5 +126,26 @@ func TestLoadWebFrameAncestors(t *testing.T) {
 		if _, err := LoadWeb(); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
+	}
+}
+
+func TestLoadWebOIDC(t *testing.T) {
+	t.Setenv("TD_AGENT_TOKEN", "x")
+	t.Setenv("TD_OIDC_ISSUER", "https://auth.example.com/")
+	if _, err := LoadWeb(); err == nil {
+		t.Error("OIDC without TD_PUBLIC_URL accepted")
+	}
+	t.Setenv("TD_PUBLIC_URL", "https://vpn-admin.example.com/")
+	secret := filepath.Join(t.TempDir(), "secret")
+	_ = os.WriteFile(secret, []byte("s3cret\n"), 0o600)
+	t.Setenv("TD_OIDC_CLIENT_SECRET_FILE", secret)
+	t.Setenv("TD_OIDC_GROUPS", "admin, vpn-admins")
+	c, err := LoadWeb()
+	if err != nil || c.OIDCIssuer != "https://auth.example.com" || c.OIDCClientSecret != "s3cret" || len(c.OIDCGroups) != 2 || c.OIDCName != "Authelia" {
+		t.Fatalf("%+v %v", c, err)
+	}
+	t.Setenv("TD_OIDC_GROUPS", "")
+	if c, _ := LoadWeb(); len(c.OIDCGroups) != 1 || c.OIDCGroups[0] != "admin" {
+		t.Errorf("default group: %v", c.OIDCGroups)
 	}
 }

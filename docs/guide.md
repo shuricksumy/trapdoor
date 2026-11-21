@@ -874,6 +874,53 @@ password comes from stdin or `TD_ADMIN_PASSWORD`.
 - Every change is logged as `audit action=... target=... by=<user>`
 - Strict Content-Security-Policy, no CDN: the UI and its fonts are served by trapdoor itself
 
+### Sign in with Authelia (OIDC)
+
+Admins can sign in with Authelia (or another OpenID Connect provider) next to the password.
+It signs in as the **local admin**: there are no separate users, and the password login stays
+for when Authelia is down (*Use the admin password* on the login page). Who may sign in is
+decided by groups: a member of any group in `TD_OIDC_GROUPS` (default `admin`).
+
+1. Register trapdoor in Authelia (`identity_providers.oidc.clients`), like your other apps;
+   policy, two factors and so on are Authelia's as usual:
+
+   ```yaml
+   - client_id: 'trapdoor'
+     client_name: 'trapdoor'
+     client_secret: '$pbkdf2-sha512$310000$…'   # authelia crypto hash generate pbkdf2 --random
+     public: false
+     authorization_policy: 'two_factor'
+     redirect_uris:
+       - 'https://vpn-admin.example.com/api/v1/auth/oidc/callback'
+     scopes: ['openid', 'profile', 'email', 'groups']
+     grant_types: ['authorization_code']
+     response_types: ['code']
+     response_modes: ['query']                  # not form_post: the browser must bring back trapdoor's cookie
+     require_pkce: true
+     pkce_challenge_method: 'S256'
+     token_endpoint_auth_method: 'client_secret_basic'
+     userinfo_signed_response_alg: 'none'
+   ```
+
+2. Set these for the web service:
+
+   | Setting | |
+   |---|---|
+   | `TD_OIDC_ISSUER` | Authelia's address, e.g. `https://auth.example.com` (empty: off) |
+   | `TD_OIDC_CLIENT_ID`, `TD_OIDC_CLIENT_SECRET` | as registered (the secret in plain text; Authelia keeps the hash); or `TD_OIDC_CLIENT_SECRET_FILE` |
+   | `TD_OIDC_GROUPS` | groups that may sign in, comma-separated (default `admin`) |
+   | `TD_PUBLIC_URL` | trapdoor's address; the callback is `<TD_PUBLIC_URL>/api/v1/auth/oidc/callback` |
+   | `TD_OIDC_NAME` | the button: *Sign in with …* (default `Authelia`) |
+   | `TD_OIDC_USER` | the local admin it signs in as (default: the first admin) |
+   | `TD_OIDC_SCOPES`, `TD_OIDC_AUTH_METHOD` | default `openid profile email groups`, `client_secret_basic` (or `client_secret_post`) |
+
+How it is checked: the authorization code flow with PKCE (S256), a one-time state bound to the
+browser (a `SameSite=Lax` cookie for the callback only) and a nonce; the ID token's signature
+against Authelia's published keys (RS256 / ES256 and their 384 / 512 variants), its issuer,
+audience and lifetime; then userinfo, where Authelia puts the groups unless the client's claims
+policy adds them to the ID token. The log line `login … via=oidc oidc_user=… oidc_email=…`
+says who it was.
+
 The pieces are separated so that the part facing the browser has no privileges:
 
 ```

@@ -5,8 +5,18 @@
 
   let username = $state('');
   let password = $state('');
-  let error = $state('');
+  // A sign-in with the provider that went wrong comes back as ?error=.
+  const back = route.query.get('error') ?? '';
+  let error = $state(back && back[0].toUpperCase() + back.slice(1) + (back.endsWith('.') ? '' : '.'));
   let busy = $state(false);
+  let sso = $state(''); // the provider's name when sign-in with it is set up
+  let showPassword = $state(false);
+  $effect(() => {
+    fetch('/api/v1/auth/methods')
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((m) => (sso = m.oidc ?? ''))
+      .catch(() => {});
+  });
 
   async function submit(e) {
     e.preventDefault();
@@ -45,6 +55,16 @@
 
     {#if error}<div class="banner bad" role="alert">{error}</div>{/if}
 
+    {#if sso}
+      <a class="btn primary sso" href="/api/v1/auth/oidc">Sign in with {sso}</a>
+      {#if !showPassword}
+        <button type="button" class="link" onclick={() => (showPassword = true)}>Use the admin password</button>
+      {:else}
+        <div class="or"><span>or with the admin password</span></div>
+      {/if}
+    {/if}
+
+    {#if !sso || showPassword}
     <label class="field">
       <span>Username</span>
       <input bind:value={username} autocomplete="username" autocapitalize="none" spellcheck="false" required />
@@ -53,7 +73,8 @@
       <span>Password</span>
       <input type="password" bind:value={password} autocomplete="current-password" required />
     </label>
-    <button class="btn primary" type="submit" disabled={busy}>{busy ? 'Logging in…' : 'Log in'}</button>
+    <button class="btn" class:primary={!sso} type="submit" disabled={busy}>{busy ? 'Logging in…' : 'Log in'}</button>
+    {/if}
   </form>
   <div class="theme-slot"><ThemeSwitch compact /></div>
 </div>
@@ -81,5 +102,9 @@
   h1 { font-size: var(--step-2); }
   .mark { margin-bottom: calc(-1 * var(--space-2)); }
   .btn { justify-content: center; height: 40px; margin-top: var(--space-2); }
+  .sso { text-decoration: none; }
+  .link { justify-self: center; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--step--1); text-decoration: underline; cursor: pointer; }
+  .or { display: flex; align-items: center; gap: var(--space-3); color: var(--ink-3); font-size: var(--step--1); }
+  .or::before, .or::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
   .theme-slot { position: fixed; top: var(--space-4); right: var(--space-4); width: 120px; }
 </style>
