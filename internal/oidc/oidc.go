@@ -44,12 +44,12 @@ type Config struct {
 	// AuthMethod at the token endpoint: client_secret_basic (default) or
 	// client_secret_post.
 	AuthMethod string
-	HTTP       *http.Client     // nil: a client with a 10 s timeout
+	HTTP       *http.Client // nil: a client with a 10 s timeout
 	// UserAgent of the requests to the provider (default "trapdoor"): Go's
 	// own is blocked by some proxies in front of providers (Cloudflare's
 	// bot protection answers the token request with 403).
 	UserAgent string
-	Now        func() time.Time // nil: time.Now
+	Now       func() time.Time // nil: time.Now
 }
 
 // Identity is who signed in.
