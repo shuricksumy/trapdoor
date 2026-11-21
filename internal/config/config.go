@@ -154,6 +154,8 @@ type Web struct {
 	OIDCIssuer, OIDCClientID, OIDCClientSecret string
 	OIDCGroups, OIDCScopes                     []string
 	OIDCName, OIDCUser, OIDCAuthMethod         string
+	// OIDCCA: extra certificates to trust for the provider (TD_OIDC_CA_FILE, PEM).
+	OIDCCA []byte
 }
 
 // ErrNoToken is returned when the shared agent token is not set.
@@ -322,6 +324,13 @@ func LoadWeb() (Web, error) {
 	c.OIDCName = env("TD_OIDC_NAME", "Authelia")
 	c.OIDCUser = os.Getenv("TD_OIDC_USER")
 	c.OIDCAuthMethod = os.Getenv("TD_OIDC_AUTH_METHOD")
+	if f := os.Getenv("TD_OIDC_CA_FILE"); f != "" {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return c, fmt.Errorf("TD_OIDC_CA_FILE: %w", err)
+		}
+		c.OIDCCA = b
+	}
 	if c.OIDCIssuer != "" && c.PublicURL == "" {
 		return c, fmt.Errorf("TD_OIDC_ISSUER needs TD_PUBLIC_URL (the callback address is built from it)")
 	}

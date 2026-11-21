@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"math/big"
 	"net/http"
@@ -257,5 +258,32 @@ func TestDiscoveryIssuerMismatch(t *testing.T) {
 	p, _ := New(Config{Issuer: srv.URL, ClientID: "a", ClientSecret: "b", RedirectURL: "https://vpn.example.com/cb", Groups: []string{"admin"}})
 	if _, _, err := p.Start(context.Background()); err == nil || !strings.Contains(err.Error(), "calls itself") {
 		t.Errorf("mismatch: %v", err)
+	}
+}
+
+// A provider behind a certificate the system does not trust (e.g. reached
+// through a proxy with a Cloudflare Origin certificate): RootCAs makes it work.
+func TestRootCAs(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{"issuer": srv.URL, "authorization_endpoint": srv.URL + "/a", "token_endpoint": srv.URL + "/t", "jwks_uri": srv.URL + "/k"})
+	}))
+	defer srv.Close()
+	cfg := Config{Issuer: srv.URL, ClientID: "a", ClientSecret: "b", RedirectURL: "https://vpn.example.com/cb", Groups: []string{"admin"}}
+	p, _ := New(cfg)
+	if _, _, err := p.Start(context.Background()); err == nil || !strings.Contains(err.Error(), "certificate") {
+		t.Errorf("untrusted certificate accepted: %v", err)
+	}
+	cfg.RootCAs = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw})
+	p, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, to, err := p.Start(context.Background()); err != nil || !strings.HasPrefix(to, srv.URL+"/a?") {
+		t.Errorf("with the CA: %s %v", to, err)
+	}
+	cfg.RootCAs = []byte("not a certificate")
+	if _, err := New(cfg); err == nil {
+		t.Error("a CA file without a certificate accepted")
 	}
 }

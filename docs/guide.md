@@ -921,6 +921,24 @@ decided by groups: a member of any group in `TD_OIDC_GROUPS` (default `admin`).
    | `TD_OIDC_NAME` | the button: *Sign in with …* (default `Authelia`) |
    | `TD_OIDC_USER` | the local admin it signs in as (default: the first admin) |
    | `TD_OIDC_SCOPES`, `TD_OIDC_AUTH_METHOD` | default `openid profile email groups`, `client_secret_basic` (or `client_secret_post`) |
+   | `TD_OIDC_CA_FILE` | a PEM certificate to trust for Authelia besides the system's (see below) |
+
+**Authelia behind Cloudflare, on the same machine.** The browser goes through Cloudflare, but
+trapdoor itself also calls Authelia (the token, its keys, userinfo), and Cloudflare's bot
+protection may answer such a server's request with a challenge page (the log says
+`server=cloudflare, cf-mitigated=challenge`). Let the web service reach Authelia through the
+reverse proxy directly instead, and trust the proxy's certificate (e.g. its Cloudflare Origin
+certificate):
+
+```yaml
+  web:
+    extra_hosts:
+      - "auth.example.com:172.30.0.100"      # the reverse proxy's internal address
+    environment:
+      TD_OIDC_CA_FILE: /etc/trapdoor/proxy.crt
+    volumes:
+      - ./traefik/cert.crt:/etc/trapdoor/proxy.crt:ro   # the certificate only, never the key
+```
 
 How it is checked: the authorization code flow with PKCE (S256), a one-time state bound to the
 browser (a `SameSite=Lax` cookie for the callback only) and a nonce; the ID token's signature
