@@ -152,7 +152,7 @@ func TestLoadWebOIDC(t *testing.T) {
 
 func TestLoadWebPasswordFrom(t *testing.T) {
 	t.Setenv("TD_AGENT_TOKEN", "x")
-	t.Setenv("TD_PASSWORD_LOGIN_FROM", "10.8.0.0/24, 172.30.0.0/24, 192.168.1.5")
+	t.Setenv("TD_PASSWORD_LOGIN_FROM", "10.8.0.0/24, 172.20.0.0/24, 192.168.1.5")
 	c, err := LoadWeb()
 	if err != nil || len(c.PasswordFrom) != 3 || c.PasswordFrom[2].Bits() != 32 {
 		t.Fatalf("%v %v", c.PasswordFrom, err)

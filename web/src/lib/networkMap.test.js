@@ -169,26 +169,26 @@ test('checkNetwork: what the routing editors accept', () => {
 // A server set up by openvpn-ui: client-to-client, LANs behind routers (iroute),
 // routes pushed per client, no "route" lines, the networks named afterwards.
 test('an openvpn-ui style server: no route warnings, routers, names, who reaches what', () => {
-  const s = { subnet: '10.8.1.0/24', server_ip: '10.8.1.1', pushes_full_tunnel: false, routes: [] };
+  const s = { subnet: '10.8.0.0/24', server_ip: '10.8.0.1', pushes_full_tunnel: false, routes: [] };
   const cs = [
     { name: 'docker', static_ip: '', full_tunnel: false, routes: [], lan: [], named: [] },
-    { name: 'castle', static_ip: '10.8.1.222', full_tunnel: false, routes: [], lan: [], named: [] },
-    { name: 'cabin', static_ip: '10.8.1.39', full_tunnel: false, routes: [], lan: [], named: [] },
-    { name: 'phone', static_ip: '10.8.1.60', full_tunnel: true, routes: [], lan: [], named: [] },
+    { name: 'castle', static_ip: '10.8.0.222', full_tunnel: false, routes: [], lan: [], named: [] },
+    { name: 'cabin', static_ip: '10.8.0.39', full_tunnel: false, routes: [], lan: [], named: [] },
+    { name: 'phone', static_ip: '10.8.0.60', full_tunnel: true, routes: [], lan: [], named: [] },
     { name: 'laptop', static_ip: '', full_tunnel: false, routes: [], lan: [], named: [] },
   ];
   const nets = [
-    { name: 'Docker services', networks: ['172.30.0.0/24'], via: 'docker', clients: ['castle', 'cabin', 'laptop'] },
-    { name: 'Castle LAN', networks: ['192.168.222.0/24'], via: 'castle', clients: ['cabin'] },
-    { name: 'Cabin LAN', networks: ['192.168.39.0/24'], via: 'cabin', clients: ['castle'] },
-    { name: 'Spare LAN', networks: ['192.168.90.0/24'], via: 'laptop', clients: [] },
+    { name: 'Docker services', networks: ['172.20.0.0/24'], via: 'docker', clients: ['castle', 'cabin', 'laptop'] },
+    { name: 'Castle LAN', networks: ['192.168.150.0/24'], via: 'castle', clients: ['cabin'] },
+    { name: 'Cabin LAN', networks: ['192.168.160.0/24'], via: 'cabin', clients: ['castle'] },
+    { name: 'Spare LAN', networks: ['192.168.170.0/24'], via: 'laptop', clients: [] },
   ];
   const m = buildMap({ srv: s, clients: cs, nets, online: new Set(['castle']), c2c: true });
   const n = byKey(m);
   assert.deepEqual(m.problems.map((p) => p.kind), ['unreached']); // only Spare LAN
   assert.equal(m.problems[0].name, 'Spare LAN');
   assert.ok(m.networks.every((x) => x.ok && x.missingRoute.length === 0));
-  assert.deepEqual(n['named:Docker services'].serverOnly, ['172.30.0.0/24']);
+  assert.deepEqual(n['named:Docker services'].serverOnly, ['172.20.0.0/24']);
   assert.deepEqual(n['named:Castle LAN'].reachedBy, ['cabin']);
   // routers first (castle is online), then the rest by name
   assert.deepEqual(m.clients.map((c) => c.name), ['castle', 'cabin', 'docker', 'laptop', 'phone']);

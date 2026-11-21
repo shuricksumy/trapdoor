@@ -80,7 +80,7 @@
       <fieldset>
         <legend>Presets</legend>
         <label class="check"><input type="checkbox" bind:checked={f.dnsOn} /><span>Send the clients' DNS to</span>
-          <input class="dns mono" bind:value={f.dns} placeholder="172.30.0.53" disabled={!f.dnsOn} aria-label="DNS server" />
+          <input class="dns mono" bind:value={f.dns} placeholder="172.20.0.53" disabled={!f.dnsOn} aria-label="DNS server" />
         </label>
         <span class="hint">Plain DNS (port 53) to any server goes there instead, e.g. your AdGuard or Pi-hole.</span>
         <label class="check"><input type="checkbox" bind:checked={f.block_dot} /><span>Block DNS-over-TLS and DNS-over-QUIC (port 853)</span></label>

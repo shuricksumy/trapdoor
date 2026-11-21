@@ -36,17 +36,17 @@ func TestServerScripts(t *testing.T) {
 			t.Fatalf("empty: %+v, %v", got, err)
 		}
 		// Presets: rules in chain TDH-wg0 for the interface.
-		got, err = s.SetScripts(ctx, api.Scripts{HookPresets: api.HookPresets{DNSRedirect: "172.30.0.53", BlockDoT: true, Isolate: true}})
+		got, err = s.SetScripts(ctx, api.Scripts{HookPresets: api.HookPresets{DNSRedirect: "172.20.0.53", BlockDoT: true, Isolate: true}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.DNSRedirect != "172.30.0.53" || !got.BlockDoT || !got.Isolate || got.State != "pending" {
+		if got.DNSRedirect != "172.20.0.53" || !got.BlockDoT || !got.Isolate || got.State != "pending" {
 			t.Errorf("presets: %+v", got)
 		}
 		up, _ := os.ReadFile(filepath.Join(cfg.WireGuardDir, "wg0.scripts-up.sh"))
 		for _, want := range []string{
 			`iptables -t nat -I PREROUTING 1 -i "$IFACE" -j TDH-wg0`,
-			"--dport 53 ! -d 172.30.0.53 -j DNAT --to-destination 172.30.0.53:53",
+			"--dport 53 ! -d 172.20.0.53 -j DNAT --to-destination 172.20.0.53:53",
 			"-p tcp --dport 853 -j REJECT --reject-with tcp-reset",
 			`iptables -A TDH-wg0 -o "$IFACE" -j REJECT`,
 		} {

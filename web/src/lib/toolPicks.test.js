@@ -4,7 +4,7 @@ import { gateway, toolPicks } from './toolPicks.js';
 
 test('gateway', () => {
   assert.equal(gateway('192.168.1.0/24'), '192.168.1.1');
-  assert.equal(gateway('11.0.0.0/20'), '11.0.0.1');
+  assert.equal(gateway('10.50.0.0/20'), '10.50.0.1');
   assert.equal(gateway('10.0.0.5/32'), '10.0.0.5');
   assert.equal(gateway('fd00::/64'), null);
   assert.equal(gateway(''), null);

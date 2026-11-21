@@ -132,7 +132,7 @@ func (h scripts) set(req api.Scripts) error {
 	if req.DNSRedirect != "" {
 		a, err := netip.ParseAddr(req.DNSRedirect)
 		if err != nil || !a.Is4() {
-			return badRequest("dns_redirect: an IPv4 address, e.g. 172.30.0.53")
+			return badRequest("dns_redirect: an IPv4 address, e.g. 172.20.0.53")
 		}
 		req.DNSRedirect = a.String()
 	}
