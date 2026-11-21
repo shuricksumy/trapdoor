@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -297,11 +298,33 @@ func (p *Provider) exchange(ctx context.Context, meta *metadata, code, verifier 
 			msg += ": " + out.Description
 		}
 		if msg == "" {
-			msg = resp.Status
+			msg = resp.Status + refusedBy(resp, body)
 		}
 		return out, fmt.Errorf("token endpoint: %s", msg)
 	}
 	return out, nil
+}
+
+// refusedBy says who answered a request with something other than the
+// provider's JSON: a proxy in front of it (e.g. Cloudflare's challenge).
+func refusedBy(resp *http.Response, body []byte) string {
+	var parts []string
+	for _, h := range []string{"Server", "Cf-Mitigated", "Cf-Ray", "Content-Type"} {
+		if v := resp.Header.Get(h); v != "" {
+			parts = append(parts, strings.ToLower(h)+"="+v)
+		}
+	}
+	text := strings.Join(strings.Fields(string(body)), " ")
+	if len(text) > 160 {
+		text = text[:160]
+	}
+	if text != "" {
+		parts = append(parts, "body="+strconv.Quote(text))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
 }
 
 func (p *Provider) userinfo(ctx context.Context, endpoint, access string) (map[string]any, error) {

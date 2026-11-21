@@ -243,6 +243,10 @@ func TestSignIn(t *testing.T) {
 	if _, err := f.login(p2); err == nil || !strings.Contains(err.Error(), "invalid_client") {
 		t.Errorf("wrong secret: %v", err)
 	}
+	// a proxy's refusal says who refused
+	if e := refusedBy(&http.Response{Header: http.Header{"Server": {"cloudflare"}, "Cf-Mitigated": {"challenge"}}}, []byte("<html>\n Just a moment </html>")); !strings.Contains(e, "server=cloudflare") || !strings.Contains(e, "cf-mitigated=challenge") || !strings.Contains(e, `"<html> Just a moment </html>"`) {
+		t.Errorf("refusedBy: %s", e)
+	}
 }
 
 func TestDiscoveryIssuerMismatch(t *testing.T) {
