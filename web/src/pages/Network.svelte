@@ -9,7 +9,7 @@
   import RoutingPanel from '../lib/RoutingPanel.svelte';
   import WGRoutingPanel from '../lib/WGRoutingPanel.svelte';
   import WGNetworkDialog from '../lib/WGNetworkDialog.svelte';
-  import { buildMap, buildWGMap } from '../lib/networkMap.js';
+  import { buildMap, buildWGMap, fold } from '../lib/networkMap.js';
 
   // Routing at a glance, the same for every server type: a map of who reaches
   // what, what needs attention (with a fix), and tabs for the clients, the
@@ -88,6 +88,18 @@
   // the missing-route warnings are in "Needs attention", with a button
   const warnings = $derived([...new Set(clients.flatMap((c) => c.warnings ?? []))].filter((w) => !w.startsWith('server.conf needs "route')));
   const netOf = (n) => nets.find((x) => x.name === n);
+  // Tags per cell, one per line; long lists fold to 4 with "+N more".
+  let unfolded = $state(new Set());
+  const unfold = (key) => (unfolded = new Set([...unfolded, key]));
+  const reachTags = (c) => [
+    ...(c.named ?? []).filter((u) => u.as === 'route').map((u) => ({ t: u.name, cls: 'named', title: netOf(u.name)?.networks.join(', ') })),
+    ...c.routes.map((r) => ({ t: r, cls: 'mono' })),
+    ...pushed.filter((r) => !c.routes.includes(r)).map((r) => ({ t: r, cls: 'mono all', title: 'Sent to every client' })),
+  ];
+  const lanTags = (c) => [
+    ...(c.named ?? []).filter((u) => u.as === 'lan').map((u) => ({ t: u.name, cls: 'named lan', title: netOf(u.name)?.networks.join(', ') })),
+    ...c.lan.map((r) => ({ t: r, cls: 'mono lan' })),
+  ];
   const rulesOf = (name) => rules.filter((r) => r.client === name).length;
 
   // Tabs, in the URL as ?tab=
@@ -196,6 +208,16 @@
   }
 </script>
 
+{#snippet tags(key, list, empty)}
+  {@const f = fold(list, unfolded.has(key))}
+  {#if list.length}
+    <div class="tags">
+      {#each f.shown as x (x.t)}<span class="tag {x.cls}" title={x.title}>{x.t}</span>{/each}
+      {#if f.more}<button class="tag more" onclick={() => unfold(key)}>+{f.more} more</button>{/if}
+    </div>
+  {:else}<span class="faint">{empty}</span>{/if}
+{/snippet}
+
 <header class="head">
   <div>
     <h1>Network</h1>
@@ -287,11 +309,11 @@
                     {#if p.disabled}<span class="faint small block">disabled</span>{:else if p.expired}<span class="faint small block">expired</span>{:else if p.notes}<span class="faint small block">{p.notes}</span>{/if}
                   </td>
                   <td class="mono" data-label="Address">{p.address}</td>
-                  <td data-label="Behind it" class="tagcell"><div class="tags">{#each p.lan ?? [] as r (r)}<span class="tag mono lan">{r}</span>{:else}<span class="faint">–</span>{/each}</div></td>
-                  <td data-label="Sends" class="tagcell"><div class="tags">
-                    {#each p.allowed_ips?.length ? p.allowed_ips : settings?.allowed_ips ?? [] as r (r)}<span class="tag mono" class:all={!p.allowed_ips?.length}>{r}</span>{/each}
+                  <td data-label="Behind it" class="tagcell">{@render tags('l:' + p.name, (p.lan ?? []).map((r) => ({ t: r, cls: 'mono lan' })), '–')}</td>
+                  <td data-label="Sends" class="tagcell">
+                    {@render tags('s:' + p.name, (p.allowed_ips?.length ? p.allowed_ips : settings?.allowed_ips ?? []).map((r) => ({ t: r, cls: p.allowed_ips?.length ? 'mono' : 'mono all' })), '–')}
                     {#if !p.allowed_ips?.length}<span class="faint small">default</span>{/if}
-                  </div></td>
+                  </td>
                   <td class="mono" data-label="DNS">{(p.dns?.length ? p.dns : settings?.dns ?? []).join(', ') || '–'}{#if !p.dns?.length && settings?.dns?.length}<span class="faint small dflt">default</span>{/if}</td>
                   <td data-label="Access">{#if rulesOf(p.name)}<a href="/access">{rulesOf(p.name)} rule{rulesOf(p.name) === 1 ? '' : 's'}</a>{:else}<span class="faint">–</span>{/if}</td>
                   <td class="actions"><button class="btn small ghost" onclick={() => editClient(p.name)}>Edit</button></td>
@@ -329,21 +351,8 @@
                   {/if}
                 </td>
                 <td data-label="All traffic">{c.full_tunnel || srv?.pushes_full_tunnel ? 'Yes' : '–'}</td>
-                <td data-label="Reaches" class="tagcell"><div class="tags">
-                  {#each (c.named ?? []).filter((u) => u.as === 'route') as u (u.name)}
-                    <span class="tag named" title={netOf(u.name)?.networks.join(', ')}>{u.name}</span>
-                  {/each}
-                  {#each c.routes as r (r)}<span class="tag mono">{r}</span>{/each}
-                  {#each pushed.filter((r) => !c.routes.includes(r)) as r (r)}<span class="tag mono all" title="Sent to every client">{r}</span>{/each}
-                  {#if !c.routes.length && !pushed.length && !(c.named ?? []).some((u) => u.as === 'route')}<span class="faint">VPN network only</span>{/if}
-                </div></td>
-                <td data-label="Behind it" class="tagcell"><div class="tags">
-                  {#each (c.named ?? []).filter((u) => u.as === 'lan') as u (u.name)}
-                    <span class="tag named lan" title={netOf(u.name)?.networks.join(', ')}>{u.name}</span>
-                  {/each}
-                  {#each c.lan as r (r)}<span class="tag mono lan">{r}</span>{/each}
-                  {#if !c.lan.length && !(c.named ?? []).some((u) => u.as === 'lan')}<span class="faint">–</span>{/if}
-                </div></td>
+                <td data-label="Reaches" class="tagcell">{@render tags('r:' + c.name, reachTags(c), 'VPN network only')}</td>
+                <td data-label="Behind it" class="tagcell">{@render tags('l:' + c.name, lanTags(c), '–')}</td>
                 <td data-label="Access">{#if rulesOf(c.name)}<a href="/access">{rulesOf(c.name)} rule{rulesOf(c.name) === 1 ? '' : 's'}</a>{:else}<span class="faint">–</span>{/if}</td>
                 <td class="actions">
                   {#if now}<button class="btn small ghost" disabled={!!busy} onclick={() => reconnect(c.name)} title="Disconnect it so it reconnects with its current settings">Reconnect</button>{/if}
@@ -429,14 +438,17 @@
   .intro { margin: 0; padding-top: 0; }
   .block { display: block; }
   .dflt { margin-left: var(--space-2); font-family: var(--sans, inherit); }
-  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
-  .tag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border: 1px solid transparent; border-radius: 6px; background: var(--sunken); color: var(--ink-2); font-size: 12px; line-height: 1.35; white-space: nowrap; }
+  /* one tag per line; a column's tags share its width */
+  .tags { display: grid; gap: 4px; }
+  .tag { display: flex; align-items: center; gap: 5px; padding: 2px 7px; border: 1px solid transparent; border-radius: 6px; background: var(--sunken); color: var(--ink-2); font-size: 12px; line-height: 1.35; white-space: nowrap; }
   .tags > .tag { margin: 0; }
-  .hint .tag { margin: 0 2px; vertical-align: 1px; }
+  .hint .tag { display: inline-flex; margin: 0 2px; vertical-align: 1px; }
   .tag.named { background: var(--accent-soft); color: var(--ink); }
   .tag.lan { border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: var(--ok-soft); color: var(--ink); font-weight: 500; }
   .tag.lan::before { content: ''; width: 6px; height: 6px; border-radius: 2px; background: var(--ok); flex: none; }
   .tag.all { border: 1px dashed var(--line); background: none; }
+  .tag.more { border: 1px solid var(--line); background: none; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
+  .tag.more:hover { border-color: var(--accent); }
   .tagcell { min-width: 140px; }
   .who { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); opacity: 0.6; flex: none; }
@@ -462,6 +474,6 @@
     .cards td[data-label]:not(:first-child) { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: start; column-gap: var(--space-2); }
     .cards td[data-label]:not(:first-child)::before { min-width: 0; padding-top: 2px; }
     .cards td[data-label]:not(:first-child) > * { grid-column: 2; justify-self: start; text-align: left; }
-    .cards td.tagcell .tags { padding-top: 1px; }
+    .cards td.tagcell .tags { padding-top: 1px; width: max-content; max-width: 100%; }
   }
 </style>

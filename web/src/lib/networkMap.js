@@ -184,3 +184,13 @@ export function checkNetwork(raw, { list = [], subnet = '', allowSubnet = false 
   if (list.includes(n)) return { error: `${n} is already there` };
   return { value: n, note: s.includes('/') && n !== s ? `Added as ${n}` : '' };
 }
+
+/**
+ * Folds a long list of tags: the first `max` when closed, all when open.
+ * A single hidden item is shown instead of a "+1 more" button.
+ * @returns {{shown: any[], more: number}}
+ */
+export function fold(list, open, max = 4) {
+  if (open || list.length <= max + 1) return { shown: list, more: 0 };
+  return { shown: list.slice(0, max), more: list.length - max };
+}
