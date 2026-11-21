@@ -1,4 +1,5 @@
 <script>
+  import Fold from './Fold.svelte';
   import { download } from './api.js';
   import { servers, toast } from './state.svelte.js';
 
@@ -23,8 +24,7 @@
   }
 </script>
 
-<section class="panel sb">
-  <div class="panel-head"><h2>Backup</h2></div>
+<Fold id="backup" title="Backup" summary="this server's keys, clients, settings and history in one file">
   <form class="panel-body sb-form" onsubmit={save}>
     <p class="muted small">
       This server only: its keys and certificates, clients, settings, access rules and traffic history. Restore it on this or another
@@ -39,10 +39,9 @@
       <button class="btn" type="submit" disabled={busy}>{busy ? 'Preparing…' : 'Download backup'}</button>
     </div>
   </form>
-</section>
+</Fold>
 
 <style>
-  .sb { margin-top: var(--space-5); }
   .sb-form { display: grid; gap: var(--space-3); }
   .sb-row { display: flex; gap: var(--space-3); align-items: end; flex-wrap: wrap; }
   .sb-row .field { flex: 1 1 240px; }

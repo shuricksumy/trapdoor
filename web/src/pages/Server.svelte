@@ -1,4 +1,5 @@
 <script>
+  import Fold from '../lib/Fold.svelte';
   import { onMount } from 'svelte';
   import { api, reloadServers } from '../lib/api.js';
   import { toast, route, setQuery, navigate, servers, selectServer, currentServer } from '../lib/state.svelte.js';
@@ -138,6 +139,14 @@
     add[key] = '';
   }
   const ipRe = /^[0-9a-fA-F:.]+$/;
+  // What is set now, for the folded header.
+  const cfgSummary = $derived(
+    cfg?.settings
+      ? [`${(cfg.settings.proto || 'udp').toUpperCase()} ${cfg.settings.port ?? ''}`, cfg.settings.subnet, cfg.settings.dns?.length ? `DNS ${cfg.settings.dns.join(', ')}` : '']
+          .filter(Boolean)
+          .join(' · ')
+      : '',
+  );
   const portChanged = $derived(cfg && form && (form.port !== cfg.settings.port || form.proto !== cfg.settings.proto));
 </script>
 
@@ -166,6 +175,9 @@
   </ul>
 {/if}
 
+<Fold id="ovpn-config" title="OpenVPN settings" summary={cfgSummary}>
+  {#snippet badge()}{#if cfg?.restart_pending}<span class="pill warn">restart pending</span>{/if}{/snippet}
+  <div class="cfg">
 <div class="tabs" role="tablist">
   {#each [['settings', 'Settings'], ['raw', 'server.conf'], ['backups', 'Backups']] as [key, label] (key)}
     <button role="tab" aria-selected={tab === key} onclick={() => (tab = key)}>{label}</button>
@@ -266,19 +278,20 @@
     {/if}
   </section>
 {/if}
+  </div>
+</Fold>
 
 <ServerScripts />
 
 <ServerBackup />
 
 {#if removable}
-  <section class="panel remove">
-    <div class="panel-head"><h2>Remove server</h2></div>
+  <Fold id="remove" title="Remove server" summary="stops this OpenVPN server; its certificates are kept">
     <div class="panel-body remove-row">
       <p class="muted">Stops this OpenVPN server. Its clients can no longer connect. Its certificates and settings are kept in a folder named <code>.removed</code> next to it; traffic history stays.</p>
       <button class="btn danger" onclick={() => (remove = { open: true, busy: false })}>Remove server</button>
     </div>
-  </section>
+  </Fold>
 {/if}
 
 <Dialog bind:open={remove.open} title="Remove this server?">
@@ -346,7 +359,6 @@
 </Dialog>
 
 <style>
-  .remove { margin-top: var(--space-5); }
   .remove-row { display: flex; gap: var(--space-4); align-items: center; justify-content: space-between; }
   @media (max-width: 600px) { .remove-row { flex-direction: column; align-items: stretch; } }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-5); }
@@ -357,6 +369,7 @@
   .problems li { display: flex; gap: var(--space-2); align-items: baseline; }
   .problems.in-dialog { margin: 0; }
 
+  .cfg { padding: var(--space-4) var(--space-5) var(--space-5); }
   .tabs { display: flex; gap: 2px; margin-bottom: var(--space-3); }
   .tabs button { height: 32px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-s); background: transparent; color: var(--ink-2); font: inherit; font-weight: 500; cursor: pointer; }
   .tabs button:hover { background: var(--sunken); color: var(--ink); }

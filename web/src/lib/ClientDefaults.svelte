@@ -1,4 +1,5 @@
 <script>
+  import Fold from './Fold.svelte';
   import { api, reloadServers } from './api.js';
   import { toast } from './state.svelte.js';
 
@@ -42,8 +43,7 @@
   }
 </script>
 
-<section class="panel cd">
-  <div class="panel-head"><h2>Settings and client defaults</h2></div>
+<Fold id="client-defaults" title="Settings and client defaults" summary={set ? `${set.name ?? ''}${set.public_host ? ` · ${set.public_host}` : ''}${set.dns?.length ? ` · DNS ${set.dns.join(', ')}` : ''}` : ''}>
   {#if !f}
     <p class="panel-body muted">{error || 'Loading…'}</p>
   {:else}
@@ -92,10 +92,9 @@
       <div><button class="btn primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button></div>
     </form>
   {/if}
-</section>
+</Fold>
 
 <style>
-  .cd { margin-top: var(--space-5); }
   .cd-form { display: grid; gap: var(--space-3); }
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); align-items: start; }
   .check { display: flex; gap: var(--space-2); align-items: center; padding-top: var(--space-5); }
