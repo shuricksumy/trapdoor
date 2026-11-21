@@ -1,4 +1,5 @@
 <script>
+  import Fold from './Fold.svelte';
   import { onMount } from 'svelte';
   import { api } from './api.js';
   import { currentServer, toast } from './state.svelte.js';
@@ -55,13 +56,16 @@
     inactive: ['off', 'Server not running'],
   };
   const vars = ['IFACE', 'SUBNET', 'SERVER_ID', 'TYPE', 'NAT_IFACE'];
+  // What is on now, for the folded header.
+  const summary = $derived.by(() => {
+    if (!s) return '';
+    const on = [s.dns_redirect && `DNS to ${s.dns_redirect}`, s.block_dot && 'DoT blocked', s.isolate && 'clients isolated', (s.up || s.down) && 'own scripts'].filter(Boolean);
+    return on.length ? on.join(' · ') : 'none';
+  });
 </script>
 
-<section class="panel">
-  <div class="panel-head">
-    <h2>Scripts and extra rules</h2>
-    {#if s?.state && stateText[s.state]}<span class="pill {stateText[s.state][0]}">{stateText[s.state][1]}</span>{/if}
-  </div>
+<Fold id="scripts" title="Scripts and extra rules" summary={summary}>
+  {#snippet badge()}{#if s?.state && stateText[s.state]}<span class="pill {stateText[s.state][0]}">{stateText[s.state][1]}</span>{/if}{/snippet}
   {#if loadError}
     <div class="panel-body"><div class="banner bad" role="alert">{loadError}</div></div>
   {:else if !s}
@@ -114,7 +118,7 @@
       <div class="actions"><button class="btn primary" type="submit" disabled={busy || !changed}>{busy ? 'Saving…' : 'Save'}</button></div>
     </form>
   {/if}
-</section>
+</Fold>
 
 <style>
   .body { display: grid; gap: var(--space-4); }

@@ -1,5 +1,6 @@
 <script>
   import ServerBackup from '../lib/ServerBackup.svelte';
+  import Fold from '../lib/Fold.svelte';
   import ServerScripts from '../lib/ServerScripts.svelte';
   import ClientDefaults from '../lib/ClientDefaults.svelte';
   import { where } from '../lib/location.js';
@@ -62,8 +63,8 @@
   <div class="banner bad" role="alert">The server has a problem: {srv.error}</div>
 {/if}
 
-<section class="panel">
-  <div class="panel-head"><h2>Connection</h2><span class="pill {srv?.running ? 'ok' : 'off'}">{srv?.running ? 'Running' : 'Not running'}</span></div>
+<Fold id="wg-connection" title="Connection" summary={srv ? `${srv.endpoint || '–'} · UDP ${srv.listen_port ?? '–'} · ${srv.subnet || '–'}` : ''}>
+  {#snippet badge()}<span class="pill {srv?.running ? 'ok' : 'off'}">{srv?.running ? 'Running' : 'Not running'}</span>{/snippet}
   <dl class="info">
     <div><dt>Address clients connect to</dt><dd class="mono">{srv?.endpoint || '–'}</dd></div>
     <div><dt>Listening on</dt><dd class="mono">UDP {srv?.listen_port ?? '–'}</dd></div>
@@ -76,12 +77,11 @@
       </dd>
     </div>
   </dl>
-</section>
+</Fold>
 
 {#if srv?.obfuscation}
   {@const o = srv.obfuscation}
-  <section class="panel">
-    <div class="panel-head"><h2>Hiding</h2><span class="small muted">AmneziaWG {o.level}</span></div>
+  <Fold id="wg-hiding" title="Hiding" summary="AmneziaWG {o.level}: the values every client config carries">
     <p class="panel-body muted small obf-note">
       {o.level === '3.1'
         ? 'Newest (3.1): also hides packet headers and sizes. Every device needs an AmneziaWG app that supports 3.1.'
@@ -106,7 +106,7 @@
         <div><dt>Imitation packet {k.toUpperCase()}</dt><dd><code class="mono">{o[k]}</code></dd></div>
       {/each}
     </dl>
-  </section>
+  </Fold>
 {/if}
 
 <ClientDefaults />
@@ -115,13 +115,12 @@
 
 <ServerBackup />
 
-<section class="panel">
-  <div class="panel-head"><h2>Remove server</h2></div>
+<Fold id="remove" title="Remove server" summary="stops the server and deletes its clients and keys">
   <div class="panel-body row">
     <p class="muted">Stops this server and deletes its clients and keys. Their devices can no longer connect. Traffic history stays.</p>
     <button class="btn danger" onclick={() => (remove = { open: true, busy: false })}>Remove server</button>
   </div>
-</section>
+</Fold>
 
 <Dialog bind:open={remove.open} title="Remove this server?">
   <p><strong>{srv?.name}</strong> ({srv?.id}) on <strong>{where(srv)}</strong> and its {peers.length} {peers.length === 1 ? 'client' : 'clients'} are deleted. Devices using it can no longer connect. This cannot be undone.</p>
@@ -135,7 +134,6 @@
   .page-head { margin-bottom: var(--space-5); }
   .page-head p { margin-top: var(--space-1); }
   .banner { margin-bottom: var(--space-4); }
-  .panel { margin-bottom: var(--space-5); }
   .info { margin: 0; padding: var(--space-2) var(--space-5) var(--space-4); display: grid; }
   .info > div { display: grid; grid-template-columns: 220px 1fr; gap: var(--space-3); padding: 10px 0; border-bottom: 1px solid var(--line); align-items: center; }
   .info > div:last-child { border-bottom: 0; }
