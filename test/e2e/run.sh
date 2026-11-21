@@ -250,6 +250,70 @@ log "switch-style rules for all clients: server, VPN network, default"
 fw '{"enabled":false,"default":"deny","rules":[]}' >/dev/null
 wait_for 5 nsping || fail "ping blocked although the rules are off"
 [[ $(iptables -S TD-FWD | tail -1) == "-A TD-FWD -j RETURN" ]] || fail "disabled chain: $(iptables -S TD-FWD)"
+log "speed limits: alice's real download and upload through tc (HTB, IFB), then a usage limit that blocks her"
+# 1 MB each way between the server (10.99.0.1) and alice's namespace; prints seconds.
+cat >"$WORK/speed.py" <<'PY'
+import socket, sys, time
+mode, host = sys.argv[1], sys.argv[2]
+N = 1_000_000
+if mode == "serve":  # serve: send 1 MB to whoever connects, read 1 MB from whoever sends
+    s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind((host, 5201)); s.listen(4)
+    while True:
+        c, _ = s.accept()
+        what = c.recv(1)
+        if what == b"d":
+            c.sendall(b"x" * N)
+        else:
+            got = 0
+            while got < N:
+                b = c.recv(65536)
+                if not b: break
+                got += len(b)
+            c.sendall(b"k")
+        c.close()
+t = time.time()
+c = socket.create_connection((host, 5201), timeout=30)
+if mode == "down":
+    c.sendall(b"d"); got = 0
+    while True:
+        b = c.recv(65536)
+        if not b: break
+        got += len(b)
+    assert got == N, got
+else:
+    c.sendall(b"u" + b"x" * N); c.recv(1)
+print(f"{time.time() - t:.2f}")
+PY
+python3 "$WORK/speed.py" serve 10.99.0.1 >/dev/null 2>&1 &
+PIDS+=($!)
+sleep 0.5
+speed() { ip netns exec twc python3 "$WORK/speed.py" "$1" 10.99.0.1; }
+fast_down=$(speed down) || fail "no download through the tunnel"
+limits() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -X "$1" ${3:+-d "$3"} "$WEB/api/v1/servers/openvpn/limits$2"; }
+limits PUT /clients/alice '{"down":2000,"up":2000}' >"$WORK/lim1.json" || fail "save alice's speed"
+grep -q '"applied":true' "$WORK/lim1.json" || fail "speed rules not applied: $(cat "$WORK/lim1.json")"
+TUN=$(ip -o link show | awk -F': ' '$2 ~ /^tun[0-9]+$/ { print $2; exit }')
+tc class show dev "$TUN" | grep -q "rate 2Mbit" || fail "no HTB class on $TUN: $(tc class show dev "$TUN")"
+slow_down=$(speed down) || fail "download with a limit"
+slow_up=$(speed up) || fail "upload with a limit"
+python3 -c "import sys; d, u = float(sys.argv[1]), float(sys.argv[2]); sys.exit(0 if d >= 3 and u >= 3 else 1)" "$slow_down" "$slow_up" ||
+	fail "1 MB at 2 Mbit/s took ${slow_down}s down / ${slow_up}s up (expected about 4s; unlimited: ${fast_down}s)"
+limits PUT /clients/alice '{}' >"$WORK/lim2.json" || fail "clear alice's speed"
+grep -q '"applied":true' "$WORK/lim2.json" || fail "clearing not applied: $(cat "$WORK/lim2.json")"
+! tc qdisc show dev "$TUN" | grep -q htb || fail "HTB left on $TUN with no limits: $(tc qdisc show dev "$TUN")"
+again=$(speed down)
+python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) < 2 else 1)" "$again" || fail "still slow without a limit: ${again}s"
+log "1 MB at 2 Mbit/s: ${slow_down}s down, ${slow_up}s up; without a limit ${again}s (first ${fast_down}s)"
+# Usage limit: 1 MB, then blocked (her traffic above is in the history after the next poll).
+limits PUT /clients/alice '{"quota_mb":1,"period":"day","block":true}' >/dev/null || fail "save alice's usage limit"
+blocked() { limits GET "" | python3 -c "import json, sys; d = json.load(sys.stdin); sys.exit(0 if any(r['name'] == 'alice' and r['state'] == 'blocked' for r in d['clients']) else 1)"; }
+wait_for 20 blocked || fail "alice not over 1 MB: $(limits GET "")"
+limits PUT /clients/alice '{"quota_mb":1,"period":"day","block":true}' >/dev/null # applied now (the minute check would do it too)
+! nsping || fail "alice gets through although she is blocked"
+limits POST /clients/alice/reset >/dev/null || fail "reset alice"
+wait_for 5 nsping || fail "alice still blocked after the reset"
+limits PUT /clients/alice '{}' >/dev/null
+log "over her usage limit alice is blocked (still connected); reset lets her through again"
 kill "$NSCLIENT"; wait "$NSCLIENT" 2>/dev/null || true
 wait_for 15 offline alice || fail "alice still online"
 log "rules block and allow alice's real traffic; off means pass-through"

@@ -49,13 +49,17 @@ server). Below, `…` stands for that prefix.
 | POST | `/api/v1/servers/{server}/backup` | `{"passphrase"}` → one server's backup (its files and traffic history) |
 | POST | `/api/v1/servers/restore` | form upload: `file`, `passphrase`, `host` (empty: this machine), `replace` (`1`) → 201 the restored server; 409 when its id or port is taken |
 | POST | `/api/v1/backup` | `{"passphrase"}` → a backup file (`.tdbackup` encrypted, or `.tar.gz` without a passphrase); see the guide |
-| GET, PUT | `/api/v1/email` | email settings: `{"enabled","host","port","security":"starttls\|tls\|none","username","password","from","insecure_skip_verify","admins":[…],"notify":{"backup_failed","node_down","cert_expiry"}}`; GET never returns the password (`password_set`) and adds `last` (the last email's outcome); PUT with an empty password keeps it, `clear_password` removes it |
+| GET, PUT | `/api/v1/email` | email settings: `{"enabled","host","port","security":"starttls\|tls\|none","username","password","from","insecure_skip_verify","admins":[…],"notify":{"backup_failed","node_down","cert_expiry","usage_limit"}}`; GET never returns the password (`password_set`) and adds `last` (the last email's outcome); PUT with an empty password keeps it, `clear_password` removes it |
 | POST | `/api/v1/email/test` | `{"to"}` (optional, default: the admins) → a test email; 502 with the SMTP error |
 | GET | `/api/v1/servers/{server}/history/uptime` | `?from=YYYY-MM-DD&to=YYYY-MM-DD` (both days included; by hour up to 3 days, by day beyond, at most 4 years), `?range=24h\|7d` (by hour), `?range=30d` (by day) or `?month=YYYY-MM` (a calendar month by day) → `{"from","to","step","starts":[…],"clients":[{"name","online","last_seen","sessions","online_seconds","buckets":[seconds per step]}],"server":[seconds the server was up per step],"server_seconds","tracked"}` (`tracked`: when the server's record begins; before it, unknown) |
 | GET | `/api/v1/servers/{server}/history/events` | `?from&to` (dates), `name`, `quiet=1` (fold reconnects within the online / offline quiet time), `offset`, `limit` (≤ 1000) → `{"total","events":[{"time","name","up","from","lasted","merged"}]}`, newest first |
 | GET | `/api/v1/servers/{server}/history/events.csv` | the same, all of it, oldest first: `time,client,event,from,was_up_seconds,quick_reconnects` |
+| GET | `/api/v1/servers/{server}/limits` | → `{"default":{limit},"own_default":{set},"clients":[{"name","own":{set},"limit":{limit},"used","period_start","period_end","reset_at","state":"full\|capped\|slowed\|blocked","speed":{"down","up","block"}}],"shaping":{agent state},"shaping_error"}`; a limit is `{"down","up"` (kbit/s, 0 = unlimited)`,"quota_mb"` (0 = none)`,"period":"day\|week\|month","slow_down","slow_up","block"}`; in a set, `null` follows the default |
+| PUT | `/api/v1/servers/{server}/limits/default` | the server's defaults (a set) → as GET, applied |
+| PUT | `/api/v1/servers/{server}/limits/clients/{name}` | a client's own values (a set; all `null`: the defaults) → as GET, applied |
+| POST | `/api/v1/servers/{server}/limits/clients/{name}/reset` | usage counts from zero for the rest of the period → as GET, applied |
 | POST | `/api/v1/servers/{server}/tools/{tool}` | `ping`, `traceroute`, `route`, `dns`, `tcp` or `http`, run in the server's network: `{"target","count","ports","kind","server","url"}` (as the tool needs) → `{"tool","ok","summary","output","truncated","duration_ms"}`; 400 for a bad target, 409 while another tool runs on the node |
-| GET, PUT | `/api/v1/telegram` | Telegram settings: `{"enabled","token","chats":[…],"notify":{"backup_failed","node_down","cert_expiry"}}`; GET never returns the token (`token_set`) and adds `last`; PUT with an empty token keeps it, `clear_token` removes it |
+| GET, PUT | `/api/v1/telegram` | Telegram settings: `{"enabled","token","chats":[…],"notify":{"backup_failed","node_down","cert_expiry","usage_limit"}}`; GET never returns the token (`token_set`) and adds `last`; PUT with an empty token keeps it, `clear_token` removes it |
 | POST | `/api/v1/telegram/test` | `{"chat"}` (optional, default: the chats) → a test message; 502 with Telegram's error |
 | GET, PUT | `/api/v1/presence` | where clients' online / offline messages go: `{"email","chat","grace_minutes"}` (one address, one chat; empty: none) |
 | GET | `/api/v1/servers/{server}/notify` | clients with online / offline messages on: `{"<client>": true}` |
@@ -123,6 +127,7 @@ under `/v1/servers/{server}/` (`…` below); an unknown server is 404.
 | GET | `…/setup` | – | `needed`, `has_pki`, defaults, container-fixed port/proto |
 | GET / PUT | `…/firewall` | access rules `{enabled, default, rules[]}` | rules, generated iptables text, `applied`, warnings, `client_to_client` (OpenVPN passes traffic between clients itself) |
 | POST | `…/firewall/addresses` | `{"names":[...]}` | gives clients fixed VPN addresses |
+| GET / PUT | `…/shaping` | speeds now `{"default":{"down","up"},"clients":{"name":{"down","up","block"}}}` (kbit/s, 0 = unlimited) | the speeds, generated `tc` script, `addresses` matched, `applied`, `waiting` (interface down), `error`; 409 with `TD_FIREWALL=off` |
 | POST | `…/setup` | wizard answers (`public_host`, `port`, `proto`, `subnet`, `dns`, `tls`, …) | creates PKI, keys, `server.conf`; 409 when it exists |
 | GET | `…/certs` | – | all entries (history included; `current` marks the newest per name) |
 | POST | `…/certs` | `{"name","kind"?,"passphrase"?,"validity_days"?,"notes"?}` | 201 cert (`notes`: display name) |

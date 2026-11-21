@@ -277,11 +277,70 @@ scripts_sync() {
 	done
 }
 
+# Speed limits of each server (TD_FIREWALL=file): <base>shaping.sh, made by
+# the agent (tc commands, see internal/shaping), run with the server's
+# device while it is up, and again when the file changes or the device was
+# recreated (a restart drops its rules). Answered in <base>shaping.status:
+# "ok|waiting|error <sha256> [message]". When the file is gone, the limits
+# are taken out.
+SH_STATE=/run/trapdoor-shaping
+rm -rf "$SH_STATE"
+mkdir -p "$SH_STATE"
+sh_status() { # <file> <line>: written only when it changes
+	[ "$(cat "$1" 2>/dev/null)" = "$2" ] && return 0
+	echo "$2" >"$1.tmp" && mv "$1.tmp" "$1"
+}
+sh_clear() { # <state prefix>
+	dev=$(cat "$1.dev" 2>/dev/null || true)
+	ifb=$(cat "$1.ifb" 2>/dev/null || true)
+	if [ -n "$dev" ]; then
+		tc qdisc del dev "$dev" root 2>/dev/null || true
+		tc qdisc del dev "$dev" ingress 2>/dev/null || true
+	fi
+	if [ -n "$ifb" ]; then ip link del "$ifb" 2>/dev/null || true; fi
+	rm -f "$1".*
+}
+shaping_sync() {
+	command -v tc >/dev/null || return 0
+	for f in "$(dirname "$CONF")/trapdoor-shaping.sh" "$OVPN_SERVERS_DIR"/*/trapdoor-shaping.sh "$WG_DIR"/*.shaping.sh "$AWG_DIR"/*.shaping.sh; do
+		[ -f "$f" ] || continue
+		base=${f%shaping.sh}
+		st=$SH_STATE/$(echo "$f" | sha256sum | cut -c1-16)
+		sum=$(sha256sum "$f" | cut -d' ' -f1)
+		dev=$(sc_dev "$(sed -n 's/^# IFACE=//p' "$f" | head -1)")
+		if [ -z "$dev" ]; then
+			sh_status "${base}shaping.status" "waiting $sum"
+			rm -f "$st.applied"
+			continue
+		fi
+		mark="$sum $dev $(cat "/sys/class/net/$dev/ifindex" 2>/dev/null)"
+		[ "$mark" = "$(cat "$st.applied" 2>/dev/null)" ] && continue
+		echo "$f" >"$st.file"
+		echo "$dev" >"$st.dev"
+		sed -n 's/^IFB=//p' "$f" | head -1 >"$st.ifb"
+		if out=$(sh "$f" "$dev" 2>&1); then
+			sh_status "${base}shaping.status" "ok $sum"
+			echo "$dev: speed limits applied"
+		else
+			sh_status "${base}shaping.status" "error $sum $(echo "$out" | tail -2 | tr '\n' ' ')"
+			echo "$dev: speed limits failed: $out"
+		fi
+		echo "$mark" >"$st.applied"
+	done
+	for f in "$SH_STATE"/*.file; do
+		[ -f "$f" ] || continue
+		[ -f "$(cat "$f")" ] && continue
+		echo "$(cat "${f%.file}.dev" 2>/dev/null): speed limits removed"
+		sh_clear "${f%.file}"
+	done
+}
+
 (while :; do
 	[ -f "$FW_RULES" ] && fw_apply
 	wg_sync "$WG_DIR" wg wg-quick
 	wg_sync "$AWG_DIR" awg awg-quick
 	scripts_sync
+	shaping_sync
 	sleep 1
 done) &
 WG_LOOP=$!
@@ -435,6 +494,10 @@ done
 # host's network).
 for st in "$SC_STATE"/*; do
 	[ -d "$st" ] && sc_down "$st"
+done
+# Speed limits: the IFB devices would outlive the container on the host's network.
+for f in "$SH_STATE"/*.file; do
+	[ -f "$f" ] && sh_clear "${f%.file}"
 done
 # Take down the WireGuard / AmneziaWG interfaces brought up here, with their NAT and
 # rules: on the host's network (network_mode: host) they would outlive the container.

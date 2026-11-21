@@ -743,6 +743,42 @@ the first record (trapdoor never deletes the session history).
 - Days are days in `TD_TZ`. WireGuard / AmneziaWG count a client as gone 3 minutes after its
   last handshake, so their downs come a little after the device went away.
 
+## Limits
+
+Menu → *Limits*, for every server type: how fast each client may go and how much it may use.
+
+<img src="screenshots/limits.png" width="720">
+
+- **Defaults for every client**: a speed (download and upload, Mbit/s; empty = unlimited), a
+  usage limit (GB per day, week from Monday or month, in `TD_TZ`; empty = none) and what
+  happens when it is reached: **slowed down** to a speed (1 Mbit/s by default) or **blocked**
+  (still connected, nothing gets through) until the period ends.
+- **A client's own values**: *Edit* on its row; for each of speed, usage limit and "when
+  reached", the default or its own. *Reset* counts its usage from zero for the rest of the
+  period and gives it its speed back (in the audit log as `limits.reset`).
+- **Usage** is both directions together, from the traffic history; the page shows it as a bar
+  with how long until the period ends. Over 80% turns orange, over the limit red.
+- **Messages**: a client at 80% and at 100% of its limit (once per period) goes to the admins
+  by email and Telegram; *a client reaches 80% or 100% of its usage limit* in their settings.
+
+How it works:
+
+- Every minute the web part works out each client's speed from its limits and usage, and sends
+  the result to the agent (`PUT …/shaping`: a default speed and the clients that differ). The
+  agent only knows speeds.
+- The agent renders `tc` commands for the server's device (`trapdoor-shaping.sh` next to
+  `server.conf`, `<id>.shaping.sh` for WireGuard / AmneziaWG): an HTB class per limited client,
+  matched by its VPN address, for downloads; uploads go through an IFB device (`tq-<id>`) and
+  are shaped the same way. Unlimited clients get no class at all. Blocked: their packets are
+  dropped both ways.
+- With `TD_FIREWALL=file` (Docker) the vpn container runs it while the interface is up, again
+  when it changes or the interface was recreated (a restart), and reports back; *Rules* on the
+  page shows it. `direct`: the agent runs it. `off`: speeds are not managed.
+- OpenVPN clients are matched by their fixed address, or the address they have while
+  connected (picked up within a minute). WireGuard clients always have one. IPv4 only.
+- The kernel needs `sch_htb`, `cls_u32`, `act_mirred`, `sch_ingress` and `ifb` (usual
+  distribution kernels load them by themselves).
+
 ## Tools
 
 Menu → *Tools*: network checks run from the selected server's network.

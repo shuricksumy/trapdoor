@@ -21,6 +21,7 @@ import (
 	"github.com/shuricksumy/trapdoor/internal/ovpn"
 	"github.com/shuricksumy/trapdoor/internal/pki"
 	"github.com/shuricksumy/trapdoor/internal/serverconf"
+	"github.com/shuricksumy/trapdoor/internal/shaping"
 )
 
 // Server is one OpenVPN server managed by the agent: its PKI, server.conf,
@@ -57,6 +58,9 @@ type Server struct {
 
 	fwMu sync.Mutex
 	fw   *fwTarget // use firewallTarget()
+
+	shapeOnce sync.Once
+	shape     *shaper // use shaper()
 
 	restartMu   sync.Mutex
 	restartWait time.Duration // tests shorten it
@@ -108,7 +112,42 @@ func (s *Server) routes() http.Handler {
 	s.registerControlRoutes(mux)
 	registerScripts(mux, s.scripts)
 	registerTools(mux)
+	registerShaping(mux, s.shaper())
 	return mux
+}
+
+// shaper keeps the server's speed limits (trapdoor-shaping.*), matched by
+// the clients' fixed addresses and, for the others, the addresses they
+// have while connected.
+func (s *Server) shaper() *shaper {
+	s.shapeOnce.Do(func() {
+		s.shape = &shaper{mode: s.firewallMode(), iface: s.fwIface, ifb: shaping.IFB(s.id),
+			base: filepath.Join(s.cfg.OpenVPNDir, "trapdoor-"), waitFn: s.firewallWait, addrs: s.clientAddrs, log: s.log}
+	})
+	return s.shape
+}
+
+func (s *Server) clientAddrs(ctx context.Context) (map[string]netip.Addr, error) {
+	ips, err := s.staticIPs()
+	if err != nil {
+		return nil, err
+	}
+	if s.stopped() {
+		return ips, nil
+	}
+	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if st, err := s.mgmt.Status(cctx); err == nil {
+		for _, se := range st.Sessions {
+			if _, fixed := ips[se.Name]; fixed {
+				continue
+			}
+			if a, err := netip.ParseAddr(se.VirtualAddress); err == nil {
+				ips[se.Name] = a
+			}
+		}
+	}
+	return ips, nil
 }
 
 // Info describes the server; it never fails, problems are in the fields.

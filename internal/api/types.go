@@ -711,3 +711,34 @@ type ToolResult struct {
 	Truncated bool   `json:"truncated,omitempty"`
 	Millis    int64  `json:"duration_ms"`
 }
+
+// Speed is a speed limit in kbit/s (0 = unlimited), or blocked (the client
+// stays connected but nothing gets through).
+type Speed struct {
+	Down  int64 `json:"down,omitempty"` // server → client
+	Up    int64 `json:"up,omitempty"`   // client → server
+	Block bool  `json:"block,omitempty"`
+}
+
+// Shaping is PUT /v1/servers/{id}/shaping: the speed each client may use
+// now. The agent knows nothing of usage limits; the web part decides who is
+// over and sends the result.
+type Shaping struct {
+	Default Speed            `json:"default"` // every client without its own
+	Clients map[string]Speed `json:"clients"` // clients with their own speed
+}
+
+// ShapingState is GET /v1/servers/{id}/shaping and the answer to PUT.
+type ShapingState struct {
+	Shaping
+	Mode    string `json:"mode"`    // direct, file (applied by the VPN container) or off
+	Applied bool   `json:"applied"` // the current rules are active
+	// Waiting: the server's interface is not up (stopped), the rules are
+	// applied when it is.
+	Waiting bool   `json:"waiting,omitempty"`
+	Error   string `json:"error,omitempty"`
+	// Addresses of the clients the rules match now (OpenVPN clients with
+	// an automatic address only while connected).
+	Addresses map[string]string `json:"addresses"`
+	Script    string            `json:"script"` // the generated tc commands
+}

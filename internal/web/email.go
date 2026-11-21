@@ -31,6 +31,7 @@ type Notify struct {
 	BackupFailed bool `json:"backup_failed"`
 	NodeDown     bool `json:"node_down"`
 	CertExpiry   bool `json:"cert_expiry"`
+	UsageLimit   bool `json:"usage_limit"` // a client reaches 80% / 100% of its usage limit
 }
 
 // EmailSettings is GET / PUT /api/v1/email.
@@ -58,7 +59,7 @@ type EmailStatus struct {
 
 func (s *Server) emailSettings(ctx context.Context) (EmailSettings, error) {
 	es := EmailSettings{Config: mail.Config{Port: 587, Security: mail.SecuritySTARTTLS},
-		Notify: Notify{BackupFailed: true, NodeDown: true, CertExpiry: true}}
+		Notify: Notify{BackupFailed: true, NodeDown: true, CertExpiry: true, UsageLimit: true}}
 	_, err := s.Stats.DB.Setting(ctx, settingEmail, &es)
 	return es, err
 }

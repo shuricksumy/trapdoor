@@ -32,7 +32,7 @@ type TelegramSettings struct {
 }
 
 func (s *Server) telegramSettings(ctx context.Context) (TelegramSettings, error) {
-	ts := TelegramSettings{Notify: Notify{BackupFailed: true, NodeDown: true, CertExpiry: true}}
+	ts := TelegramSettings{Notify: Notify{BackupFailed: true, NodeDown: true, CertExpiry: true, UsageLimit: true}}
 	_, err := s.Stats.DB.Setting(ctx, settingTelegram, &ts)
 	return ts, err
 }

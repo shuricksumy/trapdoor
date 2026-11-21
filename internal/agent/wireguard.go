@@ -23,6 +23,7 @@ import (
 	"github.com/shuricksumy/trapdoor/internal/config"
 	"github.com/shuricksumy/trapdoor/internal/httpx"
 	"github.com/shuricksumy/trapdoor/internal/pki"
+	"github.com/shuricksumy/trapdoor/internal/shaping"
 	"github.com/shuricksumy/trapdoor/internal/wg"
 )
 
@@ -84,6 +85,7 @@ type WGServer struct {
 	st          wgState
 	applied     netip.Prefix // address the interface was brought up with
 	fw          *fwTarget    // access rules: chain TD-<id> for the interface
+	shape       *shaper      // speed limits for the interface
 	applyErr    string
 	sess        map[string]*wgSession // by public key, while connected
 	last        map[string][2]int64   // last rx/tx seen per public key
@@ -133,6 +135,8 @@ func newWGServer(cfg config.Agent, log *slog.Logger, st wgState) *WGServer {
 	}
 	s.fw = &fwTarget{mode: fwMode, chain: "TD-" + st.ID, iface: st.ID, iptablesDir: cfg.IPTablesDir,
 		rulesPath: wgPath(dir, st.ID, ".rules"), statusPath: wgPath(dir, st.ID, ".fwstatus")}
+	s.shape = &shaper{mode: fwMode, iface: st.ID, ifb: shaping.IFB(st.ID), base: wgPath(dir, st.ID, "."),
+		addrs: s.peerAddrs, log: s.log}
 	if cfg.WireGuard == "file" {
 		s.run = wgFile{dir: dir, now: time.Now}
 	} else {
@@ -203,6 +207,9 @@ func loadWGDir(ctx context.Context, cfg config.Agent, log *slog.Logger, dir, typ
 		s.applyLocked(ctx, false)
 		s.refreshFirewallLocked(ctx) // the kernel forgets the rules on reboot
 		s.mu.Unlock()
+		if fwMode := cfg.Firewall; fwMode == "" || fwMode == FirewallDirect {
+			s.shape.refresh(ctx)
+		}
 		out = append(out, s)
 	}
 	return out, nil
@@ -408,6 +415,7 @@ func (s *WGServer) remove(ctx context.Context) error {
 		return err
 	}
 	s.fw.remove(ctx)
+	s.shape.remove(ctx)
 	s.scripts().remove()
 	for _, ext := range []string{".conf", ".json", ".dump", ".error", ".sync"} {
 		if err := os.Remove(wgPath(s.dir, s.st.ID, ext)); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -423,6 +431,17 @@ func writeFileAtomic(path string, b []byte) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// peerAddrs: every client's address, for the speed limits. Takes mu.
+func (s *WGServer) peerAddrs(context.Context) (map[string]netip.Addr, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]netip.Addr, len(s.st.Peers))
+	for _, p := range s.st.Peers {
+		out[p.Name] = p.Address
+	}
+	return out, nil
 }
 
 func (s *WGServer) routes() http.Handler {
@@ -450,6 +469,7 @@ func (s *WGServer) routes() http.Handler {
 	registerTools(mux)
 	mux.HandleFunc("PUT /firewall", s.handleSetFirewall)
 	mux.HandleFunc("POST /firewall/addresses", s.handleAssignAddresses)
+	registerShaping(mux, s.shape)
 	return mux
 }
 

@@ -264,6 +264,7 @@ func (s *Server) ApplyFirewallAtStart(ctx context.Context) {
 	if s.firewallMode() != FirewallDirect {
 		return
 	}
+	s.shaper().refresh(ctx)
 	if _, saved, err := s.loadPolicy(); err != nil || !saved {
 		return
 	}
