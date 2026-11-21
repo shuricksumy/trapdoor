@@ -69,9 +69,11 @@ same two-factor logins.
   expire, by email and / or your own Telegram bot ([how](docs/guide.md#email))
 - **Tools** per server: ping, traceroute, DNS, TCP ports, HTTP(S) with certificate and timing, routes, run
   from the VPN server's own network ([how](docs/guide.md#tools))
-- **Limits** per client: speed (download / upload), a usage limit per day, week or month, and
-  then slowed down or blocked until the period ends; defaults per server, reset, messages at
-  80% and 100% ([how](docs/guide.md#limits))
+- **Limits** per client: speed (download / upload), priority (high / normal / low), a usage
+  limit per day, week or month, and then slowed down or blocked until the period ends;
+  defaults per server, reset, messages at 80% and 100%; per server traffic alarms (per hour,
+  day, month) and the price of traffic, with this month's cost on the Overview
+  ([how](docs/guide.md#limits))
 - **Uptime** page for any period back to the first record: status bars per client, a month
   calendar, every up and down with filters and CSV export ([how](docs/guide.md#uptime))
 - **Online / offline messages** for the clients you pick: when they connect or disconnect, by

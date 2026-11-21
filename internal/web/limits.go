@@ -13,6 +13,7 @@ import (
 	"github.com/shuricksumy/trapdoor/internal/agent"
 	"github.com/shuricksumy/trapdoor/internal/api"
 	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/store"
 )
 
 // Speed and usage limits per server (the Limits page).
@@ -39,10 +40,12 @@ type LimitSet struct {
 	SlowDown *int64 `json:"slow_down"`
 	SlowUp   *int64 `json:"slow_up"`
 	Block    *bool  `json:"block"`
+	// Priority: high, normal or low; it needs the server's link speed.
+	Priority *string `json:"priority"`
 }
 
 func (l LimitSet) empty() bool {
-	return l.Down == nil && l.Up == nil && l.QuotaMB == nil && l.Period == nil && l.SlowDown == nil && l.SlowUp == nil && l.Block == nil
+	return l.Down == nil && l.Up == nil && l.QuotaMB == nil && l.Period == nil && l.SlowDown == nil && l.SlowUp == nil && l.Block == nil && l.Priority == nil
 }
 
 // Limit is a LimitSet with every value filled in.
@@ -54,10 +57,11 @@ type Limit struct {
 	SlowDown int64  `json:"slow_down"`
 	SlowUp   int64  `json:"slow_up"`
 	Block    bool   `json:"block"`
+	Priority string `json:"priority"`
 }
 
 // builtinLimit is the default of a server nobody set limits for.
-var builtinLimit = Limit{Period: "month", SlowDown: 1000, SlowUp: 1000}
+var builtinLimit = Limit{Period: "month", SlowDown: 1000, SlowUp: 1000, Priority: "normal"}
 
 // over fills in the nil fields of s from base.
 func (s LimitSet) over(base Limit) Limit {
@@ -68,12 +72,16 @@ func (s LimitSet) over(base Limit) Limit {
 		return d
 	}
 	out := Limit{Down: pick(s.Down, base.Down), Up: pick(s.Up, base.Up), QuotaMB: pick(s.QuotaMB, base.QuotaMB),
-		Period: base.Period, SlowDown: pick(s.SlowDown, base.SlowDown), SlowUp: pick(s.SlowUp, base.SlowUp), Block: base.Block}
+		Period: base.Period, SlowDown: pick(s.SlowDown, base.SlowDown), SlowUp: pick(s.SlowUp, base.SlowUp), Block: base.Block,
+		Priority: base.Priority}
 	if s.Period != nil {
 		out.Period = *s.Period
 	}
 	if s.Block != nil {
 		out.Block = *s.Block
+	}
+	if s.Priority != nil {
+		out.Priority = *s.Priority
 	}
 	return out
 }
@@ -95,6 +103,9 @@ func (s LimitSet) validate() error {
 	if s.Period != nil && *s.Period != "day" && *s.Period != "week" && *s.Period != "month" {
 		return errors.New("period: day, week or month")
 	}
+	if s.Priority != nil && *s.Priority != "high" && *s.Priority != "normal" && *s.Priority != "low" {
+		return errors.New("priority: high, normal or low")
+	}
 	return nil
 }
 
@@ -111,6 +122,58 @@ type limitClient struct {
 type serverLimits struct {
 	Default LimitSet                `json:"default"`
 	Clients map[string]*limitClient `json:"clients"`
+	Server  ServerSettings          `json:"server"`
+	// AlarmNotified: the last alarm message per period, "<start>:<80|100>".
+	AlarmNotified map[string]string `json:"alarm_notified,omitempty"`
+}
+
+// ServerSettings are the server's own: its link speed (for priorities),
+// traffic alarms and the price of traffic.
+type ServerSettings struct {
+	LinkDown int64 `json:"link_down"` // kbit/s to the clients, 0 = no priorities
+	LinkUp   int64 `json:"link_up"`   // kbit/s from the clients
+	// Alarms: a message at 80% and 100% of the server's traffic (both
+	// directions) in an hour, a day or a month; MB, 0 = none.
+	AlarmHourMB  int64 `json:"alarm_hour_mb"`
+	AlarmDayMB   int64 `json:"alarm_day_mb"`
+	AlarmMonthMB int64 `json:"alarm_month_mb"`
+	// PriceIn, PriceOut per GB (1000³ bytes): in = received from clients,
+	// out = sent to them. 0 = no cost shown.
+	PriceIn  float64 `json:"price_in"`
+	PriceOut float64 `json:"price_out"`
+	Currency string  `json:"currency"`
+}
+
+func (ss ServerSettings) priced() bool { return ss.PriceIn > 0 || ss.PriceOut > 0 }
+
+func (ss ServerSettings) cost(v store.InOut) float64 {
+	return float64(v.In)/1e9*ss.PriceIn + float64(v.Out)/1e9*ss.PriceOut
+}
+
+func (ss *ServerSettings) validate() error {
+	for _, k := range []int64{ss.LinkDown, ss.LinkUp} {
+		if k < 0 || k > maxKbit {
+			return fmt.Errorf("link: 0 (no priorities) to %d kbit/s", maxKbit)
+		}
+	}
+	for _, mb := range []int64{ss.AlarmHourMB, ss.AlarmDayMB, ss.AlarmMonthMB} {
+		if mb < 0 || mb > 1_000_000_000 {
+			return errors.New("alarms: 0 (none) to 1,000,000,000 MB")
+		}
+	}
+	for _, p := range []float64{ss.PriceIn, ss.PriceOut} {
+		if p < 0 || p > 1000 || math.IsNaN(p) {
+			return errors.New("price per GB: 0 to 1000")
+		}
+	}
+	ss.Currency = strings.TrimSpace(ss.Currency)
+	if ss.Currency == "" {
+		ss.Currency = "$"
+	}
+	if len([]rune(ss.Currency)) > 4 {
+		return errors.New("currency: a symbol or code, e.g. $, €, USD")
+	}
+	return nil
 }
 
 // LimitRow is one client on the Limits page.
@@ -126,6 +189,9 @@ type LimitRow struct {
 	// slowed or blocked (over its usage limit).
 	State string    `json:"state"`
 	Speed api.Speed `json:"speed"` // what it gets now
+	// Cost this month (with prices set), and the month's traffic.
+	Cost  float64     `json:"cost"`
+	Month store.InOut `json:"month"`
 }
 
 // Limits is GET /api/v1/servers/{server}/limits.
@@ -137,6 +203,19 @@ type Limits struct {
 	// not be asked; ShapingError says why).
 	Shaping      *api.ShapingState `json:"shaping,omitempty"`
 	ShapingError string            `json:"shaping_error,omitempty"`
+	Server       ServerSettings    `json:"server"`
+	Traffic      ServerTraffic     `json:"traffic"`
+}
+
+// ServerTraffic is the server's traffic (both directions) now, for the
+// alarms, and the month's cost.
+type ServerTraffic struct {
+	Hour      int64       `json:"hour"`
+	Day       int64       `json:"day"`
+	Month     int64       `json:"month"`
+	MonthIO   store.InOut `json:"month_in_out"`
+	Cost      float64     `json:"cost"`      // this month so far
+	Projected float64     `json:"projected"` // the whole month at this rate
 }
 
 func (s *Server) registerLimitRoutes(mux *http.ServeMux) {
@@ -144,6 +223,8 @@ func (s *Server) registerLimitRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/v1/servers/{server}/limits/default", s.handleSetLimitDefault)
 	mux.HandleFunc("PUT /api/v1/servers/{server}/limits/clients/{name}", s.handleSetLimitClient)
 	mux.HandleFunc("POST /api/v1/servers/{server}/limits/clients/{name}/reset", s.handleResetLimitClient)
+	mux.HandleFunc("PUT /api/v1/servers/{server}/limits/server", s.handleSetLimitServer)
+	mux.HandleFunc("GET /api/v1/servers/{server}/cost", s.handleCost)
 }
 
 func (s *Server) loadLimits(ctx context.Context) (map[string]*serverLimits, error) {
@@ -211,6 +292,11 @@ func (s *Server) evaluate(ctx context.Context, server string, sl *serverLimits, 
 		set[n] = true
 	}
 	rows := make([]LimitRow, 0, len(set))
+	mStart, _ := periodOf("month", now, s.Location)
+	monthIO, err := s.Stats.DB.UsageInOut(ctx, server, mStart.Unix())
+	if err != nil {
+		return nil, err
+	}
 	// clients with usage in the longest period count too
 	for _, p := range []string{"month", "week"} {
 		start, _ := periodOf(p, now, s.Location)
@@ -255,10 +341,21 @@ func (s *Server) evaluate(ctx context.Context, server string, sl *serverLimits, 
 				row.State, row.Speed = "slowed", api.Speed{Down: slower(lim.SlowDown, lim.Down), Up: slower(lim.SlowUp, lim.Up)}
 			}
 		}
+		row.Speed.Prio = agentPrio(lim.Priority)
+		row.Month = monthIO[n]
+		row.Cost = sl.Server.cost(row.Month)
 		rows = append(rows, row)
 	}
 	sort.Slice(rows, func(i, j int) bool { return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name) })
 	return rows, nil
+}
+
+// agentPrio: the agent's word for a priority ("" = normal).
+func agentPrio(p string) string {
+	if p == "high" || p == "low" {
+		return p
+	}
+	return ""
 }
 
 // slower: the slowed speed never exceeds the normal one (0 = unlimited).
@@ -271,8 +368,9 @@ func slower(slow, normal int64) int64 {
 
 // shapingFor is what the agent gets: the default speed, and every client
 // whose speed differs from it.
-func shapingFor(def Limit, rows []LimitRow) api.Shaping {
-	out := api.Shaping{Default: api.Speed{Down: def.Down, Up: def.Up}, Clients: map[string]api.Speed{}}
+func shapingFor(def Limit, ss ServerSettings, rows []LimitRow) api.Shaping {
+	out := api.Shaping{Default: api.Speed{Down: def.Down, Up: def.Up, Prio: agentPrio(def.Priority)}, Clients: map[string]api.Speed{},
+		LinkDown: ss.LinkDown, LinkUp: ss.LinkUp}
 	for _, r := range rows {
 		if r.Speed != out.Default {
 			out.Clients[r.Name] = r.Speed
@@ -317,8 +415,21 @@ func (s *Server) applyLimits(ctx context.Context, server string, names []string,
 		return Limits{}, err
 	}
 	var events []LimitRow
+	var alarms []alarmEvent
+	var ss ServerSettings
+	if sl != nil {
+		ss = sl.Server
+	}
+	tr, err := s.serverTraffic(ctx, server, ss)
+	if err != nil {
+		s.limitsMu.Unlock()
+		return Limits{}, err
+	}
 	if notify && sl != nil {
 		changed := false
+		if alarms = s.dueAlarms(sl, tr); len(alarms) > 0 {
+			changed = true
+		}
 		for _, r := range rows {
 			if r.Limit.QuotaMB <= 0 {
 				continue
@@ -355,14 +466,14 @@ func (s *Server) applyLimits(ctx context.Context, server string, names []string,
 	}
 	s.limitsMu.Unlock()
 
-	out := Limits{Clients: rows}
+	out := Limits{Clients: rows, Server: ss, Traffic: tr}
 	if sl != nil {
 		out.Own = sl.Default
 		out.Default = sl.Default.over(builtinLimit)
 	} else {
 		out.Default = builtinLimit
 	}
-	st, err := s.Agent.Server(server).SetShaping(ctx, shapingFor(out.Default, rows))
+	st, err := s.Agent.Server(server).SetShaping(ctx, shapingFor(out.Default, ss, rows))
 	if err != nil {
 		out.ShapingError = shapingError(err)
 	} else {
@@ -371,7 +482,171 @@ func (s *Server) applyLimits(ctx context.Context, server string, names []string,
 	if len(events) > 0 {
 		s.reportLimits(ctx, server, events)
 	}
+	if len(alarms) > 0 {
+		s.reportAlarms(ctx, server, alarms)
+	}
 	return out, nil
+}
+
+// serverTraffic: the server's traffic this hour, day and month, and the
+// month's cost.
+func (s *Server) serverTraffic(ctx context.Context, server string, ss ServerSettings) (ServerTraffic, error) {
+	now := s.Now()
+	var tr ServerTraffic
+	total := func(since time.Time) (store.InOut, error) {
+		u, err := s.Stats.DB.UsageInOut(ctx, server, since.Unix())
+		var sum store.InOut
+		for _, v := range u {
+			sum.In += v.In
+			sum.Out += v.Out
+		}
+		return sum, err
+	}
+	hour := now.Truncate(time.Hour)
+	day, _ := periodOf("day", now, s.Location)
+	month, end := periodOf("month", now, s.Location)
+	for _, p := range []struct {
+		since time.Time
+		to    *int64
+	}{{hour, &tr.Hour}, {day, &tr.Day}} {
+		v, err := total(p.since)
+		if err != nil {
+			return tr, err
+		}
+		*p.to = v.In + v.Out
+	}
+	m, err := total(month)
+	if err != nil {
+		return tr, err
+	}
+	tr.MonthIO, tr.Month = m, m.In+m.Out
+	tr.Cost = ss.cost(m)
+	if gone := now.Sub(month); gone > time.Hour {
+		tr.Projected = tr.Cost * float64(end.Sub(month)) / float64(gone)
+	}
+	return tr, nil
+}
+
+// alarmEvent is a server alarm to report.
+type alarmEvent struct {
+	period      string // hour, day, month
+	used, limit int64  // bytes
+	level       int    // 80 or 100
+}
+
+// dueAlarms: the alarms crossed and not yet reported in their period
+// (marks them reported). Called with limitsMu held.
+func (s *Server) dueAlarms(sl *serverLimits, tr ServerTraffic) []alarmEvent {
+	now := s.Now()
+	var out []alarmEvent
+	for _, a := range []struct {
+		period string
+		mb     int64
+		used   int64
+		start  time.Time
+	}{
+		{"hour", sl.Server.AlarmHourMB, tr.Hour, now.Truncate(time.Hour)},
+		{"day", sl.Server.AlarmDayMB, tr.Day, func() time.Time { t, _ := periodOf("day", now, s.Location); return t }()},
+		{"month", sl.Server.AlarmMonthMB, tr.Month, func() time.Time { t, _ := periodOf("month", now, s.Location); return t }()},
+	} {
+		if a.mb <= 0 {
+			continue
+		}
+		limit := a.mb * 1_000_000
+		level := 0
+		switch {
+		case a.used >= limit:
+			level = 100
+		case a.used*10 >= limit*8:
+			level = 80
+		}
+		if level == 0 {
+			continue
+		}
+		mark := fmt.Sprintf("%d:%d", a.start.Unix(), level)
+		prev := sl.AlarmNotified[a.period]
+		if prev == mark || (level == 80 && prev == fmt.Sprintf("%d:100", a.start.Unix())) {
+			continue
+		}
+		if sl.AlarmNotified == nil {
+			sl.AlarmNotified = map[string]string{}
+		}
+		sl.AlarmNotified[a.period] = mark
+		out = append(out, alarmEvent{period: a.period, used: a.used, limit: limit, level: level})
+	}
+	return out
+}
+
+func (s *Server) reportAlarms(ctx context.Context, server string, alarms []alarmEvent) {
+	srv := s.serverNames(ctx, server)[server]
+	if srv == "" {
+		srv = server
+	}
+	this := map[string]string{"hour": "this hour", "day": "today", "month": "this month"}
+	for _, a := range alarms {
+		var subject, text string
+		if a.level == 100 {
+			subject = fmt.Sprintf("%s is over its traffic alarm %s", srv, this[a.period])
+			text = fmt.Sprintf("🚨 %s used %s %s, over its alarm of %s.", srv, formatBytes(a.used), this[a.period], formatGB(a.limit/1_000_000))
+		} else {
+			subject = fmt.Sprintf("%s used 80%% of its traffic alarm %s", srv, this[a.period])
+			text = fmt.Sprintf("📈 %s used %s %s, %d%% of its alarm of %s.", srv, formatBytes(a.used), this[a.period], a.used*100/a.limit, formatGB(a.limit/1_000_000))
+		}
+		s.notify(ctx, func(n Notify) bool { return n.UsageLimit }, subject, text)
+	}
+}
+
+// handleSetLimitServer saves the server's link speed, alarms and prices.
+func (s *Server) handleSetLimitServer(w http.ResponseWriter, r *http.Request) {
+	var in ServerSettings
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	if err := in.validate(); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	server := r.PathValue("server")
+	if err := s.editLimits(r.Context(), server, func(sl *serverLimits, _ time.Time) error {
+		sl.Server = in
+		return nil
+	}); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(r, "limits.server", server)
+	s.writeApplied(w, r)
+}
+
+// Cost is GET /api/v1/servers/{server}/cost (the Overview page).
+type Cost struct {
+	Priced    bool        `json:"priced"` // prices are set
+	Currency  string      `json:"currency"`
+	PriceIn   float64     `json:"price_in"`
+	PriceOut  float64     `json:"price_out"`
+	Month     store.InOut `json:"month"`
+	Cost      float64     `json:"cost"`
+	Projected float64     `json:"projected"`
+}
+
+func (s *Server) handleCost(w http.ResponseWriter, r *http.Request) {
+	server := r.PathValue("server")
+	all, err := s.loadLimits(r.Context())
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var ss ServerSettings
+	if sl := all[server]; sl != nil {
+		ss = sl.Server
+	}
+	tr, err := s.serverTraffic(r.Context(), server, ss)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, Cost{Priced: ss.priced(), Currency: ss.Currency, PriceIn: ss.PriceIn, PriceOut: ss.PriceOut,
+		Month: tr.MonthIO, Cost: tr.Cost, Projected: tr.Projected})
 }
 
 func shapingError(err error) string {
@@ -432,7 +707,11 @@ func (s *Server) handleGetLimits(w http.ResponseWriter, r *http.Request) {
 	}
 	out := Limits{Default: builtinLimit, Clients: rows}
 	if sl := all[server]; sl != nil {
-		out.Own, out.Default = sl.Default, sl.Default.over(builtinLimit)
+		out.Own, out.Default, out.Server = sl.Default, sl.Default.over(builtinLimit), sl.Server
+	}
+	if out.Traffic, err = s.serverTraffic(r.Context(), server, out.Server); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	if st, err := c.Shaping(r.Context()); err != nil {
 		out.ShapingError = shapingError(err)

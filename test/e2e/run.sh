@@ -326,6 +326,17 @@ over=$(speed down) || fail "download while slowed"
 python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) >= 3 else 1)" "$over" || fail "over her limit 1 MB took ${over}s (expected about 4s at 2 Mbit/s)"
 limits PUT /clients/alice '{}' >/dev/null
 log "over her usage limit alice is slowed to 2 Mbit/s: 1 MB took ${over}s"
+# The server's link speed (for priorities): everything is kept under it; alice high.
+limits PUT /server '{"link_down":4000,"link_up":4000}' >"$WORK/lim4.json" || fail "save the link speed"
+grep -q '"applied":true' "$WORK/lim4.json" || fail "link speed not applied: $(cat "$WORK/lim4.json")"
+limits PUT /clients/alice '{"priority":"high"}' >/dev/null || fail "save alice's priority"
+tc class show dev "$TUN" | grep -q "rate 4Mbit ceil 4Mbit" || fail "no link class: $(tc class show dev "$TUN")"
+tc class show dev "$TUN" | grep -q "prio 0" || fail "alice's class is not high priority: $(tc class show dev "$TUN")"
+linked=$(speed down) || fail "download under the link speed"
+python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) >= 1.5 else 1)" "$linked" || fail "1 MB under a 4 Mbit/s link took ${linked}s (expected about 2s)"
+limits PUT /server '{}' >/dev/null
+limits PUT /clients/alice '{}' >/dev/null
+log "under a 4 Mbit/s link 1 MB took ${linked}s; alice high priority (prio 0)"
 kill "$NSCLIENT"; wait "$NSCLIENT" 2>/dev/null || true
 wait_for 15 offline alice || fail "alice still online"
 log "rules block and allow alice's real traffic; off means pass-through"

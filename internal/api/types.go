@@ -718,6 +718,9 @@ type Speed struct {
 	Down  int64 `json:"down,omitempty"` // server → client
 	Up    int64 `json:"up,omitempty"`   // client → server
 	Block bool  `json:"block,omitempty"`
+	// Prio is "high" or "low" ("" = normal); it only matters with the
+	// server's link speed (Shaping.LinkDown / LinkUp).
+	Prio string `json:"prio,omitempty"`
 }
 
 // Shaping is PUT /v1/servers/{id}/shaping: the speed each client may use
@@ -726,6 +729,10 @@ type Speed struct {
 type Shaping struct {
 	Default Speed            `json:"default"` // every client without its own
 	Clients map[string]Speed `json:"clients"` // clients with their own speed
+	// LinkDown, LinkUp: the server's speed in kbit/s each way, for
+	// priorities (traffic is kept just under it); 0 = no priorities.
+	LinkDown int64 `json:"link_down,omitempty"`
+	LinkUp   int64 `json:"link_up,omitempty"`
 }
 
 // ShapingState is GET /v1/servers/{id}/shaping and the answer to PUT.

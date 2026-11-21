@@ -18,7 +18,7 @@ func TestIFB(t *testing.T) {
 }
 
 func TestRenderEmpty(t *testing.T) {
-	s, _ := Render("tun+", "tq-openvpn", []Client{{Name: "anna", Addr: netip.MustParseAddr("10.8.0.6")}})
+	s, _ := Render("tun+", "tq-openvpn", []Client{{Name: "anna", Addr: netip.MustParseAddr("10.8.0.6")}}, Link{})
 	if strings.Contains(s, " add ") {
 		t.Errorf("nothing limited, but rules:\n%s", s)
 	}
@@ -34,7 +34,7 @@ func TestRender(t *testing.T) {
 		{Name: "eve\nrm -rf /", Addr: netip.MustParseAddr("10.8.0.9"), Limit: Limit{Block: true, Down: 5}},
 		{Name: "v6", Addr: netip.MustParseAddr("fd00::2"), Limit: Limit{Down: 1000}},
 		{Name: "free", Addr: netip.MustParseAddr("10.8.0.8")},
-	})
+	}, Link{})
 	if len(skipped) != 1 || skipped[0] != "v6" {
 		t.Errorf("skipped %v", skipped)
 	}
@@ -68,7 +68,7 @@ func TestRenderRuns(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s, _ := Render("tun+", "tq-openvpn", []Client{{Name: "anna", Addr: netip.MustParseAddr("10.8.0.6"), Limit: Limit{Down: 1000, Up: 500}}})
+	s, _ := Render("tun+", "tq-openvpn", []Client{{Name: "anna", Addr: netip.MustParseAddr("10.8.0.6"), Limit: Limit{Down: 1000, Up: 500}}}, Link{})
 	path := filepath.Join(dir, "shaping.sh")
 	if err := os.WriteFile(path, []byte(s), 0o644); err != nil {
 		t.Fatal(err)
@@ -93,11 +93,44 @@ func TestRenderRuns(t *testing.T) {
 		t.Errorf("clear:\n%s", got)
 	}
 	// no limits left: only removes, and succeeds
-	empty, _ := Render("tun+", "tq-openvpn", nil)
+	empty, _ := Render("tun+", "tq-openvpn", nil, Link{})
 	if err := os.WriteFile(path, []byte(empty), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if got := run("tun0"); strings.Contains(got, " add ") || !strings.Contains(got, "tc qdisc del dev tun0 root") {
 		t.Errorf("empty:\n%s", got)
+	}
+}
+
+// With the link's speed every client gets a class: a guaranteed share by
+// priority, its own limit as the ceiling, and the rest of the traffic in 1:2.
+func TestRenderPriorities(t *testing.T) {
+	s, _ := Render("tun+", "tq-openvpn", []Client{
+		{Name: "immich", Addr: netip.MustParseAddr("10.8.0.2"), Limit: Limit{Prio: "high"}},
+		{Name: "phone", Addr: netip.MustParseAddr("10.8.0.3")},
+		{Name: "camera", Addr: netip.MustParseAddr("10.8.0.4"), Limit: Limit{Prio: "low", Down: 2000}},
+		{Name: "gone", Addr: netip.MustParseAddr("10.8.0.5"), Limit: Limit{Block: true}},
+	}, Link{Down: 90000})
+	// weights: immich 4, phone 2, camera 1, everything else 2 → 9
+	for _, want := range []string{
+		`tc qdisc add dev "$DEV" root handle 1: htb default 2`,
+		`tc class add dev "$DEV" parent 1: classid 1:1 htb rate 90000kbit ceil 90000kbit`,
+		`tc class add dev "$DEV" parent 1:1 classid 1:2 htb rate 20000kbit ceil 90000kbit prio 1`,
+		`tc class add dev "$DEV" parent 1:1 classid 1:10 htb rate 40000kbit ceil 90000kbit prio 0 quantum 200000 # immich`,
+		`tc class add dev "$DEV" parent 1:1 classid 1:11 htb rate 20000kbit ceil 90000kbit prio 1 quantum 200000 # phone`,
+		`tc class add dev "$DEV" parent 1:1 classid 1:12 htb rate 2000kbit ceil 2000kbit prio 2 quantum 25000 # camera`,
+		`match ip dst 10.8.0.5/32 action drop # gone blocked`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in\n%s", want, s)
+		}
+	}
+	// no upload link and no upload limits: the blocked client is dropped, nothing shaped
+	if strings.Contains(s, "type ifb") || !strings.Contains(s, "parent ffff: protocol ip prio 1 u32 match ip src 10.8.0.5/32 action drop") {
+		t.Errorf("upload:\n%s", s)
+	}
+	// without a link the priority alone does nothing
+	if s, _ := Render("tun+", "tq-openvpn", []Client{{Name: "immich", Addr: netip.MustParseAddr("10.8.0.2"), Limit: Limit{Prio: "high"}}}, Link{}); strings.Contains(s, " add ") {
+		t.Errorf("priority without a link:\n%s", s)
 	}
 }

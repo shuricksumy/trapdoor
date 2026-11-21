@@ -445,3 +445,31 @@ func (db *DB) Usage(ctx context.Context, agent string, since int64) (map[string]
 	}
 	return out, rows.Err()
 }
+
+// InOut is traffic as the server sees it: In received from the client
+// (its upload), Out sent to it (its download).
+type InOut struct {
+	In  int64 `json:"in"`
+	Out int64 `json:"out"`
+}
+
+// UsageInOut is each client's traffic of a server in the hours that start
+// at or after since, by direction.
+func (db *DB) UsageInOut(ctx context.Context, agent string, since int64) (map[string]InOut, error) {
+	rows, err := db.QueryContext(ctx, `SELECT name, SUM(bytes_in), SUM(bytes_out) FROM traffic_hourly
+		WHERE agent = ? AND hour >= ? GROUP BY name`, agent, since)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]InOut{}
+	for rows.Next() {
+		var name string
+		var v InOut
+		if err := rows.Scan(&name, &v.In, &v.Out); err != nil {
+			return nil, err
+		}
+		out[name] = v
+	}
+	return out, rows.Err()
+}

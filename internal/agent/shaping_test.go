@@ -234,3 +234,27 @@ func TestShapingWireGuard(t *testing.T) {
 		t.Error("script left after the server was removed")
 	}
 }
+
+// With the server's link speed every client gets a class, by priority.
+func TestShapingPriorities(t *testing.T) {
+	old := shapingWait
+	shapingWait = 200 * time.Millisecond
+	t.Cleanup(func() { shapingWait = old })
+	c, _ := shapingServer(t, "file")
+	ctx := context.Background()
+	if _, err := c.SetShaping(ctx, api.Shaping{Clients: map[string]api.Speed{"alice": {Prio: "urgent"}}}); err == nil {
+		t.Error("bad priority accepted")
+	}
+	if _, err := c.SetShaping(ctx, api.Shaping{LinkDown: -1}); err == nil {
+		t.Error("negative link accepted")
+	}
+	st, err := c.SetShaping(ctx, api.Shaping{LinkDown: 100000, LinkUp: 20000, Clients: map[string]api.Speed{"alice": {Prio: "high"}}})
+	if err != nil || st.Addresses["alice"] != "10.8.0.10" || st.LinkDown != 100000 {
+		t.Fatalf("set = %+v %v", st, err)
+	}
+	for _, want := range []string{"classid 1:1 htb rate 100000kbit", "prio 0 quantum 200000 # alice", "classid 1:1 htb rate 20000kbit", `redirect dev "$IFB"`} {
+		if !strings.Contains(st.Script, want) {
+			t.Errorf("missing %q in\n%s", want, st.Script)
+		}
+	}
+}

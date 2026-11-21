@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api, poll } from '../lib/api.js';
+  import { money } from '../lib/limits.js';
   import { bytes, duration, relative, certState, date } from '../lib/format.js';
   import { settings, toast, servers } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
@@ -14,6 +15,7 @@
   let liveError = $state('');
   let history = $state([]);
   let today = $state(null);
+  let cost = $state(null); // this month's traffic cost (prices on the Limits page)
   let certs = $state([]);
   let now = $state(new Date());
 
@@ -28,6 +30,7 @@
     if (st.status === 'fulfilled') status = st.value;
     if (hs.status === 'fulfilled') history = hs.value;
     if (rep.status === 'fulfilled') today = rep.value;
+    api('/cost').then((c) => (cost = c), () => {});
     if (cs.status === 'fulfilled') {
       certs = cs.value;
       setClientNames(certs);
@@ -86,7 +89,7 @@
   <div class="banner warn setup" role="status"><span>OpenVPN is not set up yet.</span> <a class="btn small primary" href="/setup">Set up the server</a></div>
 {:else if serverProblem}<div class="banner bad" role="alert">{serverProblem}</div>{/if}
 
-<section class="summary" aria-label="Today">
+<section class="summary" class:five={cost?.priced} aria-label="Today">
   <div>
     <span class="k">Connected now</span>
     <span class="v">{live ? live.sessions.length : '–'}</span>
@@ -103,6 +106,13 @@
     <span class="k">Sessions today</span>
     <span class="v">{today ? today.total.sessions : '–'}</span>
   </div>
+  {#if cost?.priced}
+    <a class="costtile" href="/limits" title="Prices and traffic alarms on the Limits page">
+      <span class="k">Cost this month</span>
+      <span class="v">{money(cost.cost, cost.currency)}</span>
+      {#if cost.projected}<span class="faint small">≈ {money(cost.projected, cost.currency)} by the month's end</span>{/if}
+    </a>
+  {/if}
 </section>
 
 <section class="panel">
@@ -196,6 +206,10 @@
     padding: var(--space-4) var(--space-4) var(--space-4) 0;
   }
   .summary > div + div { padding-left: var(--space-4); border-left: 1px solid var(--line); }
+  .summary.five { grid-template-columns: repeat(5, 1fr); }
+  .summary > .costtile { display: grid; gap: 2px; padding: var(--space-4) 0 var(--space-4) var(--space-4); border-left: 1px solid var(--line); color: inherit; text-decoration: none; }
+  .summary > .costtile:hover .v { color: var(--accent); }
+  .small { font-size: var(--step--1); }
   .k { font-size: var(--step--1); color: var(--ink-2); }
   .v { font-size: var(--step-2); font-weight: 500; letter-spacing: -0.01em; }
 
