@@ -741,6 +741,31 @@ the first record (trapdoor never deletes the session history).
 - Days are days in `TD_TZ`. WireGuard / AmneziaWG count a client as gone 3 minutes after its
   last handshake, so their downs come a little after the device went away.
 
+## Tools
+
+Menu → *Tools*: network checks run from the selected server's network. In Docker the agent
+shares the vpn container's network, so a check reaches what the VPN server reaches: its
+clients' VPN addresses, the LANs behind them, the internet.
+
+| Tool | What it shows |
+|---|---|
+| Ping | replies, packet loss, min / avg / max time (1, 4 or 10 packets) |
+| Traceroute | the path hop by hop, up to 20 (one probe each) |
+| DNS | A / AAAA, CNAME, MX, TXT, NS or reverse (PTR), from the system's resolver or a chosen DNS server, e.g. your AdGuard |
+| TCP port | open, closed (refused) or no answer, with the connect time; several ports at once (`22, 80,443`, `8000-8005`) |
+| HTTP(S) | status, timing (DNS, connect, TLS, first byte), the certificate and whether it is trusted, the redirect target (not followed) |
+| Route | which interface and gateway a destination takes (`ip route get`); empty: the addresses and the routing table |
+
+- Suggestions under the target: this server, connected clients' VPN addresses, a gateway in
+  each LAN behind a client, the DNS servers clients get.
+- Each result shows a summary line and the full output; the last 20 stay on the page while it
+  is open.
+- Safety: no shell; ping, traceroute and ip get their arguments as a list, and a target must be
+  an IP address or a host name (nothing that could be an option or a command). One tool runs at
+  a time per node, for at most 30 seconds; the output is cut at 32 kB. Every run is in the audit
+  log (`tool.ping` and so on, with the target).
+- Traceroute needs raw sockets: the agent runs as root with NET_RAW, as in the compose files.
+
 ## Client online / offline
 
 A message when a client connects or disconnects, by email and / or Telegram:

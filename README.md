@@ -59,6 +59,8 @@ same two-factor logins.
 - **Email and Telegram**: send a client its profile or WireGuard config (with QR code) and how
   to set it up; notifications when a backup fails, a node stops answering or certificates
   expire, by email and / or your own Telegram bot ([how](docs/guide.md#email))
+- **Tools** per server: ping, traceroute, DNS, TCP ports, HTTP(S) with certificate and timing, routes, run
+  from the VPN server's own network ([how](docs/guide.md#tools))
 - **Uptime** page for any period back to the first record: status bars per client, a month
   calendar, every up and down with filters and CSV export ([how](docs/guide.md#uptime))
 - **Online / offline messages** for the clients you pick: when they connect or disconnect, by

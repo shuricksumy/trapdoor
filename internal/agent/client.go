@@ -299,6 +299,15 @@ func (c *Client) SetCertNotes(ctx context.Context, name, notes string) (api.Cert
 	return out, err
 }
 
+// RunTool runs a network tool (ping, traceroute, route, dns, tcp, http) in
+// the server's network.
+func (c *Client) RunTool(ctx context.Context, tool string, req api.ToolRequest) (api.ToolResult, error) {
+	var out api.ToolResult
+	// up to 30 s (a traceroute): the slow client, not the usual timeout
+	err := c.do(ctx, c.slow, http.MethodPost, c.path("/tools/"+url.PathEscape(tool)), req, &out)
+	return out, err
+}
+
 // Scripts returns the server's presets and own start / stop scripts.
 func (c *Client) Scripts(ctx context.Context) (api.Scripts, error) {
 	var out api.Scripts

@@ -690,3 +690,24 @@ type Firewall struct {
 type AssignAddresses struct {
 	Names []string `json:"names"`
 }
+
+// ToolRequest is the body of POST /v1/servers/{id}/tools/{tool}: ping,
+// traceroute, route, dns, tcp or http, run in the server's network.
+type ToolRequest struct {
+	Target string `json:"target,omitempty"` // host name or IP (route: an IP, empty = the routing table)
+	Count  int    `json:"count,omitempty"`  // ping: 1-10
+	Ports  string `json:"ports,omitempty"`  // tcp: "22, 80,443" or "8000-8005"
+	Kind   string `json:"kind,omitempty"`   // dns: A, AAAA, CNAME, MX, TXT, NS, PTR
+	Server string `json:"server,omitempty"` // dns: a DNS server to ask (IP)
+	URL    string `json:"url,omitempty"`    // http
+}
+
+// ToolResult is what a tool found.
+type ToolResult struct {
+	Tool      string `json:"tool"`
+	OK        bool   `json:"ok"`
+	Summary   string `json:"summary"`
+	Output    string `json:"output"`
+	Truncated bool   `json:"truncated,omitempty"`
+	Millis    int64  `json:"duration_ms"`
+}
