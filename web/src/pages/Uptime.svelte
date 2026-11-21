@@ -7,7 +7,7 @@
   import { currentServer, route, setQuery } from '../lib/state.svelte.js';
   import { clientName, loadClientNames } from '../lib/names.svelte.js';
   import { duration, relative, dateTime } from '../lib/format.js';
-  import { bucketSpan, known as recordedBy, level, monthGrid, pageList, preset, presetOf, serverLevel, sortClients, uptimePct } from '../lib/uptime.js';
+  import { bucketSpan, known as recordedBy, level, monthGrid, pageList, parts, preset, presetOf, sortClients, uptimePct } from '../lib/uptime.js';
 
   const isWG = ['wireguard', 'amneziawg'].includes(currentServer()?.type);
   const presets = [['today', 'Today'], ['7d', '7 days'], ['30d', '30 days'], ['this_month', 'This month'], ['last_month', 'Last month'], ['this_year', 'This year']];
@@ -199,6 +199,11 @@
   }
 </script>
 
+<!-- One bar segment: its parts stacked bottom up, each at least 4 px when not zero. -->
+{#snippet seg(ps, title)}
+  <i class="b" class:future={!ps.length} {title}>{#each ps as p, k (k)}<i class="p {p.kind}" style="flex-basis: {p.frac * 100}%"></i>{/each}</i>
+{/snippet}
+
 <header class="head">
   <div>
     <h1>Uptime</h1>
@@ -295,7 +300,7 @@
       <li class="srv">
         <span class="who static"><i class="dot" class:on={currentServer()?.running !== false}></i><span class="name">Server</span></span>
         <div class="bars" role="img" aria-label="The server: up {serverPct ?? '–'}% of the recorded time">
-          {#each report.starts as _, i (i)}<i class="b {serverLevel(report.server?.[i] ?? 0, spans[i], covered[i])}" title={serverTip(i)}></i>{/each}
+          {#each report.starts as _, i (i)}{@render seg(spans[i] <= 0 ? [] : covered[i] ? parts(report.server?.[i] ?? 0, spans[i], undefined, true) : [{ kind: 'none', frac: 1 }], serverTip(i))}{/each}
         </div>
         <span class="pct">{serverPct === null ? '–' : `${serverPct}%`}</span>
         <span class="seen faint small">{report.tracked ? `since ${new Date(report.tracked).toLocaleDateString([], { day: 'numeric', month: 'short' })}` : 'not recorded yet'}</span>
@@ -306,7 +311,7 @@
             <i class="dot" class:on={c.online}></i><span class="name">{clientName(c.name)}</span>
           </button>
           <div class="bars" role="img" aria-label="{clientName(c.name)}: online {uptimePct(c.online_seconds, report, now)}% of the period">
-            {#each c.buckets as sec, i (i)}<i class="b {level(sec, spans[i], report.server?.[i], covered[i])}" title={tip(c, i)}></i>{/each}
+            {#each c.buckets as sec, i (i)}{@render seg(parts(sec, spans[i], report.server?.[i], covered[i]), tip(c, i))}{/each}
           </div>
           <span class="pct">{uptimePct(c.online_seconds, report, now)}%</span>
           <span class="seen faint small">{c.online ? 'online now' : c.last_seen ? `seen ${relative(c.last_seen)}` : 'never seen'}</span>
@@ -314,8 +319,8 @@
       {/each}
     </ul>
     <p class="panel-body hint legend">
-      <i class="b full"></i> online <i class="b part"></i> part of the {report.step} <i class="b off"></i> not connected, server up
-      <i class="b out"></i> server down <i class="b none"></i> not recorded yet · click a client for its calendar
+      <i class="key on"></i> online <i class="key off"></i> not connected, server up <i class="key out"></i> server down
+      <i class="key none"></i> not recorded yet · each {report.step} is split by time, even a minute shows · click a client for its calendar
     </p>
   {/if}
 </section>
@@ -398,20 +403,20 @@
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); opacity: 0.6; flex: none; }
   .dot.on { background: var(--ok); opacity: 1; }
   .bars { display: flex; gap: 1px; height: 26px; }
-  .b { flex: 1; min-width: 1px; border-radius: 2px; }
-  .b.full { background: var(--ok); }
-  .b.part { background: color-mix(in srgb, var(--ok) 45%, var(--sunken)); }
-  .b.none { background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line); }
-  .b.off { background: color-mix(in srgb, var(--bad) 70%, var(--sunken)); }
-  .b.out { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+  .b { flex: 1; min-width: 1px; display: flex; flex-direction: column-reverse; overflow: hidden; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--line); }
+  .b.future { opacity: 0.4; }
+  .p { flex-grow: 0; flex-shrink: 1; min-height: 4px; }
+  .p.on, .key.on { background: var(--ok); }
+  .p.off, .key.off { background: color-mix(in srgb, var(--bad) 75%, var(--sunken)); }
+  .p.none, .key.none { background: var(--sunken); }
+  .p.out, .key.out { background: transparent; }
+  .key { display: inline-block; width: 10px; height: 12px; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--line); }
   .srv { border-bottom: 1px dashed var(--line); }
   .who.static { cursor: default; }
   .who.static:hover .name { text-decoration: none; }
-  .b.future { background: transparent; box-shadow: inset 0 0 0 1px var(--line); opacity: 0.4; }
   .pct { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
   .seen { text-align: right; }
   .legend { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .legend .b { display: inline-block; flex: none; width: 10px; height: 12px; }
   .events .when { white-space: nowrap; }
   .ev { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: var(--step--1); font-weight: 600; white-space: nowrap; }
   .ev.up { color: var(--ok); background: var(--ok-soft); }

@@ -120,3 +120,30 @@ export function pageList(current, pages) {
   out.push(pages);
   return out;
 }
+
+/**
+ * A segment as stacked parts, bottom up: 'on' (online), 'off' (not connected
+ * while the server was up; 'none' when the server's record does not cover
+ * it), 'out' (the server was down). Each is { kind, frac } with frac of the
+ * segment so far; parts of 0 are left out, so even a second online or offline
+ * can be drawn (the page gives every part a minimum height).
+ * For the server's own row pass seconds = server up and server = undefined.
+ */
+export function parts(seconds, span, server, known = false) {
+  if (span <= 0) return [];
+  const on = Math.min(seconds, span);
+  let off;
+  let out = 0;
+  if (server === undefined || !known) off = span - on;
+  else {
+    const up = Math.min(Math.max(server, on), span); // online implies up
+    off = up - on;
+    out = span - up;
+  }
+  const unknownOff = server === undefined ? 'out' : known ? 'off' : 'none';
+  return [
+    { kind: 'on', frac: on / span },
+    { kind: unknownOff, frac: off / span },
+    { kind: 'out', frac: out / span },
+  ].filter((p) => p.frac > 0);
+}

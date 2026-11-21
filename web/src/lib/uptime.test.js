@@ -93,3 +93,18 @@ test('page buttons: first, last, two around the current one', async () => {
   // the length stays the same while paging through, so the buttons do not jump
   for (let c = 1; c <= 30; c++) assert.equal(pageList(c, 30).length, 9, `page ${c}`);
 });
+
+test('stacked parts: short times are kept, not rounded away', async () => {
+  const { parts } = await import('./uptime.js');
+  const k = (ps) => ps.map((p) => `${p.kind}:${Math.round(p.frac * 3600)}`).join(' ');
+  assert.equal(k(parts(60, 3600, 3600, true)), 'on:60 off:3540'); // one minute online
+  assert.equal(k(parts(1, 3600, 3600, true)), 'on:1 off:3599'); // one second
+  assert.equal(k(parts(3300, 3600, 3600, true)), 'on:3300 off:300'); // five minutes away
+  assert.equal(k(parts(0, 3600, 2700, true)), 'off:2700 out:900'); // a 15-minute outage
+  assert.equal(k(parts(600, 3600, 0, true)), 'on:600 out:3000'); // online counts as up
+  assert.equal(k(parts(0, 3600, 3600, false)), 'none:3600'); // before the server's record
+  assert.equal(k(parts(3600, 3600, 3600, true)), 'on:3600');
+  assert.deepEqual(parts(0, 0, 0, true), []); // the future
+  // the server's own row: up and down
+  assert.equal(k(parts(3000, 3600, undefined, true)), 'on:3000 out:600');
+});
