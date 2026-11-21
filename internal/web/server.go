@@ -47,6 +47,7 @@ type AgentClient interface {
 	RenewCert(ctx context.Context, name string, validityDays int) (api.Cert, error)
 	RemoveCert(ctx context.Context, name string) error
 	SetCertNotes(ctx context.Context, name, notes string) (api.Cert, error)
+	RunTool(ctx context.Context, tool string, req api.ToolRequest) (api.ToolResult, error)
 	Profile(ctx context.Context, name string) ([]byte, error)
 	KillSession(ctx context.Context, clientID int64) error
 	KillName(ctx context.Context, name string) (int, error)
@@ -165,6 +166,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/servers/{server}/stats.csv", s.handleStatsCSV)
 	api.HandleFunc("GET /api/v1/servers/{server}/history/sessions", s.handleHistorySessions)
 	api.HandleFunc("GET /api/v1/servers/{server}/history/uptime", s.handleUptime)
+	api.HandleFunc("POST /api/v1/servers/{server}/tools/{tool}", s.handleTool)
 	api.HandleFunc("GET /api/v1/servers/{server}/history/events", s.handleEvents)
 	api.HandleFunc("GET /api/v1/servers/{server}/history/events.csv", s.handleEventsCSV)
 	s.registerCertRoutes(api)

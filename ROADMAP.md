@@ -112,6 +112,8 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
 - [x] Telegram notifications (own bot): the admin notifications; client online / offline
       messages by email and / or Telegram, per client, quiet for quick reconnects
 - [x] Uptime history per client: when it was online, as bars and a calendar
+- [x] Uptime page: any period, status bars with server outages, calendar, ups and downs
+- [x] Tools page: ping, traceroute, DNS, TCP ports, HTTP(S), routes from the server's network
 - [ ] Audit log
 - [ ] easyrsa `vars` in the native PKI: certificate name fields (`EASYRSA_DN` org mode:
       country, province, city, org, email, OU), key type and size, digest, CA / certificate /

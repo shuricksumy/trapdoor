@@ -109,6 +109,14 @@ for _ in $(seq 15); do curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/sessions
 curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/sessions" | grep -q '"name":"alice"' || fail "alice not in live sessions"
 ping -c 2 -W 2 10.77.0.1 >/dev/null || fail "no traffic through the tunnel"
 
+log "tools: ping, traceroute and the route to alice from the server's network (the agent shares the vpn container's)"
+alice_ip=$(curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/sessions" | python3 -c 'import json,sys; print([s["virtual_address"] for s in json.load(sys.stdin)["sessions"] if s["name"]=="alice"][0])')
+tool() { curl -sS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" -d "$2" "$WEB/api/v1/servers/openvpn/tools/$1"; }
+tool ping "{\"target\":\"$alice_ip\",\"count\":2}" | grep -q '"ok":true' || fail "tools: no ping to alice: $(tool ping "{\"target\":\"$alice_ip\",\"count\":2}")"
+tool traceroute "{\"target\":\"$alice_ip\"}" | grep -q '"ok":true' || fail "tools: traceroute to alice: $(tool traceroute "{\"target\":\"$alice_ip\"}")"
+tool route "{\"target\":\"$alice_ip\"}" | grep -q "dev tun" || fail "tools: alice is not routed through the tunnel: $(tool route "{\"target\":\"$alice_ip\"}")"
+tool ping '{"target":"-c 99 127.0.0.1"}' | grep -q '"error"' || fail "tools: an option was accepted as a target"
+
 log "revoke disconnects alice"
 curl -fsS -b "$JAR" -H "Origin: $WEB" -X POST "$WEB/api/v1/servers/openvpn/certs/alice/revoke" >/dev/null
 for _ in $(seq 10); do curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/sessions" | grep -q '"name":"alice"' || break; sleep 1; done

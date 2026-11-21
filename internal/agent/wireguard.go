@@ -447,6 +447,7 @@ func (s *WGServer) routes() http.Handler {
 	mux.HandleFunc("GET /peers/{name}/conf", s.handlePeerConf)
 	registerScripts(mux, s.scripts)
 	mux.HandleFunc("GET /firewall", s.handleGetFirewall)
+	registerTools(mux)
 	mux.HandleFunc("PUT /firewall", s.handleSetFirewall)
 	mux.HandleFunc("POST /firewall/addresses", s.handleAssignAddresses)
 	return mux

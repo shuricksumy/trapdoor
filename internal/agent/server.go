@@ -107,6 +107,7 @@ func (s *Server) routes() http.Handler {
 	s.registerFirewallRoutes(mux)
 	s.registerControlRoutes(mux)
 	registerScripts(mux, s.scripts)
+	registerTools(mux)
 	return mux
 }
 

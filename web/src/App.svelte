@@ -12,6 +12,7 @@
   import Sessions from './pages/Sessions.svelte';
   import Statistics from './pages/Statistics.svelte';
   import Uptime from './pages/Uptime.svelte';
+  import Tools from './pages/Tools.svelte';
   import Account from './pages/Account.svelte';
   import Server from './pages/Server.svelte';
   import Setup from './pages/Setup.svelte';
@@ -33,6 +34,7 @@
     { path: '/network', label: 'Network', icon: 'M12 3v6M5 21v-4h14v4M12 9a2 2 0 1 0 0 .01M12 11v6M5 17v-2h14v2', component: Network },
     { path: '/access', label: 'Access', icon: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5zM12 15v2', component: Access },
     { path: '/server', label: 'Server', icon: 'M4 5h16v5H4zM4 14h16v5H4zM8 7.5h.01M8 16.5h.01', component: Server },
+    { path: '/tools', label: 'Tools', icon: 'M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z', component: Tools },
   ];
 
   const wgPages = [
@@ -41,6 +43,7 @@
     // Connected, Uptime, Traffic, Network, Access: the same pages
     ...pages.filter((p) => ['/sessions', '/uptime', '/statistics', '/network', '/access'].includes(p.path)),
     { path: '/server', label: 'Server', icon: pages.find((p) => p.path === '/server').icon, component: WireGuardServer },
+    pages.find((p) => p.path === '/tools'),
   ];
 
   // WireGuard and AmneziaWG servers share their pages.

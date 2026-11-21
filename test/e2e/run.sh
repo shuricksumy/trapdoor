@@ -253,6 +253,11 @@ wait_for 5 nsping || fail "ping blocked although the rules are off"
 kill "$NSCLIENT"; wait "$NSCLIENT" 2>/dev/null || true
 wait_for 15 offline alice || fail "alice still online"
 log "rules block and allow alice's real traffic; off means pass-through"
+log "tools: ping and the route to the VPN server's address through the agent (real ping, ip)"
+api -d '{"target":"10.99.0.1","count":1}' "$API/v1/servers/openvpn/tools/ping" | grep -q '"ok":true' || fail "tools: ping the server: $(api -d '{"target":"10.99.0.1","count":1}' "$API/v1/servers/openvpn/tools/ping")"
+api -d '{"target":"10.99.0.1"}' "$API/v1/servers/openvpn/tools/route" | grep -q '"ok":true' || fail "tools: route lookup"
+code=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Trapdoor-Token: $TOKEN" -d '{"target":"10.99.0.1; id"}' "$API/v1/servers/openvpn/tools/ping")
+[[ $code == 400 ]] || fail "tools: a command in the target was not refused ($code)"
 
 log "server config: push DNS + a route to everyone via the web, restart (SIGHUP), clients get them"
 webj() { curl -fsS -b "$JAR" -H "Origin: $WEB" -H "Content-Type: application/json" "$@"; }
