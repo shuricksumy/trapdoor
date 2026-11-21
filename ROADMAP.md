@@ -116,6 +116,8 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
 - [x] Tools page: ping, traceroute, DNS, TCP ports, HTTP(S), routes from the server's network
 - [x] Limits page: speed per client (tc: HTB, IFB for uploads), usage limits per day / week /
       month that slow down or block until the period ends, defaults per server, reset, messages
+- [x] Limits: priorities per client (with the server's link speed), traffic alarms per server
+      (hour / day / month), price of traffic with the month's cost on the Overview
 - [ ] Audit log
 - [ ] easyrsa `vars` in the native PKI: certificate name fields (`EASYRSA_DN` org mode:
       country, province, city, org, email, OU), key type and size, digest, CA / certificate /

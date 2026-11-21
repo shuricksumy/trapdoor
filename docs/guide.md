@@ -762,8 +762,26 @@ Menu → *Limits*, for every server type: how fast each client may go and how mu
   period and gives it its speed back (in the audit log as `limits.reset`).
 - **Usage** is both directions together, from the traffic history. Over 80% the bar turns
   orange, over the limit red.
-- **Messages**: a client at 80% and at 100% of its limit (once per period) goes to the admins
-  by email and Telegram; *a client reaches 80% or 100% of its usage limit* in their settings.
+- **Priority** per client: high, normal or low. When the server's link is busy, high goes
+  first and low gets what is left; every client keeps a guaranteed share (high 4 : normal 2 :
+  low 1). It needs the server's **link speed** (Server settings): priorities only work where a
+  queue forms, and the VPN device itself never fills up, so trapdoor keeps traffic just under
+  the speed you give (set it a little below the real bottleneck, e.g. 90 for a 100 Mbit/s line).
+- **How fast can it go**: OpenVPN runs as one process per server (usually 100–500 Mbit/s in
+  total, depending on the CPU and cipher); WireGuard runs in the kernel (1 Gbit/s and more);
+  AmneziaWG in userspace (a few hundred Mbit/s). The server's network and its cloud plan set a
+  limit too; a speed above what the server can do changes nothing.
+- **Server settings** (per server, so nodes in different places each have their own):
+  - **Traffic alarms**: GB per hour, per day and / or per month for the whole server (both
+    directions); a message at 80% and 100%, once per period. Nothing is slowed: they are there
+    to notice, e.g., a forgotten camera stream before it costs money.
+  - **Price per GB** in and out, and the currency: the month's cost so far and where it will end
+    up at this rate, on the Limits page and the server's **Overview**, and each client's on its
+    row. In: what clients send (their upload); out: what they get. On a cloud server both usually
+    cost (a download leaves the server to the client, an upload leaves it to the internet).
+- **Messages**: a client at 80% and at 100% of its limit and the server's alarms (once per
+  period) go to the admins by email and Telegram; *a client reaches 80% or 100% of its usage
+  limit* in their settings.
 
 How it works:
 
@@ -774,7 +792,9 @@ How it works:
   `server.conf`, `<id>.shaping.sh` for WireGuard / AmneziaWG): an HTB class per limited client,
   matched by its VPN address, for downloads; uploads go through an IFB device (`tq-<id>`) and
   are shaped the same way. Unlimited clients get no class at all. Blocked: their packets are
-  dropped both ways.
+  dropped both ways. With a link speed, everything goes through one class at that speed and
+  every client has its own under it (rate: its share, ceil: its limit or the link, prio: 0 / 1 /
+  2), so spare bandwidth goes to high-priority clients first.
 - With `TD_FIREWALL=file` (Docker) the vpn container runs it while the interface is up, again
   when it changes or the interface was recreated (a restart), and reports back; *Rules* on the
   page shows it. `direct`: the agent runs it. `off`: speeds are not managed.

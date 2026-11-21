@@ -58,6 +58,7 @@ export const groups = {
   speed: ['down', 'up'],
   usage: ['quota_mb', 'period'],
   over: ['slow_down', 'slow_up', 'block'],
+  prio: ['priority'],
 };
 
 /** Which groups a client sets itself (any field of the group). */
@@ -73,6 +74,7 @@ export function toForm(limit) {
     down: fromKbit(limit.down), up: fromKbit(limit.up),
     quota: fromMB(limit.quota_mb), period: limit.period || 'month',
     slow_down: fromKbit(limit.slow_down), slow_up: fromKbit(limit.slow_up), block: !!limit.block,
+    priority: limit.priority || 'normal',
   };
 }
 
@@ -81,8 +83,8 @@ export function toForm(limit) {
  * from the form, the others null (follow the default). Throws with a
  * message for a bad value.
  */
-export function fromForm(form, own = { speed: true, usage: true, over: true }) {
-  const out = { down: null, up: null, quota_mb: null, period: null, slow_down: null, slow_up: null, block: null };
+export function fromForm(form, own = { speed: true, usage: true, over: true, prio: true }) {
+  const out = { down: null, up: null, quota_mb: null, period: null, slow_down: null, slow_up: null, block: null, priority: null };
   const num = (v, conv, what) => {
     const n = conv(v);
     if (Number.isNaN(n)) throw new Error(`${what}: a number, or empty`);
@@ -102,6 +104,7 @@ export function fromForm(form, own = { speed: true, usage: true, over: true }) {
     out.slow_up = num(form.slow_up, toKbit, 'Slowed upload speed');
     if (!out.block && (!out.slow_down || !out.slow_up)) throw new Error('Slowed speed: give both, or block instead');
   }
+  if (own.prio) out.priority = form.priority || 'normal';
   return out;
 }
 
@@ -133,3 +136,49 @@ export function resetsIn(end, now = Date.now()) {
   if (s >= 120) return `in ${Math.floor(s / 60)} minutes`;
   return 'in a minute';
 }
+
+/** The server settings form (link speeds, alarms, prices) on screen. */
+export function serverForm(ss = {}) {
+  return {
+    link_down: fromKbit(ss.link_down), link_up: fromKbit(ss.link_up),
+    alarm_hour: fromMB(ss.alarm_hour_mb), alarm_day: fromMB(ss.alarm_day_mb), alarm_month: fromMB(ss.alarm_month_mb),
+    price_in: ss.price_in ? String(ss.price_in) : '', price_out: ss.price_out ? String(ss.price_out) : '',
+    currency: ss.currency || '$',
+  };
+}
+
+/** The server settings to send; throws with a message for a bad value. */
+export function fromServerForm(f) {
+  const num = (v, conv, what) => {
+    const n = conv(v);
+    if (Number.isNaN(n)) throw new Error(`${what}: a number, or empty`);
+    return n;
+  };
+  const price = (v, what) => {
+    const t = String(v ?? '').trim().replace(',', '.');
+    if (t === '') return 0;
+    const n = Number(t);
+    if (!Number.isFinite(n) || n < 0) throw new Error(`${what}: a price, or empty`);
+    return n;
+  };
+  return {
+    link_down: num(f.link_down, toKbit, 'Link download'), link_up: num(f.link_up, toKbit, 'Link upload'),
+    alarm_hour_mb: num(f.alarm_hour, toMB, 'Alarm per hour'), alarm_day_mb: num(f.alarm_day, toMB, 'Alarm per day'),
+    alarm_month_mb: num(f.alarm_month, toMB, 'Alarm per month'),
+    price_in: price(f.price_in, 'Price in'), price_out: price(f.price_out, 'Price out'),
+    currency: String(f.currency ?? '').trim() || '$',
+  };
+}
+
+/** 1.143 → "$1.14", with the currency before short symbols and after codes. */
+export function money(v, currency = '$') {
+  const n = (v ?? 0) < 10 ? (v ?? 0).toFixed(2) : (v ?? 0).toFixed(0);
+  return currency.length > 1 ? `${n} ${currency}` : `${currency}${n}`;
+}
+
+/** How fast a VPN type usually goes, for the hints next to speeds. */
+export const typeSpeed = {
+  openvpn: 'OpenVPN runs as one process per server: usually 100–500 Mbit/s in total, depending on the CPU and cipher (more with the DCO kernel module).',
+  wireguard: 'WireGuard runs in the kernel: up to 1 Gbit/s and more; usually the server\'s network is the limit.',
+  amneziawg: 'AmneziaWG runs in userspace (amneziawg-go): usually a few hundred Mbit/s, depending on the CPU.',
+};

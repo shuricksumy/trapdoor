@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -139,7 +140,7 @@ func TestLimits(t *testing.T) {
 	if b := row(l, "bob"); b.State != "blocked" || !b.Speed.Block || b.Limit.QuotaMB != 100 {
 		t.Errorf("bob: %+v", b)
 	}
-	if c := row(l, "carol"); c.State != "full" || c.Own.Down == nil || c.Limit.QuotaMB != 1000 {
+	if c := row(l, "carol"); c.State != "full" || c.Own.Down == nil || c.Limit.QuotaMB != 1000 || c.Limit.Priority != "normal" {
 		t.Errorf("carol: %+v", c)
 	}
 	got := agentGot()
@@ -201,4 +202,110 @@ func TestLimits(t *testing.T) {
 	if _, ok := all["openvpn"].Clients["carol"]; ok {
 		t.Error("carol kept an empty entry")
 	}
+}
+
+// Server settings: link speed and priorities go to the agent, alarms are
+// reported once per period, the month's cost per client and server.
+func TestLimitServerSettings(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "td.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ovpnDir := t.TempDir()
+	host := agent.NewHost("agent-secret", log, agent.New(config.Agent{Token: "agent-secret", OpenVPNDir: ovpnDir, CCDDir: t.TempDir(), MgmtAddr: "127.0.0.1:1"}, log, nil))
+	ag := httptest.NewServer(host.Handler())
+	t.Cleanup(ag.Close)
+	tg := &tgbox{}
+	clock := time.Date(2026, 11, 15, 12, 30, 0, 0, time.UTC) // half of November gone
+	srv := New(Deps{Agent: ClientAgent(agent.NewClient(ag.URL, "agent-secret", 5*time.Second)), Stats: &history.Stats{DB: db},
+		Auth: auth.New(db, auth.Options{}), APIToken: "tok", Location: time.UTC, Log: log, SendTelegram: tg.send,
+		Now: func() time.Time { return clock }})
+	h := srv.Handler()
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer tok")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	if err := db.SetSetting(ctx, settingTelegram, TelegramSettings{Enabled: true, Token: tgToken, Chats: []string{"4242"}, Notify: Notify{UsageLimit: true}}); err != nil {
+		t.Fatal(err)
+	}
+	add := func(name string, hour time.Time, in, out int64) {
+		if _, err := db.Exec(`INSERT INTO traffic_hourly (agent, name, hour, bytes_in, bytes_out) VALUES ('openvpn', ?, ?, ?, ?)`, name, hour.Unix(), in, out); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("cam", time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC), 1_000_000_000, 700_000_000) // 1.7 GB this hour
+	add("immich", time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC), 10_000_000_000, 1_000_000_000)
+
+	for _, bad := range []string{`{"link_down":-1}`, `{"price_in":-0.1}`, `{"alarm_day_mb":-5}`, `{"currency":"dollars"}`} {
+		if rec := call(http.MethodPut, "/api/v1/servers/openvpn/limits/server", bad); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d", bad, rec.Code)
+		}
+	}
+	if rec := call(http.MethodPut, "/api/v1/servers/openvpn/limits/clients/immich", `{"priority":"urgent"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad priority: %d", rec.Code)
+	}
+	rec := call(http.MethodPut, "/api/v1/servers/openvpn/limits/server", `{"link_down":100000,"link_up":50000,"alarm_hour_mb":2000,"alarm_day_mb":10000,"price_in":0.09,"price_out":0.09,"currency":""}`)
+	if rec.Code != 200 {
+		t.Fatal(rec.Body)
+	}
+	call(http.MethodPut, "/api/v1/servers/openvpn/limits/clients/immich", `{"priority":"high"}`)
+	rec = call(http.MethodPut, "/api/v1/servers/openvpn/limits/clients/cam", `{"priority":"low"}`)
+	l := decode[Limits](t, rec)
+	if l.Server.Currency != "$" || l.Traffic.Hour != 1_700_000_000 || l.Traffic.Month != 12_700_000_000 {
+		t.Errorf("server: %+v traffic %+v", l.Server, l.Traffic)
+	}
+	// 12.7 GB × $0.09 = $1.143 after 14.5 of 30 days → about $2.36 for November
+	if math.Abs(l.Traffic.Cost-1.143) > 0.001 || math.Abs(l.Traffic.Projected-2.3614) > 0.01 {
+		t.Errorf("cost %v projected %v", l.Traffic.Cost, l.Traffic.Projected)
+	}
+	if r := row(t, l, "immich"); r.Limit.Priority != "high" || math.Abs(r.Cost-0.99) > 0.001 {
+		t.Errorf("immich: %+v", r)
+	}
+	var got api.Shaping
+	b, _ := os.ReadFile(filepath.Join(ovpnDir, "trapdoor-shaping.json"))
+	_ = json.Unmarshal(b, &got)
+	if got.LinkDown != 100000 || got.LinkUp != 50000 || got.Clients["immich"].Prio != "high" || got.Clients["cam"].Prio != "low" || got.Default.Prio != "" {
+		t.Errorf("agent got %+v", got)
+	}
+
+	// The minute check: the hour's alarm at 85%, once; the day's (17%) not.
+	srv.checkLimits(ctx)
+	srv.checkLimits(ctx)
+	srv.mailWG.Wait()
+	if len(tg.sent) != 1 || !strings.Contains(tg.sent[0], "📈 OpenVPN used 1.7 GB this hour, 85% of its alarm of 2 GB.") {
+		t.Errorf("messages: %q", tg.sent)
+	}
+	add("cam", time.Date(2026, 11, 15, 11, 0, 0, 0, time.UTC), 0, 0) // nothing
+	if _, err := db.Exec(`UPDATE traffic_hourly SET bytes_out = bytes_out + 500000000 WHERE name = 'cam' AND hour = ?`, time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC).Unix()); err != nil {
+		t.Fatal(err)
+	}
+	srv.checkLimits(ctx)
+	srv.mailWG.Wait()
+	if len(tg.sent) != 2 || !strings.Contains(tg.sent[1], "🚨 OpenVPN used 2.2 GB this hour, over its alarm of 2 GB.") {
+		t.Errorf("messages: %q", tg.sent)
+	}
+
+	// The Overview's cost.
+	c := decode[Cost](t, call(http.MethodGet, "/api/v1/servers/openvpn/cost", ""))
+	if !c.Priced || c.Currency != "$" || c.Month.In != 11_000_000_000 {
+		t.Errorf("cost: %+v", c)
+	}
+}
+
+func row(t *testing.T, l Limits, name string) LimitRow {
+	t.Helper()
+	for _, r := range l.Clients {
+		if r.Name == name {
+			return r
+		}
+	}
+	t.Fatalf("no row for %s", name)
+	return LimitRow{}
 }

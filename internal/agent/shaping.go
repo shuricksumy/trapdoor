@@ -89,6 +89,9 @@ func validShaping(in api.Shaping) error {
 		if s.Down < 0 || s.Up < 0 || s.Down > shaping.MaxRate || s.Up > shaping.MaxRate {
 			return fmt.Errorf("%s: speeds are 0 (unlimited) to %d kbit/s", what, shaping.MaxRate)
 		}
+		if s.Prio != "" && s.Prio != "high" && s.Prio != "low" {
+			return fmt.Errorf("%s: priority is high, low or empty (normal)", what)
+		}
 		return nil
 	}
 	if err := check("default", in.Default); err != nil {
@@ -96,6 +99,9 @@ func validShaping(in api.Shaping) error {
 	}
 	if in.Default.Block {
 		return errors.New("default: blocking every client is not a speed limit")
+	}
+	if in.LinkDown < 0 || in.LinkUp < 0 || in.LinkDown > shaping.MaxRate || in.LinkUp > shaping.MaxRate {
+		return fmt.Errorf("link: 0 (no priorities) to %d kbit/s", shaping.MaxRate)
 	}
 	if len(in.Clients) > 10000 {
 		return errors.New("too many clients")
@@ -148,13 +154,13 @@ func (sh *shaper) render(ctx context.Context, cfg api.Shaping) (string, map[stri
 		if !own {
 			sp = cfg.Default
 		}
-		lim := shaping.Limit{Down: sp.Down, Up: sp.Up, Block: sp.Block}
+		lim := shaping.Limit{Down: sp.Down, Up: sp.Up, Block: sp.Block, Prio: sp.Prio}
 		clients = append(clients, shaping.Client{Name: n, Addr: addrs[n], Limit: lim})
-		if lim.Limited() {
+		if lim.Limited() || cfg.LinkDown > 0 || cfg.LinkUp > 0 {
 			shown[n] = addrs[n].String()
 		}
 	}
-	script, _ := shaping.Render(sh.iface, sh.ifb, clients)
+	script, _ := shaping.Render(sh.iface, sh.ifb, clients, shaping.Link{Down: cfg.LinkDown, Up: cfg.LinkUp})
 	return script, shown, nil
 }
 
@@ -168,7 +174,7 @@ func (sh *shaper) set(ctx context.Context, in api.Shaping) (api.ShapingState, er
 	if err != nil {
 		return api.ShapingState{}, err
 	}
-	empty := in.Default == (api.Speed{}) && len(in.Clients) == 0
+	empty := in.Default == (api.Speed{}) && len(in.Clients) == 0 && in.LinkDown == 0 && in.LinkUp == 0
 	if !saved && empty { // nothing asked, nothing touched
 		return api.ShapingState{Shaping: in, Mode: sh.mode, Applied: true, Addresses: map[string]string{}}, nil
 	}
