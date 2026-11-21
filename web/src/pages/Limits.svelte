@@ -83,9 +83,13 @@
     }
   }
 
-  const stateText = { full: 'full speed', capped: 'capped', slowed: 'slowed', blocked: 'blocked' };
+  // compact for the list: "50 / 20 Mbit/s", "unlimited", "1 Mbit/s"
+  const mb = (k) => (k ? String(Math.round(k / 10) / 100) : '∞');
+  const sp = (d, u) => (d === u ? speedPair(d, u) : `${mb(d)} / ${mb(u)} Mbit/s`);
+  const quota = (l) => (l.quota_mb ? `${quotaText(l.quota_mb)} / ${l.period}` : 'no limit');
+  const nowShort = (r) => (r.state === 'slowed' ? `slowed · ${sp(r.speed.down ?? 0, r.speed.up ?? 0)}` : stateText[r.state]);
+  const stateText = { full: 'full speed', capped: 'normal', slowed: 'slowed', blocked: 'blocked' };
   const stateKind = { full: 'off', capped: 'ok', slowed: 'warn', blocked: 'bad' };
-  const nowText = (r) => (r.state === 'blocked' ? 'blocked' : r.state === 'full' ? 'full speed' : speedPair(r.speed.down ?? 0, r.speed.up ?? 0));
   const defaultOf = (g) =>
     g === 'speed' ? speedPair(def.down, def.up) : g === 'usage' ? (def.quota_mb ? `${quotaText(def.quota_mb)} ${periodText[def.period]}` : 'no limit') : overText(def);
 </script>
@@ -117,68 +121,56 @@
 
   <section class="panel">
     <div class="panel-head">
-      <h2>Defaults for every client</h2>
-      <button class="btn small" onclick={() => edit(null)}>Edit</button>
-    </div>
-    <dl class="panel-body defaults">
-      <div><dt>Speed</dt><dd>{speedPair(def.down, def.up)}</dd></div>
-      <div><dt>Usage limit</dt><dd>{def.quota_mb ? `${quotaText(def.quota_mb)} ${periodText[def.period]}` : 'no limit'}</dd></div>
-      <div><dt>When reached</dt><dd>{overText(def)}</dd></div>
-    </dl>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head">
       <h2>Clients</h2>
       <input class="search" type="search" placeholder="Find a client" bind:value={find} aria-label="Find a client" />
     </div>
-    {#if !data.clients.length}
-      <p class="panel-body muted">No clients yet.</p>
-    {:else}
-      <div class="table-wrap">
-        <table class="cards">
-          <thead><tr><th>Client</th><th>Speed now</th><th class="use">Usage this period</th><th>Resets</th><th>Own settings</th><th><span class="sr">Actions</span></th></tr></thead>
-          <tbody>
-            {#each rows as r (r.name)}
-              {@const pct = usagePct(r.used, r.limit.quota_mb)}
-              {@const og = ownGroups(r.own)}
-              <tr>
-                <td data-label="Client"><strong title={clientTitle(r.name)}>{clientName(r.name)}</strong></td>
-                <td data-label="Speed now">
-                  <span class="pill {stateKind[r.state]}" title={stateText[r.state]}>{nowText(r)}</span>
-                  {#if r.state !== 'full' && !addr(r.name)}<span class="faint small block">applies while connected</span>{/if}
-                </td>
-                <td data-label="Usage" class="use">
-                  {#if pct != null}
-                    <div class="bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.min(pct, 100)} aria-label="Usage">
-                      <i style="width: {Math.min(pct, 100)}%" class:warn={pct >= 80 && pct < 100} class:bad={pct >= 100}></i>
-                    </div>
-                    <span class="small">{bytes(r.used)} <span class="faint">of {quotaText(r.limit.quota_mb)} {periodText[r.limit.period]} · {pct}%</span></span>
-                  {:else}
-                    <span class="small">{bytes(r.used)} <span class="faint">this month, no limit</span></span>
-                  {/if}
-                </td>
-                <td data-label="Resets" class="small">{#if r.limit.quota_mb}{resetsIn(r.period_end, now)}{#if r.reset_at}<span class="faint block">reset {new Date(r.reset_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>{/if}{:else}<span class="faint">–</span>{/if}</td>
-                <td data-label="Own settings">
-                  {#if og.speed || og.usage || og.over}
-                    <div class="tags">
-                      {#if og.speed}<span class="tag">{speedPair(r.limit.down, r.limit.up)}</span>{/if}
-                      {#if og.usage}<span class="tag">{r.limit.quota_mb ? `${quotaText(r.limit.quota_mb)} ${periodText[r.limit.period]}` : 'no usage limit'}</span>{/if}
-                      {#if og.over}<span class="tag">{r.limit.block ? 'blocks' : `slows to ${speedPair(r.limit.slow_down, r.limit.slow_up)}`}</span>{/if}
-                    </div>
-                  {:else}<span class="faint">defaults</span>{/if}
-                </td>
-                <td class="actions">
-                  {#if r.limit.quota_mb && r.used > 0}<button class="btn small ghost" disabled={busy === r.name} onclick={() => reset(r)} title="Count from zero for the rest of the period">Reset</button>{/if}
-                  <button class="btn small ghost" onclick={() => edit(r)}>Edit</button>
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-      <p class="panel-body hint">Speeds are per client. Usage counts both directions and is checked every minute; a new client and an OpenVPN client with an automatic address get their speed within a minute of connecting.</p>
-    {/if}
+    <div class="table-wrap">
+      <table class="list">
+        <thead><tr><th>Client</th><th>Speed ↓ / ↑</th><th>Usage limit</th><th class="use">Used</th><th>When reached</th><th>Now</th><th>Resets</th><th><span class="sr">Actions</span></th></tr></thead>
+        <tbody>
+          <tr class="def" onclick={() => edit(null)}>
+            <td class="who"><strong>Default</strong><span class="faint small block">every client</span></td>
+            <td class="c-speed">{sp(def.down, def.up)}</td>
+            <td class="c-quota">{quota(def)}</td>
+            <td class="use"><span class="faint small">{bytes((data.clients ?? []).reduce((n, r) => n + r.used, 0))} in all</span></td>
+            <td class="c-over">{def.quota_mb ? (def.block ? 'block' : `slow to ${sp(def.slow_down, def.slow_up)}`) : '–'}</td>
+            <td class="c-now"></td>
+            <td class="c-resets"></td>
+            <td class="actions"><button class="btn small ghost" onclick={(e) => (e.stopPropagation(), edit(null))}>Edit</button></td>
+          </tr>
+          {#each rows as r (r.name)}
+            {@const pct = usagePct(r.used, r.limit.quota_mb)}
+            {@const og = ownGroups(r.own)}
+            <tr onclick={() => edit(r)}>
+              <td class="who">
+                <strong title={clientTitle(r.name)}>{clientName(r.name)}</strong>
+                <span class="pill {stateKind[r.state]} m-only">{nowShort(r)}</span>
+              </td>
+              <td class="c-speed" class:inh={!og.speed}>{sp(r.limit.down, r.limit.up)}</td>
+              <td class="c-quota" class:inh={!og.usage}>{quota(r.limit)}</td>
+              <td class="use">
+                {#if pct != null}
+                  <div class="bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.min(pct, 100)} aria-label="Usage">
+                    <i style="width: {Math.min(pct, 100)}%" class:warn={pct >= 80 && pct < 100} class:bad={pct >= 100}></i>
+                  </div>
+                  <span class="small">{bytes(r.used)} <span class="faint">· {pct}%</span></span>
+                {:else}
+                  <span class="small">{bytes(r.used)}</span>
+                {/if}
+              </td>
+              <td class="c-over" class:inh={!og.over}>{r.limit.quota_mb ? (r.limit.block ? 'block' : `slow to ${sp(r.limit.slow_down, r.limit.slow_up)}`) : '–'}</td>
+              <td class="c-now"><span class="pill {stateKind[r.state]}">{nowShort(r)}</span>{#if r.state !== 'full' && !addr(r.name)}<span class="faint small block">while connected</span>{/if}</td>
+              <td class="c-resets small">{#if r.limit.quota_mb}{resetsIn(r.period_end, now)}{:else}<span class="faint">–</span>{/if}</td>
+              <td class="actions">
+                {#if r.limit.quota_mb && r.used > 0}<button class="btn small ghost" disabled={busy === r.name} onclick={(e) => (e.stopPropagation(), reset(r))} title="Count from zero for the rest of the period">Reset</button>{/if}
+                <button class="btn small ghost" onclick={(e) => (e.stopPropagation(), edit(r))}>Edit</button>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+    <p class="panel-body hint"><span class="inh">Grey</span>: from the default · <strong>black</strong>: the client's own. Speeds are per client; usage counts both directions and is checked every minute.</p>
   </section>
 {/if}
 
@@ -250,9 +242,6 @@
   .v.bad { color: var(--bad); }
   .v.warn { color: var(--warn); }
   .small-v { font-size: var(--step-0); padding-top: 6px; }
-  .defaults { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin: 0; }
-  .defaults dt { font-size: var(--step--1); color: var(--ink-3); }
-  .defaults dd { margin: 2px 0 0; font-weight: 500; }
   .search { max-width: 240px; height: 32px; }
   .use { min-width: 220px; }
   .bar { height: 6px; margin-bottom: 4px; border-radius: 3px; background: var(--sunken); overflow: hidden; max-width: 240px; }
@@ -261,9 +250,17 @@
   .bar i.bad { background: var(--bad); }
   .small { font-size: var(--step--1); }
   .block { display: block; }
-  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
-  .tag { padding: 2px 7px; border-radius: 6px; background: var(--accent-soft); font-size: 12px; white-space: nowrap; }
   .actions { text-align: right; white-space: nowrap; }
+  .list tbody tr { cursor: pointer; }
+  .list tbody tr:hover td { background: var(--sunken); }
+  .list tr.def td { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); border-bottom: 2px solid var(--line); }
+  .list td { white-space: nowrap; }
+  .list th, .list td { padding-left: 10px; padding-right: 10px; }
+  .list .actions .btn { padding: 0 var(--space-2); }
+  .list td.use { white-space: normal; width: 170px; min-width: 150px; }
+  .list .bar { max-width: 160px; }
+  .inh { color: var(--ink-3); }
+  .m-only { display: none; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .dlg { display: grid; gap: var(--space-4); }
   fieldset { display: grid; gap: var(--space-2); margin: 0; padding: 0 0 var(--space-3); border: 0; border-bottom: 1px solid var(--line); min-width: 0; }
@@ -281,20 +278,26 @@
     .tiles { grid-template-columns: 1fr 1fr; }
     .tiles > div:nth-child(3) { padding-left: 0; border-left: 0; }
     .tiles > div:nth-child(n + 3) { border-top: 1px solid var(--line); }
-    .defaults { grid-template-columns: 1fr; gap: var(--space-2); }
   }
   @media (max-width: 640px) {
     .search { max-width: none; width: 100%; }
-    .cards thead { display: none; }
-    .cards, .cards tbody, .cards tr, .cards td { display: block; width: 100%; }
-    .cards tr { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--line); }
-    .cards td { padding: 3px 0; border: 0; }
-    .cards td[data-label]:not(:first-child) { display: grid; grid-template-columns: 104px minmax(0, 1fr); column-gap: var(--space-2); align-items: start; }
-    .cards td[data-label]:not(:first-child)::before { content: attr(data-label); color: var(--ink-3); font-size: var(--step--1); padding-top: 2px; }
-    .cards td[data-label]:not(:first-child) > * { grid-column: 2; justify-self: start; }
-    .cards .actions { text-align: left; padding-top: var(--space-2); }
-    .use { min-width: 0; }
-    .cards td[data-label]:not(:first-child) > .bar { justify-self: stretch; width: 100%; }
+    /* phone: one compact line per client (name, state, usage); a tap opens the dialog */
+    .list thead { display: none; }
+    .list, .list tbody { display: block; }
+    .list tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px var(--space-3); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--line); }
+    .list td, .list tr.def td { display: none; padding: 0; border: 0 !important; background: none !important; }
+    .list tr.def { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+    .list tr.def td.who { display: flex; }
+    .list tr.def td.actions { display: block; }
+    .list td.who { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+    .list td.use { display: block; grid-column: 1 / -1; }
+    .list tr.def td.c-speed, .list tr.def td.c-quota { display: block; grid-column: 1 / -1; font-size: var(--step--1); }
+    .list tr.def td.use { display: none; }
+    .list td.actions { display: block; grid-row: 1; grid-column: 2; }
+    .list td.actions .btn.ghost:not(:last-child) { display: none; }
+    .m-only { display: inline-flex; }
+    .list .bar { max-width: none; }
+    .list td.use { width: auto; }
     .indent { padding-left: 0; }
   }
 </style>

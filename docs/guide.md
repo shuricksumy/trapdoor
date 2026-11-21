@@ -749,15 +749,19 @@ Menu → *Limits*, for every server type: how fast each client may go and how mu
 
 <img src="screenshots/limits.png" width="720">
 
-- **Defaults for every client**: a speed (download and upload, Mbit/s; empty = unlimited), a
+- **One list**: the first row is the **Default** for every client, then each client with its
+  speed, usage limit, usage this period (bar and %), what happens when reached, its state now
+  and when the period resets. Grey values come from the default, black ones are the client's
+  own. A click on a row (or *Edit*) opens its dialog; on a phone each client is one line.
+- **Default for every client**: a speed (download and upload, Mbit/s; empty = unlimited), a
   usage limit (GB per day, week from Monday or month, in `TD_TZ`; empty = none) and what
   happens when it is reached: **slowed down** to a speed (1 Mbit/s by default) or **blocked**
   (still connected, nothing gets through) until the period ends.
-- **A client's own values**: *Edit* on its row; for each of speed, usage limit and "when
+- **A client's own values**: in its dialog, for each of speed, usage limit and "when
   reached", the default or its own. *Reset* counts its usage from zero for the rest of the
   period and gives it its speed back (in the audit log as `limits.reset`).
-- **Usage** is both directions together, from the traffic history; the page shows it as a bar
-  with how long until the period ends. Over 80% turns orange, over the limit red.
+- **Usage** is both directions together, from the traffic history. Over 80% the bar turns
+  orange, over the limit red.
 - **Messages**: a client at 80% and at 100% of its limit (once per period) goes to the admins
   by email and Telegram; *a client reaches 80% or 100% of its usage limit* in their settings.
 
