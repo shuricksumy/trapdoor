@@ -31,8 +31,8 @@ type LoginMethods struct {
 }
 
 func (s *Server) registerOIDCRoutes(public *http.ServeMux) {
-	public.HandleFunc("GET /api/v1/auth/methods", func(w http.ResponseWriter, _ *http.Request) {
-		m := LoginMethods{Password: true}
+	public.HandleFunc("GET /api/v1/auth/methods", func(w http.ResponseWriter, r *http.Request) {
+		m := LoginMethods{Password: s.passwordAllowed(r)}
 		if s.OIDC != nil {
 			m.OIDC = s.OIDCName
 			if m.OIDC == "" {

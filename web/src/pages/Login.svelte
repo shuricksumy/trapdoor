@@ -11,10 +11,14 @@
   let busy = $state(false);
   let sso = $state(''); // the provider's name when sign-in with it is set up
   let showPassword = $state(false);
+  let pw = $state(true); // the password login is allowed from this address
   $effect(() => {
     fetch('/api/v1/auth/methods')
       .then((r) => (r.ok ? r.json() : {}))
-      .then((m) => (sso = m.oidc ?? ''))
+      .then((m) => {
+        sso = m.oidc ?? '';
+        pw = m.password !== false;
+      })
       .catch(() => {});
   });
 
@@ -57,14 +61,18 @@
 
     {#if sso}
       <a class="btn primary sso" href="/api/v1/auth/oidc">Sign in with {sso}</a>
-      {#if !showPassword}
+      {#if !pw}
+        <p class="note">The admin password works only from the VPN or the local network.</p>
+      {:else if !showPassword}
         <button type="button" class="link" onclick={() => (showPassword = true)}>Use the admin password</button>
       {:else}
         <div class="or"><span>or with the admin password</span></div>
       {/if}
     {/if}
 
-    {#if !sso || showPassword}
+    {#if !pw && !sso}
+      <div class="banner warn">The password login is not allowed from this address. Connect to the VPN or the local network.</div>
+    {:else if pw && (!sso || showPassword)}
     <label class="field">
       <span>Username</span>
       <input bind:value={username} autocomplete="username" autocapitalize="none" spellcheck="false" required />
@@ -104,6 +112,7 @@
   .btn { justify-content: center; height: 40px; margin-top: var(--space-2); }
   .sso { text-decoration: none; }
   .link { justify-self: center; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--step--1); text-decoration: underline; cursor: pointer; }
+  .note { margin: 0; text-align: center; color: var(--ink-3); font-size: var(--step--1); }
   .or { display: flex; align-items: center; gap: var(--space-3); color: var(--ink-3); font-size: var(--step--1); }
   .or::before, .or::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
   .theme-slot { position: fixed; top: var(--space-4); right: var(--space-4); width: 120px; }

@@ -121,6 +121,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := s.clientIP(r)
+	if !s.passwordAllowed(r) {
+		s.Log.Warn("password login refused: not from an allowed network", "ip", ip, "username", req.Username)
+		httpx.WriteError(w, http.StatusForbidden, "the password login is not allowed from this address")
+		return
+	}
 	if ok, wait := s.Limiter.Allowed(ip, req.Username); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		s.Log.Warn("login throttled", "ip", ip, "username", req.Username)
@@ -229,6 +234,24 @@ func (s *Server) clientIP(r *http.Request) string {
 		}
 	}
 	return host
+}
+
+// passwordAllowed: the password login is allowed from the client's address
+// (TD_PASSWORD_LOGIN_FROM; empty = from anywhere).
+func (s *Server) passwordAllowed(r *http.Request) bool {
+	if len(s.PasswordFrom) == 0 {
+		return true
+	}
+	a, err := netip.ParseAddr(s.clientIP(r))
+	if err != nil {
+		return false
+	}
+	for _, p := range s.PasswordFrom {
+		if p.Contains(a.Unmap()) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) trusted(a netip.Addr) bool {

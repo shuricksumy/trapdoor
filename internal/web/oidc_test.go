@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -143,6 +144,56 @@ func TestOIDCLogin(t *testing.T) {
 			if ck.Name == cookieName && ck.Value != "" {
 				t.Errorf("%s: session cookie set", name)
 			}
+		}
+	}
+}
+
+// TD_PASSWORD_LOGIN_FROM: the password login only from allowed networks,
+// the client address taken through trusted proxies.
+func TestPasswordLoginFrom(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "td.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	a := auth.New(db, auth.Options{})
+	if _, err := a.CreateUser(ctx, "admin", "correct horse battery staple"); err != nil {
+		t.Fatal(err)
+	}
+	h := New(Deps{Stats: &history.Stats{DB: db}, Auth: a, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("172.30.0.0/24")},
+		PasswordFrom:   []netip.Prefix{netip.MustParsePrefix("10.8.0.0/24"), netip.MustParsePrefix("192.168.1.5/32")}}).Handler()
+	try := func(remote, xff string) (int, string) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"correct horse battery staple"}`))
+		req.RemoteAddr = remote + ":5555"
+		if xff != "" {
+			req.Header.Set("X-Forwarded-For", xff)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		m := httptest.NewRequest(http.MethodGet, "/api/v1/auth/methods", nil)
+		m.RemoteAddr = req.RemoteAddr
+		m.Header = req.Header.Clone()
+		mrec := httptest.NewRecorder()
+		h.ServeHTTP(mrec, m)
+		return rec.Code, mrec.Body.String()
+	}
+	for _, c := range []struct {
+		remote, xff string
+		ok          bool
+	}{
+		{"10.8.0.6", "", true},                          // a VPN client, directly
+		{"192.168.1.5", "", true},                       // a single address
+		{"203.0.113.9", "", false},                      // the internet
+		{"172.30.0.2", "10.8.0.6", true},                // through the trusted proxy, from the VPN
+		{"172.30.0.2", "203.0.113.9", false},            // through the trusted proxy, from the internet
+		{"203.0.113.9", "10.8.0.6", false},              // an untrusted peer cannot claim a VPN address
+		{"172.30.0.2", "10.8.0.6, 198.51.100.7", false}, // the last untrusted hop counts
+	} {
+		code, methods := try(c.remote, c.xff)
+		if (code == http.StatusOK) != c.ok || (code == http.StatusForbidden) == c.ok || strings.Contains(methods, `"password":true`) != c.ok {
+			t.Errorf("%s via %q: login %d, methods %s", c.remote, c.xff, code, methods)
 		}
 	}
 }

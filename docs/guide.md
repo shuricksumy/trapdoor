@@ -871,6 +871,14 @@ password comes from stdin or `TD_ADMIN_PASSWORD`.
   may frame it, and `X-Frame-Options` is left out. With both on one domain
   (`admin.example.com`, `vpn.example.com`) the login works inside the frame.
 - Behind a reverse proxy set `TD_TRUSTED_PROXIES` so the real client IP is used
+- `TD_PASSWORD_LOGIN_FROM` (comma-separated networks or addresses, e.g.
+  `10.8.0.0/24,192.168.1.0/24`): the password login works only from there; from anywhere else
+  it is refused and the login page shows only *Sign in with Authelia*. Sign-in with OIDC, the
+  API token and the `trapdoor user` commands are not affected. The address is the client's
+  as trapdoor sees it after `TD_TRUSTED_PROXIES`: behind Cloudflare that is a Cloudflare
+  address (so the password is refused from the internet), and a VPN client reaches the
+  password only when it gets to trapdoor directly (e.g. the VPN's DNS points the name at the
+  proxy's internal address)
 - Every change is logged as `audit action=... target=... by=<user>`
 - Strict Content-Security-Policy, no CDN: the UI and its fonts are served by trapdoor itself
 

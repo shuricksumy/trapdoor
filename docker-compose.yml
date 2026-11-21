@@ -98,6 +98,8 @@ services:
       TD_OIDC_CLIENT_ID: ${TD_OIDC_CLIENT_ID:-trapdoor}
       TD_OIDC_CLIENT_SECRET: ${TD_OIDC_CLIENT_SECRET:-}
       TD_OIDC_GROUPS: ${TD_OIDC_GROUPS:-admin}
+      # the password login only from these networks, e.g. 10.8.0.0/24,192.168.1.0/24 (empty: anywhere)
+      TD_PASSWORD_LOGIN_FROM: ${TD_PASSWORD_LOGIN_FROM:-}
       TD_FRAME_ANCESTORS: ${TD_FRAME_ANCESTORS:-} # sites that may show the UI in an iframe
       TD_BACKUP_PASSPHRASE: ${TD_BACKUP_PASSPHRASE:-} # encrypts scheduled backups (Account → Scheduled backups)
       TD_JOIN_SECRET: ${TD_JOIN_SECRET:-} # optional: nodes started with it join by themselves
