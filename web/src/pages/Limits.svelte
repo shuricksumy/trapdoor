@@ -7,6 +7,8 @@
   import { clientName, clientTitle, loadClientNames } from '../lib/names.svelte.js';
   import { bytes } from '../lib/format.js';
   import Dialog from '../lib/Dialog.svelte';
+  import Pager from '../lib/Pager.svelte';
+  import { paginate, savedSize } from '../lib/pager.js';
   import { speedPair, quotaText, usagePct, periodText, ownGroups, toForm, fromForm, overText, summary, resetsIn, serverForm, fromServerForm, money, typeSpeed } from '../lib/limits.js';
 
   const server = currentServer();
@@ -35,6 +37,14 @@
   const rows = $derived(
     (data?.clients ?? []).filter((r) => !find || `${r.name} ${clientName(r.name)}`.toLowerCase().includes(find.toLowerCase())),
   );
+  // Pages of clients (the Default row stays on top of every page).
+  let page = $state(1);
+  let size = $state(savedSize());
+  $effect(() => {
+    void find;
+    page = 1;
+  });
+  const shown = $derived(paginate(rows, page, size));
   const tiles = $derived(summary(data?.clients ?? []));
   const def = $derived(data?.default);
   const sh = $derived(data?.shaping);
@@ -190,7 +200,7 @@
             {#if priced}<td class="num c-cost">{money(tr.cost, cur)}</td>{/if}
             <td class="actions"><button class="btn small ghost" onclick={(e) => (e.stopPropagation(), edit(null))}>Edit</button></td>
           </tr>
-          {#each rows as r (r.name)}
+          {#each shown.rows as r (r.name)}
             {@const pct = usagePct(r.used, r.limit.quota_mb)}
             {@const og = ownGroups(r.own)}
             <tr onclick={() => edit(r)}>
@@ -223,6 +233,7 @@
         </tbody>
       </table>
     </div>
+    <Pager bind:page bind:size info={shown} label="Pages of clients" />
     <p class="panel-body hint"><span class="inh">Grey</span>: from the default · <strong>black</strong>: the client's own. Speeds are per client; usage counts both directions and is checked every minute.{#if !linked} Priorities work once the server's link speed is set (Server settings).{/if}</p>
   </section>
 {/if}

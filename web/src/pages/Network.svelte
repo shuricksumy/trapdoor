@@ -9,6 +9,8 @@
   import RoutingPanel from '../lib/RoutingPanel.svelte';
   import WGRoutingPanel from '../lib/WGRoutingPanel.svelte';
   import WGNetworkDialog from '../lib/WGNetworkDialog.svelte';
+  import Pager from '../lib/Pager.svelte';
+  import { paginate, savedSize } from '../lib/pager.js';
   import { buildMap, buildWGMap, fold } from '../lib/networkMap.js';
 
   // Routing at a glance, the same for every server type: a map of who reaches
@@ -136,6 +138,16 @@
   const sorted = (list) => [...list].sort((a, b) => (order.get(a.name) ?? 1e9) - (order.get(b.name) ?? 1e9));
   const ovpnRows = $derived(sorted(clients).filter((c) => match(c.name, c.static_ip, live.get(c.name), c.routes, c.lan)));
   const wgRows = $derived(sorted(peers).filter((p) => match(p.name, p.address, p.lan, p.notes)));
+  const isRouterOVPN = (c) => c.lan.length > 0 || (c.named ?? []).some((u) => u.as === 'lan');
+  // Pages of the clients table: back to the first when the search changes.
+  let page = $state(1);
+  let size = $state(savedSize());
+  $effect(() => {
+    void q;
+    page = 1;
+  });
+  const ovpnShown = $derived(paginate(ovpnRows, page, size));
+  const wgShown = $derived(paginate(wgRows, page, size));
 
   // Fixes
   let busy = $state('');
@@ -218,6 +230,74 @@
   {:else}<span class="faint">{empty}</span>{/if}
 {/snippet}
 
+{#snippet wgTable(list)}
+        <div class="table-wrap">
+          <table class="cards">
+            <thead><tr><th>Client</th><th>Address</th><th>Behind it</th><th>Sends through the VPN</th><th>DNS</th><th>Access</th><th><span class="sr">Edit</span></th></tr></thead>
+            <tbody>
+              {#each list as p (p.name)}
+                <tr class:off={p.disabled || p.expired}>
+                  <td data-label="Client">
+                    <span class="who"><i class="dot" class:on={p.connected} title={p.connected ? 'Connected' : 'Not connected'}></i><strong>{p.name}</strong>{#if p.lan?.length}<span class="router">router</span>{/if}</span>
+                    {#if p.disabled}<span class="faint small block">disabled</span>{:else if p.expired}<span class="faint small block">expired</span>{:else if p.notes}<span class="faint small block">{p.notes}</span>{/if}
+                  </td>
+                  <td class="mono" data-label="Address">{p.address}</td>
+                  <td data-label="Behind it" class="tagcell">{@render tags('l:' + p.name, (p.lan ?? []).map((r) => ({ t: r, cls: 'mono lan' })), '–')}</td>
+                  <td data-label="Sends" class="tagcell">
+                    {@render tags('s:' + p.name, (p.allowed_ips?.length ? p.allowed_ips : settings?.allowed_ips ?? []).map((r) => ({ t: r, cls: p.allowed_ips?.length ? 'mono' : 'mono all' })), '–')}
+                    {#if !p.allowed_ips?.length}<span class="faint small">default</span>{/if}
+                  </td>
+                  <td class="mono" data-label="DNS">{(p.dns?.length ? p.dns : settings?.dns ?? []).join(', ') || '–'}{#if !p.dns?.length && settings?.dns?.length}<span class="faint small dflt">default</span>{/if}</td>
+                  <td data-label="Access">{#if rulesOf(p.name)}<a href="/access">{rulesOf(p.name)} rule{rulesOf(p.name) === 1 ? '' : 's'}</a>{:else}<span class="faint">–</span>{/if}</td>
+                  <td class="actions"><button class="btn small ghost" onclick={() => editClient(p.name)}>Edit</button></td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+{/snippet}
+
+{#snippet ovpnTable(list)}
+      <div class="table-wrap">
+        <table class="cards">
+          <thead><tr><th>Client</th><th>VPN address</th><th>All traffic</th><th>Reaches</th><th>Behind it</th><th>Access</th><th><span class="sr">Actions</span></th></tr></thead>
+          <tbody>
+            {#each list as c (c.name)}
+              {@const now = live.get(c.name)}
+              {@const isRouter = isRouterOVPN(c)}
+              <tr>
+                <td data-label="Client">
+                  <span class="who">
+                    <i class="dot" class:on={!!now} title={now ? 'Connected' : 'Not connected'}></i>
+                    <strong title={clientTitle(c.name)}>{clientName(c.name)}</strong>
+                    {#if isRouter}<span class="router">router</span>{/if}
+                  </span>
+                  {#each c.warnings?.filter((w) => !w.startsWith('server.conf needs "route')) ?? [] as w (w)}<span class="warn-text small block">{w}</span>{/each}
+                </td>
+                <td data-label="VPN address">
+                  {#if c.static_ip}<span class="mono">{c.static_ip}</span>
+                  {:else}
+                    <span class="faint">automatic</span>{#if now}<span class="mono small block">now {now}</span>{/if}
+                    <button class="link small block" disabled={!!busy} onclick={() => makeFixed(c.name)} title="Give it a fixed address (needed for access rules about this client)">{busy === c.name ? 'Fixing…' : 'Make fixed'}</button>
+                  {/if}
+                </td>
+                <td data-label="All traffic">{c.full_tunnel || srv?.pushes_full_tunnel ? 'Yes' : '–'}</td>
+                <td data-label="Reaches" class="tagcell">{@render tags('r:' + c.name, reachTags(c), 'VPN network only')}</td>
+                <td data-label="Behind it" class="tagcell">{@render tags('l:' + c.name, lanTags(c), '–')}</td>
+                <td data-label="Access">{#if rulesOf(c.name)}<a href="/access">{rulesOf(c.name)} rule{rulesOf(c.name) === 1 ? '' : 's'}</a>{:else}<span class="faint">–</span>{/if}</td>
+                <td class="actions">
+                  {#if now}<button class="btn small ghost" disabled={!!busy} onclick={() => reconnect(c.name)} title="Disconnect it so it reconnects with its current settings">Reconnect</button>{/if}
+                  <button class="btn small ghost" onclick={() => editClient(c.name)}>Edit</button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+{/snippet}
+
+
+
 <header class="head">
   <div>
     <h1>Network</h1>
@@ -298,71 +378,15 @@
       {#if peers.length === 0}
         <p class="panel-body muted">No clients yet.</p>
       {:else}
-        <div class="table-wrap">
-          <table class="cards">
-            <thead><tr><th>Client</th><th>Address</th><th>Behind it</th><th>Sends through the VPN</th><th>DNS</th><th>Access</th><th><span class="sr">Edit</span></th></tr></thead>
-            <tbody>
-              {#each wgRows as p (p.name)}
-                <tr class:off={p.disabled || p.expired}>
-                  <td data-label="Client">
-                    <span class="who"><i class="dot" class:on={p.connected} title={p.connected ? 'Connected' : 'Not connected'}></i><strong>{p.name}</strong>{#if p.lan?.length}<span class="router">router</span>{/if}</span>
-                    {#if p.disabled}<span class="faint small block">disabled</span>{:else if p.expired}<span class="faint small block">expired</span>{:else if p.notes}<span class="faint small block">{p.notes}</span>{/if}
-                  </td>
-                  <td class="mono" data-label="Address">{p.address}</td>
-                  <td data-label="Behind it" class="tagcell">{@render tags('l:' + p.name, (p.lan ?? []).map((r) => ({ t: r, cls: 'mono lan' })), '–')}</td>
-                  <td data-label="Sends" class="tagcell">
-                    {@render tags('s:' + p.name, (p.allowed_ips?.length ? p.allowed_ips : settings?.allowed_ips ?? []).map((r) => ({ t: r, cls: p.allowed_ips?.length ? 'mono' : 'mono all' })), '–')}
-                    {#if !p.allowed_ips?.length}<span class="faint small">default</span>{/if}
-                  </td>
-                  <td class="mono" data-label="DNS">{(p.dns?.length ? p.dns : settings?.dns ?? []).join(', ') || '–'}{#if !p.dns?.length && settings?.dns?.length}<span class="faint small dflt">default</span>{/if}</td>
-                  <td data-label="Access">{#if rulesOf(p.name)}<a href="/access">{rulesOf(p.name)} rule{rulesOf(p.name) === 1 ? '' : 's'}</a>{:else}<span class="faint">–</span>{/if}</td>
-                  <td class="actions"><button class="btn small ghost" onclick={() => editClient(p.name)}>Edit</button></td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
+        {@render wgTable(wgShown.rows)}
+        <Pager bind:page bind:size info={wgShown} label="Pages of clients" />
         <p class="panel-body hint"><span class="tag mono all">10.0.0.0/8</span> from the defaults (Routing tab) · a client's own list replaces them</p>
       {/if}
     {:else if clients.length === 0}
       <p class="panel-body muted">No clients yet.</p>
     {:else}
-      <div class="table-wrap">
-        <table class="cards">
-          <thead><tr><th>Client</th><th>VPN address</th><th>All traffic</th><th>Reaches</th><th>Behind it</th><th>Access</th><th><span class="sr">Actions</span></th></tr></thead>
-          <tbody>
-            {#each ovpnRows as c (c.name)}
-              {@const now = live.get(c.name)}
-              {@const isRouter = c.lan.length || (c.named ?? []).some((u) => u.as === 'lan')}
-              <tr>
-                <td data-label="Client">
-                  <span class="who">
-                    <i class="dot" class:on={!!now} title={now ? 'Connected' : 'Not connected'}></i>
-                    <strong title={clientTitle(c.name)}>{clientName(c.name)}</strong>
-                    {#if isRouter}<span class="router">router</span>{/if}
-                  </span>
-                  {#each c.warnings?.filter((w) => !w.startsWith('server.conf needs "route')) ?? [] as w (w)}<span class="warn-text small block">{w}</span>{/each}
-                </td>
-                <td data-label="VPN address">
-                  {#if c.static_ip}<span class="mono">{c.static_ip}</span>
-                  {:else}
-                    <span class="faint">automatic</span>{#if now}<span class="mono small block">now {now}</span>{/if}
-                    <button class="link small block" disabled={!!busy} onclick={() => makeFixed(c.name)} title="Give it a fixed address (needed for access rules about this client)">{busy === c.name ? 'Fixing…' : 'Make fixed'}</button>
-                  {/if}
-                </td>
-                <td data-label="All traffic">{c.full_tunnel || srv?.pushes_full_tunnel ? 'Yes' : '–'}</td>
-                <td data-label="Reaches" class="tagcell">{@render tags('r:' + c.name, reachTags(c), 'VPN network only')}</td>
-                <td data-label="Behind it" class="tagcell">{@render tags('l:' + c.name, lanTags(c), '–')}</td>
-                <td data-label="Access">{#if rulesOf(c.name)}<a href="/access">{rulesOf(c.name)} rule{rulesOf(c.name) === 1 ? '' : 's'}</a>{:else}<span class="faint">–</span>{/if}</td>
-                <td class="actions">
-                  {#if now}<button class="btn small ghost" disabled={!!busy} onclick={() => reconnect(c.name)} title="Disconnect it so it reconnects with its current settings">Reconnect</button>{/if}
-                  <button class="btn small ghost" onclick={() => editClient(c.name)}>Edit</button>
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
+      {@render ovpnTable(ovpnShown.rows)}
+      <Pager bind:page bind:size info={ovpnShown} label="Pages of clients" />
       <p class="panel-body hint"><span class="tag named">Name</span> named network · <span class="tag named lan">LAN</span> network behind the client · <span class="tag mono all">10.0.0.0/8</span> sent to every client (Routing tab) · Access: rules for this client alone (Access page)</p>
     {/if}
   </section>

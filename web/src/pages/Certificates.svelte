@@ -10,6 +10,8 @@
   import { placeMenu } from '../lib/menu.js';
   import SendProfile from '../lib/SendProfile.svelte';
   import Lifetime from '../lib/Lifetime.svelte';
+  import Pager from '../lib/Pager.svelte';
+  import { paginate, savedSize } from '../lib/pager.js';
 
   let twoFactor = $state({ open: false, name: '' });
   let network = $state({ open: false, name: '' });
@@ -84,6 +86,15 @@
       .filter((c) => !search || `${c.name} ${c.notes ?? ''}`.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => a.name.localeCompare(b.name) || (b.current - a.current)),
   );
+  // Pages: back to the first when the filter or search changes.
+  let page = $state(1);
+  let size = $state(savedSize());
+  $effect(() => {
+    void [filter, search, showHistory];
+    page = 1;
+  });
+  const shown = $derived(paginate(rows, page, size));
+
   const counts = $derived.by(() => {
     const n = { all: 0, valid: 0, expiring: 0, expired: 0, revoked: 0 };
     for (const c of clientCerts.filter((c) => c.current)) {
@@ -98,7 +109,7 @@
 
   // Selection for bulk renew: current, not revoked.
   let selected = $state(new Set());
-  const selectable = $derived(rows.filter((c) => c.current && c.status !== 'revoked'));
+  const selectable = $derived(shown.rows.filter((c) => c.current && c.status !== 'revoked'));
   const allSelected = $derived(selectable.length > 0 && selectable.every((c) => selected.has(c.name)));
   function toggle(name) {
     const s = new Set(selected);
@@ -312,7 +323,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each rows as c (c.serial)}
+          {#each shown.rows as c (c.serial)}
             <tr class:old={!c.current} class:picked={selected.has(c.name) && c.current}>
               <td class="sel">
                 {#if c.current && c.status !== 'revoked'}
@@ -375,6 +386,7 @@
         </tbody>
       </table>
     </div>
+    <Pager bind:page bind:size info={shown} label="Pages of clients" />
   {/if}
 </section>
 

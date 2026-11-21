@@ -4,6 +4,8 @@
   import { route, setQuery } from '../lib/state.svelte.js';
   import BarChart from '../lib/BarChart.svelte';
   import { setClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
+  import Pager from '../lib/Pager.svelte';
+  import { paginate, savedSize } from '../lib/pager.js';
 
   const presets = [
     { key: 'last_30_days', label: 'Last 30 days' },
@@ -22,6 +24,14 @@
   let name = $state(q.get('name') ?? '');
 
   let report = $state(null);
+  // Pages of the by-client table: back to the first with a new report.
+  let page = $state(1);
+  let size = $state(savedSize());
+  $effect(() => {
+    void report;
+    page = 1;
+  });
+  const shown = $derived(paginate(report?.users ?? [], page, size));
   let error = $state('');
   let loading = $state(false);
   let clients = $state([]);
@@ -161,7 +171,7 @@
               </tr>
             </thead>
             <tbody>
-              {#each report.users as u (u.name)}
+              {#each shown.rows as u (u.name)}
                 <tr>
                   <td><button class="link" onclick={() => (name = u.name)} title="Show only {clientName(u.name)}{clientName(u.name) !== u.name ? ` (${u.name})` : ''}">{clientName(u.name)}</button></td>
                   <td class="num hide-s">{bytes(u.download)}</td>
@@ -178,6 +188,7 @@
             </tbody>
           </table>
         </div>
+        <Pager bind:page bind:size info={shown} label="Pages of clients" />
       {/if}
     </section>
   {:else}
