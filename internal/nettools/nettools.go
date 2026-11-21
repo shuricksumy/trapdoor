@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -378,11 +377,22 @@ func HTTP(ctx context.Context, raw string) (Result, error) {
 	req, _ := http.NewRequestWithContext(httptrace.WithClientTrace(ctx, trace), http.MethodGet, u.String(), nil)
 	req.Header.Set("User-Agent", "trapdoor-tools")
 	client := &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		Transport: &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // reported below, not trusted
+		Transport: &http.Transport{Proxy: nil}} // certificates are verified; an untrusted one is reported below
 	t0 = time.Now()
 	resp, err := client.Do(req)
 	r := Result{Millis: time.Since(t0).Milliseconds()}
 	if err != nil {
+		// An untrusted certificate: say why, with the certificate the server sent.
+		var ce *tls.CertificateVerificationError
+		if errors.As(err, &ce) && len(ce.UnverifiedCertificates) > 0 {
+			c := ce.UnverifiedCertificates[0]
+			days := int(time.Until(c.NotAfter).Hours() / 24)
+			r.Summary = "certificate not trusted: " + shortErr(ce.Err)
+			r.Output = fmt.Sprintf("%s\n\ncertificate: %s, issued by %s\nvalid %s to %s (%d days left)\nnames: %s\n",
+				r.Summary, c.Subject.CommonName, c.Issuer.CommonName, c.NotBefore.UTC().Format("2006-01-02"),
+				c.NotAfter.UTC().Format("2006-01-02"), days, strings.Join(c.DNSNames, ", "))
+			return r, nil
+		}
 		r.Summary = shortErr(err)
 		r.Output = err.Error() + "\n"
 		return r, nil
@@ -405,32 +415,14 @@ func HTTP(ctx context.Context, raw string) (Result, error) {
 	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
 		c := resp.TLS.PeerCertificates[0]
 		days := int(time.Until(c.NotAfter).Hours() / 24)
-		_, verr := c.Verify(certOpts(u.Hostname(), resp.TLS))
-		trusted := "trusted"
-		if verr != nil {
-			trusted = "NOT trusted: " + shortErr(verr)
-		}
-		fmt.Fprintf(&b, "\ncertificate: %s, issued by %s\nvalid until %s (%d days), %s\n",
-			c.Subject.CommonName, c.Issuer.CommonName, c.NotAfter.UTC().Format("2006-01-02"), days, trusted)
+		fmt.Fprintf(&b, "\ncertificate: %s, issued by %s\nvalid until %s (%d days), trusted\n",
+			c.Subject.CommonName, c.Issuer.CommonName, c.NotAfter.UTC().Format("2006-01-02"), days)
 		certNote = fmt.Sprintf(", certificate %d days", days)
-		if verr != nil {
-			certNote = ", certificate not trusted"
-		}
 	}
 	r.Output = b.String()
 	r.OK = resp.StatusCode < 500
 	r.Summary = fmt.Sprintf("%s in %d ms%s", resp.Status, firstByte.Milliseconds(), certNote)
 	return r, nil
-}
-
-// certOpts checks the server's certificate against the system's roots, with
-// the chain it sent.
-func certOpts(host string, st *tls.ConnectionState) x509.VerifyOptions {
-	o := x509.VerifyOptions{DNSName: host, Intermediates: x509.NewCertPool()}
-	for _, c := range st.PeerCertificates[1:] {
-		o.Intermediates.AddCert(c)
-	}
-	return o
 }
 
 func firstLine(s, fallback string) string {

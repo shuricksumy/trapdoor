@@ -134,13 +134,19 @@ func TestHTTP(t *testing.T) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 	defer srv.Close()
+	// a self-signed certificate: verified, refused, and its details shown
 	r, err := HTTP(context.Background(), srv.URL+"/")
-	if err != nil || !r.OK || !strings.HasPrefix(r.Summary, "200 OK in ") || !strings.Contains(r.Summary, "certificate not trusted") ||
-		!strings.Contains(r.Output, "Server: demo") || !strings.Contains(r.Output, "timing: DNS") {
-		t.Errorf("https: %+v %v", r, err)
+	if err != nil || r.OK || !strings.HasPrefix(r.Summary, "certificate not trusted: ") || !strings.Contains(r.Output, "certificate: ") || !strings.Contains(r.Output, "days left") {
+		t.Errorf("untrusted https: %+v %v", r, err)
+	}
+	plain := httptest.NewServer(srv.Config.Handler)
+	defer plain.Close()
+	r, err = HTTP(context.Background(), plain.URL+"/")
+	if err != nil || !r.OK || !strings.HasPrefix(r.Summary, "200 OK in ") || !strings.Contains(r.Output, "Server: demo") || !strings.Contains(r.Output, "timing: DNS") {
+		t.Errorf("http: %+v %v", r, err)
 	}
 	// redirects are reported, not followed
-	r, _ = HTTP(context.Background(), srv.URL+"/old")
+	r, _ = HTTP(context.Background(), plain.URL+"/old")
 	if !strings.HasPrefix(r.Summary, "301") || !strings.Contains(r.Output, "Location: /new") {
 		t.Errorf("redirect: %+v", r)
 	}
