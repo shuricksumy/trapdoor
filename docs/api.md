@@ -43,7 +43,21 @@ server). Below, `…` stands for that prefix.
 | GET, POST | `…/setup` | setup status / run the setup (see the agent API) |
 | GET, PUT | `…/firewall` | access rules |
 | POST | `…/firewall/addresses` | `{"names":[…]}` → fixed VPN addresses for these clients |
+| GET, POST | `…/peers` | WireGuard clients: list / add (body as the agent's) |
+| POST | `…/peers/bulk` | add several clients |
+| GET, PUT | `…/settings` | WireGuard server settings and client defaults |
+| GET, PUT, DELETE | `…/peers/{name}` | get / `{"disabled"?,"lan"?,"address"?,"psk"?,"settings"?:{notes,dns,allowed_ips,mtu,keepalive,expires_at}}` / delete |
+| GET, PUT | `…/scripts` | presets and own scripts: `{"dns_redirect","block_dot","isolate","up","down"}`; GET adds `editable` (`TD_SCRIPTS=on`), `supported`, `iface`, `files`, `state` (`ok`, `error` + `message`, `pending`, `inactive`); PUT 403 when `up` / `down` change on a node without `TD_SCRIPTS=on` |
+| GET, PUT | `…/cert-defaults` | OpenVPN: `{"validity_days"}` for new and renewed client certificates when a request has none (0 = 825 days) |
+| GET | `…/peers/{name}/conf` | download the client's WireGuard configuration |
 
+### Servers, settings and the rest
+
+Adding and removing servers, backups, sign-in, limits, notifications and nodes. Paths are
+given in full.
+
+| Method | Path | Result |
+|---|---|---|
 | POST | `/api/v1/servers` | add an OpenVPN, WireGuard or AmneziaWG server (body as the agent's `POST /v1/servers`, plus `"host"`: the machine, empty for this one) |
 | DELETE | `/api/v1/servers/{server}` | remove a WireGuard / AmneziaWG server and its interface, or an added OpenVPN server |
 | POST | `/api/v1/servers/{server}/backup` | `{"passphrase"}` → one server's backup (its files and traffic history) |
@@ -91,13 +105,6 @@ Servers on another node have the id `<node>.<id>` (e.g. `vps.wg0`) in every
 `/api/v1/servers/{server}/…` path and in `agent.servers` of `/api/v1/status`, with `"host"`
 set; `agent.hosts` lists the other nodes and whether they answer, `agent.machine` and
 `agent.node` name the own node (`TD_MACHINE`, `TD_NODE_NAME`).
-| GET, POST | `…/peers` | WireGuard clients: list / add (body as the agent's) |
-| POST | `…/peers/bulk` | add several clients |
-| GET, PUT | `…/settings` | WireGuard server settings and client defaults |
-| GET, PUT, DELETE | `…/peers/{name}` | get / `{"disabled"?,"lan"?,"address"?,"psk"?,"settings"?:{notes,dns,allowed_ips,mtu,keepalive,expires_at}}` / delete |
-| GET, PUT | `…/scripts` | presets and own scripts: `{"dns_redirect","block_dot","isolate","up","down"}`; GET adds `editable` (`TD_SCRIPTS=on`), `supported`, `iface`, `files`, `state` (`ok`, `error` + `message`, `pending`, `inactive`); PUT 403 when `up` / `down` change on a node without `TD_SCRIPTS=on` |
-| GET, PUT | `…/cert-defaults` | OpenVPN: `{"validity_days"}` for new and renewed client certificates when a request has none (0 = 825 days) |
-| GET | `…/peers/{name}/conf` | download the client's WireGuard configuration |
 
 Calls are passed to the agent (404 for an unknown server); every change is logged as
 `audit server=... action=... target=... by=<user>`.
