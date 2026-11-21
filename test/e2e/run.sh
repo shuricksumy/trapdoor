@@ -298,7 +298,8 @@ slow_down=$(speed down) || fail "download with a limit"
 slow_up=$(speed up) || fail "upload with a limit"
 python3 -c "import sys; d, u = float(sys.argv[1]), float(sys.argv[2]); sys.exit(0 if d >= 3 and u >= 3 else 1)" "$slow_down" "$slow_up" ||
 	fail "1 MB at 2 Mbit/s took ${slow_down}s down / ${slow_up}s up (expected about 4s; unlimited: ${fast_down}s)"
-limits PUT /clients/alice '{}' >/dev/null || fail "clear alice's speed"
+limits PUT /clients/alice '{}' >"$WORK/lim2.json" || fail "clear alice's speed"
+grep -q '"applied":true' "$WORK/lim2.json" || fail "clearing not applied: $(cat "$WORK/lim2.json")"
 ! tc qdisc show dev "$TUN" | grep -q htb || fail "HTB left on $TUN with no limits: $(tc qdisc show dev "$TUN")"
 again=$(speed down)
 python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) < 2 else 1)" "$again" || fail "still slow without a limit: ${again}s"

@@ -95,7 +95,7 @@ func Render(iface, ifb string, clients []Client) (script string, skipped []strin
 	b.WriteString("tc qdisc del dev \"$DEV\" root 2>/dev/null || true\n")
 	b.WriteString("tc qdisc del dev \"$DEV\" ingress 2>/dev/null || true\n")
 	b.WriteString("ip link del \"$IFB\" 2>/dev/null || true\n")
-	b.WriteString("[ \"${2:-}\" = clear ] && exit 0\n")
+	b.WriteString("if [ \"${2:-}\" = clear ]; then exit 0; fi\n")
 	if len(down)+len(blocked) > 0 {
 		b.WriteString("\n# download: server → client\n")
 		b.WriteString("tc qdisc add dev \"$DEV\" root handle 1: htb default 0\n")
@@ -122,6 +122,7 @@ func Render(iface, ifb string, clients []Client) (script string, skipped []strin
 			b.WriteString("tc filter add dev \"$DEV\" parent ffff: protocol ip prio 2 u32 match u32 0 0 action mirred egress redirect dev \"$IFB\"\n")
 		}
 	}
+	b.WriteString("exit 0\n")
 	return b.String(), skipped
 }
 

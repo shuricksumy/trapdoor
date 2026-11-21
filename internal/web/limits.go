@@ -194,12 +194,6 @@ func periodOf(period string, now time.Time, loc *time.Location) (time.Time, time
 	}
 }
 
-// usageAt is a client's usage in its period now, and the period.
-type usageAt struct {
-	used       int64
-	start, end time.Time
-}
-
 // evaluate works out each client's row. names: the clients to show (the
 // clients of the server, those with settings and those with usage).
 func (s *Server) evaluate(ctx context.Context, server string, sl *serverLimits, names []string) ([]LimitRow, error) {

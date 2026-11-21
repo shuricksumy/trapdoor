@@ -92,4 +92,12 @@ func TestRenderRuns(t *testing.T) {
 	if got := run("tun0", "clear"); strings.Contains(got, " add ") || !strings.Contains(got, "ip link del tq-openvpn") {
 		t.Errorf("clear:\n%s", got)
 	}
+	// no limits left: only removes, and succeeds
+	empty, _ := Render("tun+", "tq-openvpn", nil)
+	if err := os.WriteFile(path, []byte(empty), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := run("tun0"); strings.Contains(got, " add ") || !strings.Contains(got, "tc qdisc del dev tun0 root") {
+		t.Errorf("empty:\n%s", got)
+	}
 }
