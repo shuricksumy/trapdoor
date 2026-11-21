@@ -77,6 +77,8 @@ type AgentClient interface {
 	Scripts(ctx context.Context) (api.Scripts, error)
 	SetScripts(ctx context.Context, in api.Scripts) (api.Scripts, error)
 	AssignAddresses(ctx context.Context, names []string) (api.Firewall, error)
+	Shaping(ctx context.Context) (api.ShapingState, error)
+	SetShaping(ctx context.Context, in api.Shaping) (api.ShapingState, error)
 
 	// WireGuard servers.
 	RemoveServer(ctx context.Context) error
@@ -138,6 +140,7 @@ type Server struct {
 	nodes    nodeWatch
 	mailWG   sync.WaitGroup // emails being sent (tests wait for them)
 	presence presenceWatch
+	limitsMu sync.Mutex // the "limits" setting
 }
 
 // New returns a web server.
@@ -178,6 +181,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerEmailRoutes(api)
 	s.registerTelegramRoutes(api)
 	s.registerPresenceRoutes(api)
+	s.registerLimitRoutes(api)
 	s.registerServerControlRoutes(api)
 
 	mux := http.NewServeMux()

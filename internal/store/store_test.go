@@ -109,3 +109,28 @@ func TestMigrationDropsUndefSessions(t *testing.T) {
 		}
 	}
 }
+
+func TestUsage(t *testing.T) {
+	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "td.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	for _, r := range []struct {
+		agent, name   string
+		hour, in, out int64
+	}{
+		{"openvpn", "anna", 3600, 100, 1000},
+		{"openvpn", "anna", 7200, 5, 50},
+		{"openvpn", "bob", 0, 1, 1}, // before
+		{"wg0", "anna", 7200, 9, 9}, // other server
+	} {
+		if _, err := db.Exec(`INSERT INTO traffic_hourly (agent, name, hour, bytes_in, bytes_out) VALUES (?, ?, ?, ?, ?)`, r.agent, r.name, r.hour, r.in, r.out); err != nil {
+			t.Fatal(err)
+		}
+	}
+	u, err := db.Usage(context.Background(), "openvpn", 3600)
+	if err != nil || len(u) != 1 || u["anna"] != 1155 {
+		t.Errorf("usage = %v %v", u, err)
+	}
+}

@@ -117,6 +117,19 @@ tool traceroute "{\"target\":\"$alice_ip\"}" | grep -q '"ok":true' || fail "tool
 tool route "{\"target\":\"$alice_ip\"}" | grep -q "dev tun" || fail "tools: alice is not routed through the tunnel: $(tool route "{\"target\":\"$alice_ip\"}")"
 tool ping '{"target":"-c 99 127.0.0.1"}' | grep -q '"error"' || fail "tools: an option was accepted as a target"
 
+log "speed limits: written by the agent, applied by the vpn container with tc (alice's address from her session)"
+vpntc() { dc exec -T vpn sh -c "tc $1 show dev \$(ls /sys/class/net | grep -E '^tun[0-9]+\$' | head -1)"; }
+api -X PUT -H "Content-Type: application/json" -m 30 -d '{"down":3000,"up":1000}' \
+	"$WEB/api/v1/servers/openvpn/limits/clients/alice" >"$WORK/lim.json" || fail "save alice's speed"
+grep -q '"applied":true' "$WORK/lim.json" || fail "speed limits not applied: $(cat "$WORK/lim.json")"
+grep -q "\"alice\":\"$alice_ip\"" "$WORK/lim.json" || fail "alice's session address not used: $(cat "$WORK/lim.json")"
+vpntc class | grep -q "rate 3Mbit" || fail "no HTB class in the container: $(vpntc class)"
+dc exec -T vpn ip link show tq-openvpn >/dev/null || fail "no IFB device for uploads"
+vpnlog "speed limits applied" || fail "no apply log"
+ping -c 2 -W 2 10.77.0.1 >/dev/null || fail "no traffic with a speed limit"
+api -X PUT -H "Content-Type: application/json" -m 30 -d '{}' "$WEB/api/v1/servers/openvpn/limits/clients/alice" | grep -q '"applied":true' || fail "clearing the speed not applied"
+! vpntc qdisc | grep -q htb || fail "HTB left without limits: $(vpntc qdisc)"
+
 log "revoke disconnects alice"
 curl -fsS -b "$JAR" -H "Origin: $WEB" -X POST "$WEB/api/v1/servers/openvpn/certs/alice/revoke" >/dev/null
 for _ in $(seq 10); do curl -fsS -b "$JAR" "$WEB/api/v1/servers/openvpn/sessions" | grep -q '"name":"alice"' || break; sleep 1; done

@@ -28,7 +28,7 @@
         from: e.from ?? '',
         admins: (e.admins ?? []).join(', '),
         insecure: !!e.insecure_skip_verify,
-        notify: { backup_failed: true, node_down: true, cert_expiry: true, ...(e.notify ?? {}) },
+        notify: { backup_failed: true, node_down: true, cert_expiry: true, usage_limit: true, ...(e.notify ?? {}) },
       };
       loadError = '';
     } catch (err) {
@@ -161,6 +161,7 @@
           <label class="check"><input type="checkbox" bind:checked={f.notify.backup_failed} /><span>a scheduled backup fails</span></label>
           <label class="check"><input type="checkbox" bind:checked={f.notify.node_down} /><span>a node does not answer for 5 minutes, and when it is back</span></label>
           <label class="check"><input type="checkbox" bind:checked={f.notify.cert_expiry} /><span>certificates expire soon (once per certificate)</span></label>
+          <label class="check"><input type="checkbox" bind:checked={f.notify.usage_limit} /><span>a client reaches 80% or 100% of its usage limit (Limits page)</span></label>
         </fieldset>
       {/if}
 

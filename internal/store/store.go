@@ -424,3 +424,24 @@ func (db *DB) LastDisconnect(ctx context.Context, agent, name string) (time.Time
 	}
 	return time.Unix(ts.Int64, 0).UTC(), nil
 }
+
+// Usage is each client's traffic (both directions) of a server in the
+// hours that start at or after since (unix seconds).
+func (db *DB) Usage(ctx context.Context, agent string, since int64) (map[string]int64, error) {
+	rows, err := db.QueryContext(ctx, `SELECT name, SUM(bytes_in + bytes_out) FROM traffic_hourly
+		WHERE agent = ? AND hour >= ? GROUP BY name`, agent, since)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]int64{}
+	for rows.Next() {
+		var name string
+		var n int64
+		if err := rows.Scan(&name, &n); err != nil {
+			return nil, err
+		}
+		out[name] = n
+	}
+	return out, rows.Err()
+}

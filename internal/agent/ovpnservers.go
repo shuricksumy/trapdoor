@@ -197,6 +197,7 @@ func (s *Server) remove(ctx context.Context) (string, error) {
 	// it to the container, which notices the directory is gone).
 	s.fwMu.Lock()
 	s.firewallTarget().remove(ctx)
+	s.shaper().remove(ctx)
 	s.fwMu.Unlock()
 	if err := os.Rename(s.cfg.OpenVPNDir, dst); err != nil {
 		return "", err

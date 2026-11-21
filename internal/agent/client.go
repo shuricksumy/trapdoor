@@ -561,3 +561,17 @@ func (c *Client) PeerConf(ctx context.Context, name string) ([]byte, error) {
 	err := c.doJSON(ctx, http.MethodGet, c.path("/peers/"+url.PathEscape(name)+"/conf"), nil, &out)
 	return out, err
 }
+
+// Shaping returns the server's speed limits and whether they are active.
+func (c *Client) Shaping(ctx context.Context) (api.ShapingState, error) {
+	var out api.ShapingState
+	err := c.doJSON(ctx, http.MethodGet, c.path("/shaping"), nil, &out)
+	return out, err
+}
+
+// SetShaping sets the speed each client may use now.
+func (c *Client) SetShaping(ctx context.Context, in api.Shaping) (api.ShapingState, error) {
+	var out api.ShapingState
+	err := c.doJSON(ctx, http.MethodPut, c.path("/shaping"), in, &out)
+	return out, err
+}
