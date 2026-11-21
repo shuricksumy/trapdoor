@@ -122,6 +122,10 @@ type Web struct {
 	CookieSecure bool
 	// TrustedProxies may set X-Forwarded-For (CIDRs).     TD_TRUSTED_PROXIES
 	TrustedProxies []netip.Prefix
+	// PasswordFrom: the password login works only from these networks
+	// (empty = anywhere); sign-in with OIDC, the API token and the CLI are
+	// not affected.                                       TD_PASSWORD_LOGIN_FROM
+	PasswordFrom []netip.Prefix
 	// ExpiryWarnDays flags client certificates expiring
 	// within this many days.                              TD_EXPIRY_WARN_DAYS (default 30)
 	ExpiryWarnDays int
@@ -274,17 +278,13 @@ func LoadWeb() (Web, error) {
 	if err != nil || warnDays < 1 || warnDays > 365 {
 		return Web{}, fmt.Errorf("TD_EXPIRY_WARN_DAYS must be 1-365")
 	}
-	var proxies []netip.Prefix
-	for _, p := range list(env("TD_TRUSTED_PROXIES", "-")) {
-		pfx, err := netip.ParsePrefix(p)
-		if err != nil {
-			addr, err2 := netip.ParseAddr(p)
-			if err2 != nil {
-				return Web{}, fmt.Errorf("TD_TRUSTED_PROXIES: %q is not a CIDR or IP", p)
-			}
-			pfx = netip.PrefixFrom(addr, addr.BitLen())
-		}
-		proxies = append(proxies, pfx.Masked())
+	proxies, err := prefixes("TD_TRUSTED_PROXIES")
+	if err != nil {
+		return Web{}, err
+	}
+	passwordFrom, err := prefixes("TD_PASSWORD_LOGIN_FROM")
+	if err != nil {
+		return Web{}, err
 	}
 	c := Web{
 		Listen:         env("TD_WEB_LISTEN", ":8080"),
@@ -299,6 +299,7 @@ func LoadWeb() (Web, error) {
 		TrustedProxies: proxies,
 		SessionIdle:    idle,
 		JoinSecret:     os.Getenv("TD_JOIN_SECRET"),
+		PasswordFrom:   passwordFrom,
 	}
 	c.BackupDir = env("TD_BACKUP_DIR", filepath.Join(filepath.Dir(c.DBPath), "backups"))
 	if c.BackupDir == "-" {
@@ -342,6 +343,23 @@ func LoadWeb() (Web, error) {
 // frameOrigin is a CSP source for frame-ancestors: scheme, host (optionally
 // *.domain), optional port; nothing that could end the directive.
 var frameOrigin = regexp.MustCompile(`^https?://(\*\.)?[A-Za-z0-9.-]+(:[0-9]{1,5})?$`)
+
+// prefixes reads a comma-separated list of CIDRs or single addresses.
+func prefixes(name string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, p := range list(env(name, "-")) {
+		pfx, err := netip.ParsePrefix(p)
+		if err != nil {
+			addr, err2 := netip.ParseAddr(p)
+			if err2 != nil {
+				return nil, fmt.Errorf("%s: %q is not a CIDR or IP", name, p)
+			}
+			pfx = netip.PrefixFrom(addr, addr.BitLen())
+		}
+		out = append(out, pfx.Masked())
+	}
+	return out, nil
+}
 
 // list splits a comma-separated value; "-" means an empty list.
 func list(v string) []string {

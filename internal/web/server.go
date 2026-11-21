@@ -131,6 +131,9 @@ type Deps struct {
 	CookieSecure bool
 	// TrustedProxies may set X-Forwarded-For (for login throttling and logs).
 	TrustedProxies []netip.Prefix
+	// PasswordFrom: the password login works only from these networks
+	// (TD_PASSWORD_LOGIN_FROM; empty = anywhere).
+	PasswordFrom []netip.Prefix
 	// ExpiryWarnDays flags certificates expiring within this many days.
 	ExpiryWarnDays int
 	Location       *time.Location

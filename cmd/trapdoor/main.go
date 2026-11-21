@@ -230,7 +230,7 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 	srv := web.New(web.Deps{
 		Agent: agents, Hosts: agents, Backup: agents, JoinSecret: cfg.JoinSecret, Stats: &history.Stats{DB: db},
 		Auth: authSvc, APIToken: cfg.APIToken, CookieSecure: cfg.CookieSecure,
-		TrustedProxies: cfg.TrustedProxies, Location: cfg.Location, Log: log,
+		TrustedProxies: cfg.TrustedProxies, PasswordFrom: cfg.PasswordFrom, Location: cfg.Location, Log: log,
 		ExpiryWarnDays: cfg.ExpiryWarnDays, BackupDir: cfg.BackupDir, BackupPassphrase: cfg.BackupPassphrase,
 		PublicURL: cfg.PublicURL, FrameAncestors: cfg.FrameAncestors,
 		OIDC: sso, OIDCName: cfg.OIDCName, OIDCUser: cfg.OIDCUser,
