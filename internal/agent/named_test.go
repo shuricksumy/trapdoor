@@ -169,7 +169,7 @@ func TestNamedNetworkKeepsUnchangedFiles(t *testing.T) {
 	}
 	files := map[string]string{
 		"router": "### Automatic generated \"router\" settings file\nifconfig-push 10.8.0.20 255.255.255.0\niroute 192.168.50.0 255.255.255.0\n",
-		"laptop": "### Automatic generated \"laptop\" settings file\n# Route to router\npush \"route 192.168.50.0 255.255.255.0\"\n# Route to docker\npush \"route 172.30.0.0 255.255.255.0\"\n#2FA_KEY:00\n",
+		"laptop": "### Automatic generated \"laptop\" settings file\n# Route to router\npush \"route 192.168.50.0 255.255.255.0\"\n# Route to docker\npush \"route 172.20.0.0 255.255.255.0\"\n#2FA_KEY:00\n",
 	}
 	if err := os.MkdirAll(ccdDir, 0o755); err != nil {
 		t.Fatal(err)

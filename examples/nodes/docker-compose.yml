@@ -185,7 +185,7 @@ services:
       TD_TRUSTED_PROXIES: ${TD_TRUSTED_PROXIES:-}
       TD_WEB_API_TOKEN: ${TD_WEB_API_TOKEN:-}
       TD_PUBLIC_URL: ${TD_PUBLIC_URL:-} # link in notification emails
-      # Sign in with Authelia or another OIDC provider (docs/guide.md#sign-in-with-authelia-oidc); empty issuer = off
+      # Sign in with Authelia or another OIDC provider (docs/oidc.md); empty issuer = off
       TD_OIDC_ISSUER: ${TD_OIDC_ISSUER:-}
       TD_OIDC_CLIENT_ID: ${TD_OIDC_CLIENT_ID:-trapdoor}
       TD_OIDC_CLIENT_SECRET: ${TD_OIDC_CLIENT_SECRET:-}
