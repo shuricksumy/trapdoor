@@ -46,6 +46,17 @@ func newFake(t *testing.T) *fakeProvider {
 	f.rsa, _ = rsa.GenerateKey(rand.Reader, 2048)
 	f.ec, _ = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	mux := http.NewServeMux()
+	// Like Cloudflare's bot protection in front of Authelia: Go's default
+	// User-Agent gets 403.
+	guard := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.UserAgent(), "Go-http-client") {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			h.ServeHTTP(w, r)
+		})
+	}
 	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"issuer": f.srv.URL, "authorization_endpoint": f.srv.URL + "/authorize",
 			"token_endpoint": f.srv.URL + "/token", "userinfo_endpoint": f.srv.URL + "/userinfo", "jwks_uri": f.srv.URL + "/jwks"})
@@ -97,7 +108,7 @@ func newFake(t *testing.T) *fakeProvider {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(info)
 	})
-	f.srv = httptest.NewServer(mux)
+	f.srv = httptest.NewServer(guard(mux))
 	t.Cleanup(f.srv.Close)
 	return f
 }

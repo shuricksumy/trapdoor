@@ -44,8 +44,12 @@ type Config struct {
 	// AuthMethod at the token endpoint: client_secret_basic (default) or
 	// client_secret_post.
 	AuthMethod string
-	HTTP       *http.Client     // nil: a client with a 10 s timeout
-	Now        func() time.Time // nil: time.Now
+	HTTP       *http.Client // nil: a client with a 10 s timeout
+	// UserAgent of the requests to the provider (default "trapdoor"): Go's
+	// own is blocked by some proxies in front of providers (Cloudflare's
+	// bot protection answers the token request with 403).
+	UserAgent string
+	Now       func() time.Time // nil: time.Now
 }
 
 // Identity is who signed in.
@@ -124,6 +128,9 @@ func New(cfg Config) (*Provider, error) {
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
+	}
+	if cfg.UserAgent == "" {
+		cfg.UserAgent = "trapdoor"
 	}
 	return &Provider{cfg: cfg, pending: map[string]pending{}}, nil
 }
@@ -273,6 +280,7 @@ func (p *Provider) exchange(ctx context.Context, meta *metadata, code, verifier 
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", p.cfg.UserAgent)
 	if p.cfg.AuthMethod == "client_secret_basic" {
 		req.SetBasicAuth(url.QueryEscape(p.cfg.ClientID), url.QueryEscape(p.cfg.ClientSecret))
 	}
@@ -310,6 +318,7 @@ func (p *Provider) getJSON(ctx context.Context, u, bearer string, v any) error {
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", p.cfg.UserAgent)
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
