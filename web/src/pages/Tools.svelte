@@ -6,6 +6,7 @@
   import { currentServer, route, setQuery } from '../lib/state.svelte.js';
   import { clientName, loadClientNames } from '../lib/names.svelte.js';
   import { where } from '../lib/location.js';
+  import { toolPicks } from '../lib/toolPicks.js';
 
   const server = currentServer();
   const isWG = ['wireguard', 'amneziawg'].includes(server?.type);
@@ -25,31 +26,33 @@
   let runs = $state([]); // newest first: { id, tool, target, at, res | error, open }
   let seq = 0;
 
-  // Suggestions from the server: its own address, connected clients, their LANs, DNS servers.
-  let picks = $state([]);
+  // Suggestions from the server, grouped: itself, connected clients, the LANs
+  // behind clients (by their named network), DNS servers, the internet.
+  let groups = $state([]);
   let dnsPicks = $state([]);
   $effect(() => {
     loadClientNames();
-    const subnet = server?.subnet ?? '';
-    const own = subnet ? [{ v: subnet.replace(/\.\d+\/\d+$/, '.1'), l: 'this server' }] : [];
+    const own = server?.subnet ? server.subnet.replace(/\.\d+\/\d+$/, '.1') : '';
     Promise.all([
       api('/sessions').catch(() => null),
       isWG ? api('/peers').catch(() => []) : api('/network').catch(() => null),
       isWG ? api('/settings').catch(() => null) : api('/server/config').catch(() => null),
-    ]).then(([ses, net, cfg]) => {
-      const out = [...own];
-      if (!isWG && net?.server_ip) out[0] = { v: net.server_ip, l: 'this server' };
-      for (const s of ses?.sessions ?? []) if (s.virtual_address) out.push({ v: s.virtual_address, l: `${clientName(s.name)} (connected)` });
+      isWG ? Promise.resolve(null) : api('/named-networks').catch(() => null),
+    ]).then(([ses, net, cfg, named]) => {
       const lans = isWG ? (net ?? []).flatMap((p) => (p.lan ?? []).map((l) => [l, p.name])) : Object.entries(net?.client_lans ?? {}).flatMap(([c, ls]) => ls.map((l) => [l, c]));
-      for (const [l, c] of lans) out.push({ v: l.replace(/\.0\/\d+$/, '.1'), l: `gateway of ${l}, behind ${clientName(c)}` });
       const dns = isWG ? cfg?.dns ?? [] : cfg?.settings?.dns ?? [];
       dnsPicks = dns.map((d) => ({ v: d, l: 'DNS for clients' }));
-      for (const d of dns) out.push({ v: d, l: 'DNS for clients' });
-      out.push({ v: '1.1.1.1', l: 'internet (Cloudflare)' });
-      const seen = new Set();
-      picks = out.filter((p) => !seen.has(p.v) && seen.add(p.v));
+      groups = toolPicks({
+        serverIP: (!isWG && net?.server_ip) || own,
+        sessions: ses?.sessions ?? [],
+        lans,
+        nets: named?.networks ?? [],
+        dns,
+        display: clientName,
+      });
     });
   });
+  const picks = $derived(groups.flatMap((g) => g.items));
 
   async function runTool(e) {
     e?.preventDefault();
@@ -112,13 +115,24 @@
       {/if}
       <button class="btn primary run" type="submit" disabled={busy}>{busy ? 'Running…' : 'Run'}</button>
     </div>
-    {#if picks.length && tool !== 'http'}
-      <div class="chips" aria-label="Suggestions">
-        {#each picks.slice(0, 10) as p (p.v)}<button type="button" class="chip" onclick={() => (f.target = p.v)} title={p.l}><span class="mono">{p.v}</span> <span class="faint">{p.l}</span></button>{/each}
+    {#if groups.length && tool !== 'http'}
+      <div class="picks" aria-label="Suggestions">
+        {#each groups as g (g.key)}
+          <div class="pick-row">
+            <span class="pick-title">{g.title}</span>
+            <div class="chips">
+              {#each g.items as p (p.v)}
+                <button type="button" class="chip {g.key}" class:on={f.target === p.v} onclick={() => (f.target = p.v)} title={p.title}>
+                  <span class="chip-name">{p.name}</span><span class="mono chip-ip">{p.v}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/each}
       </div>
     {/if}
   </form>
-  <datalist id="tool-picks">{#each picks as p (p.v)}<option value={p.v}>{p.l}</option>{/each}</datalist>
+  <datalist id="tool-picks">{#each picks as p (p.v)}<option value={p.v}>{p.title}</option>{/each}</datalist>
   <datalist id="dns-picks">{#each dnsPicks as p (p.v)}<option value={p.v}>{p.l}</option>{/each}</datalist>
 </section>
 
@@ -153,9 +167,17 @@
   .grow { flex: 1 1 260px; }
   .field.small { width: 140px; }
   .run { height: 38px; min-width: 96px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { display: inline-flex; gap: 6px; align-items: baseline; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1); cursor: pointer; }
+  .picks { display: grid; gap: var(--space-2); padding-top: var(--space-1); }
+  .pick-row { display: grid; grid-template-columns: 150px 1fr; gap: var(--space-3); align-items: start; }
+  .pick-title { padding-top: 5px; color: var(--ink-3); font-size: var(--step--1); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+  .chip { display: inline-flex; align-items: center; max-width: 100%; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1); line-height: 1.2; cursor: pointer; overflow: hidden; white-space: nowrap; }
+  .chip > span { padding: 4px 8px; }
+  .chip-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+  .chip-ip { border-left: 1px solid var(--line); background: var(--sunken); color: var(--ink-2); font-size: 12px; }
   .chip:hover { border-color: var(--accent); }
+  .chip.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .chip.online .chip-name::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--ok); vertical-align: 1px; }
   .run-card { overflow: hidden; }
   .run-head { display: flex; align-items: center; gap: var(--space-3); width: 100%; padding: var(--space-3) var(--space-5); border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; flex-wrap: wrap; }
   .what { min-width: 0; overflow-wrap: anywhere; }
@@ -167,5 +189,7 @@
     .field.small { width: auto; flex: 1 1 120px; }
     .run { width: 100%; }
     .when { margin-left: 0; width: 100%; }
+    .pick-row { grid-template-columns: 1fr; gap: 4px; }
+    .pick-title { padding-top: 0; }
   }
 </style>

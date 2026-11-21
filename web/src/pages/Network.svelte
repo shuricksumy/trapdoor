@@ -287,11 +287,11 @@
                     {#if p.disabled}<span class="faint small block">disabled</span>{:else if p.expired}<span class="faint small block">expired</span>{:else if p.notes}<span class="faint small block">{p.notes}</span>{/if}
                   </td>
                   <td class="mono" data-label="Address">{p.address}</td>
-                  <td data-label="Behind it">{#each p.lan ?? [] as r (r)}<span class="tag mono">{r}</span>{:else}<span class="faint">–</span>{/each}</td>
-                  <td data-label="Sends">
+                  <td data-label="Behind it" class="tagcell"><div class="tags">{#each p.lan ?? [] as r (r)}<span class="tag mono lan">{r}</span>{:else}<span class="faint">–</span>{/each}</div></td>
+                  <td data-label="Sends" class="tagcell"><div class="tags">
                     {#each p.allowed_ips?.length ? p.allowed_ips : settings?.allowed_ips ?? [] as r (r)}<span class="tag mono" class:all={!p.allowed_ips?.length}>{r}</span>{/each}
                     {#if !p.allowed_ips?.length}<span class="faint small">default</span>{/if}
-                  </td>
+                  </div></td>
                   <td class="mono" data-label="DNS">{(p.dns?.length ? p.dns : settings?.dns ?? []).join(', ') || '–'}{#if !p.dns?.length && settings?.dns?.length}<span class="faint small dflt">default</span>{/if}</td>
                   <td data-label="Access">{#if rulesOf(p.name)}<a href="/access">{rulesOf(p.name)} rule{rulesOf(p.name) === 1 ? '' : 's'}</a>{:else}<span class="faint">–</span>{/if}</td>
                   <td class="actions"><button class="btn small ghost" onclick={() => editClient(p.name)}>Edit</button></td>
@@ -329,21 +329,21 @@
                   {/if}
                 </td>
                 <td data-label="All traffic">{c.full_tunnel || srv?.pushes_full_tunnel ? 'Yes' : '–'}</td>
-                <td data-label="Reaches">
+                <td data-label="Reaches" class="tagcell"><div class="tags">
                   {#each (c.named ?? []).filter((u) => u.as === 'route') as u (u.name)}
                     <span class="tag named" title={netOf(u.name)?.networks.join(', ')}>{u.name}</span>
                   {/each}
                   {#each c.routes as r (r)}<span class="tag mono">{r}</span>{/each}
                   {#each pushed.filter((r) => !c.routes.includes(r)) as r (r)}<span class="tag mono all" title="Sent to every client">{r}</span>{/each}
                   {#if !c.routes.length && !pushed.length && !(c.named ?? []).some((u) => u.as === 'route')}<span class="faint">VPN network only</span>{/if}
-                </td>
-                <td data-label="Behind it">
+                </div></td>
+                <td data-label="Behind it" class="tagcell"><div class="tags">
                   {#each (c.named ?? []).filter((u) => u.as === 'lan') as u (u.name)}
-                    <span class="tag named" title={netOf(u.name)?.networks.join(', ')}>{u.name}</span>
+                    <span class="tag named lan" title={netOf(u.name)?.networks.join(', ')}>{u.name}</span>
                   {/each}
-                  {#each c.lan as r (r)}<span class="tag mono">{r}</span>{/each}
+                  {#each c.lan as r (r)}<span class="tag mono lan">{r}</span>{/each}
                   {#if !c.lan.length && !(c.named ?? []).some((u) => u.as === 'lan')}<span class="faint">–</span>{/if}
-                </td>
+                </div></td>
                 <td data-label="Access">{#if rulesOf(c.name)}<a href="/access">{rulesOf(c.name)} rule{rulesOf(c.name) === 1 ? '' : 's'}</a>{:else}<span class="faint">–</span>{/if}</td>
                 <td class="actions">
                   {#if now}<button class="btn small ghost" disabled={!!busy} onclick={() => reconnect(c.name)} title="Disconnect it so it reconnects with its current settings">Reconnect</button>{/if}
@@ -354,7 +354,7 @@
           </tbody>
         </table>
       </div>
-      <p class="panel-body hint"><span class="tag named">Name</span> named network · <span class="tag mono all">10.0.0.0/8</span> sent to every client (Routing tab) · Access: rules for this client alone (Access page)</p>
+      <p class="panel-body hint"><span class="tag named">Name</span> named network · <span class="tag named lan">LAN</span> network behind the client · <span class="tag mono all">10.0.0.0/8</span> sent to every client (Routing tab) · Access: rules for this client alone (Access page)</p>
     {/if}
   </section>
 {:else if tab === 'routing'}
@@ -429,9 +429,15 @@
   .intro { margin: 0; padding-top: 0; }
   .block { display: block; }
   .dflt { margin-left: var(--space-2); font-family: var(--sans, inherit); }
-  .tag { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 8px; border-radius: 999px; background: var(--sunken); font-size: 12px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border: 1px solid transparent; border-radius: 6px; background: var(--sunken); color: var(--ink-2); font-size: 12px; line-height: 1.35; white-space: nowrap; }
+  .tags > .tag { margin: 0; }
+  .hint .tag { margin: 0 2px; vertical-align: 1px; }
   .tag.named { background: var(--accent-soft); color: var(--ink); }
+  .tag.lan { border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: var(--ok-soft); color: var(--ink); font-weight: 500; }
+  .tag.lan::before { content: ''; width: 6px; height: 6px; border-radius: 2px; background: var(--ok); flex: none; }
   .tag.all { border: 1px dashed var(--line); background: none; }
+  .tagcell { min-width: 140px; }
   .who { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); opacity: 0.6; flex: none; }
   .dot.on { background: var(--ok); opacity: 1; }
@@ -452,5 +458,10 @@
     .cards td { padding: 3px 0; border: 0; }
     .cards td[data-label]:not(:first-child)::before { content: attr(data-label); display: inline-block; min-width: 104px; color: var(--ink-3); font-size: var(--step--1); }
     .cards .actions { text-align: left; padding-top: var(--space-2); }
+    /* label | value, every value in the second column */
+    .cards td[data-label]:not(:first-child) { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: start; column-gap: var(--space-2); }
+    .cards td[data-label]:not(:first-child)::before { min-width: 0; padding-top: 2px; }
+    .cards td[data-label]:not(:first-child) > * { grid-column: 2; justify-self: start; text-align: left; }
+    .cards td.tagcell .tags { padding-top: 1px; }
   }
 </style>

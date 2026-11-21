@@ -761,8 +761,9 @@ clients' VPN addresses, the LANs behind them, the internet.
 | HTTP(S) | status, timing (DNS, connect, TLS, first byte), the certificate and whether it is trusted, the redirect target (not followed) |
 | Route | which interface and gateway a destination takes (`ip route get`); empty: the addresses and the routing table |
 
-- Suggestions under the target: this server, connected clients' VPN addresses, a gateway in
-  each LAN behind a client, the DNS servers clients get.
+- Suggestions under the target, grouped: this server, connected clients' VPN addresses, a
+  gateway in each LAN behind a client (named after its named network, if it has one), the DNS
+  servers clients get, and the internet.
 - Each result shows a summary line and the full output; the last 20 stay on the page while it
   is open.
 - Safety: no shell; ping, traceroute and ip get their arguments as a list, and a target must be
