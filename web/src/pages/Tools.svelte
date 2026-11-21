@@ -170,11 +170,12 @@
   .picks { display: grid; gap: var(--space-2); padding-top: var(--space-1); }
   .pick-row { display: grid; grid-template-columns: 150px 1fr; gap: var(--space-3); align-items: start; }
   .pick-title { padding-top: 5px; color: var(--ink-3); font-size: var(--step--1); }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-  .chip { display: inline-flex; align-items: center; max-width: 100%; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1); line-height: 1.2; cursor: pointer; overflow: hidden; white-space: nowrap; }
-  .chip > span { padding: 4px 8px; }
-  .chip-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
-  .chip-ip { border-left: 1px solid var(--line); background: var(--sunken); color: var(--ink-2); font-size: 12px; }
+  /* same-size chips in aligned columns: name left, address right */
+  .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; min-width: 0; }
+  .chip { display: flex; align-items: stretch; min-width: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1); line-height: 1.2; text-align: left; cursor: pointer; overflow: hidden; white-space: nowrap; }
+  .chip > span { padding: 5px 8px; }
+  .chip-name { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+  .chip-ip { flex: none; width: 118px; border-left: 1px solid var(--line); background: var(--sunken); color: var(--ink-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
   .chip:hover { border-color: var(--accent); }
   .chip.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .chip.online .chip-name::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--ok); vertical-align: 1px; }
