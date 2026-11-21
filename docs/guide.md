@@ -715,6 +715,8 @@ out). The web process needs to reach `api.telegram.org`.
 Menu → *Uptime*: when each client of the selected server was online, for any period back to
 the first record (trapdoor never deletes the session history).
 
+<img src="screenshots/uptime.png" width="720">
+
 - **Filters**, kept in the address so a view can be bookmarked: *Today*, *7 days*, *30 days*,
   *This month*, *Last month*, *This year*, or any *From* / *To* dates (up to 4 years); one
   client or all; *Hide quick reconnects* folds a disconnect followed by a reconnect within the
@@ -743,7 +745,10 @@ the first record (trapdoor never deletes the session history).
 
 ## Tools
 
-Menu → *Tools*: network checks run from the selected server's network. In Docker the agent
+Menu → *Tools*: network checks run from the selected server's network.
+
+<img src="screenshots/tools-dark.png" width="720">
+ In Docker the agent
 shares the vpn container's network, so a check reaches what the VPN server reaches: its
 clients' VPN addresses, the LANs behind them, the internet.
 
