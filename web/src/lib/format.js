@@ -31,13 +31,13 @@ export const dateTime = (s) => (s ? dateTimeFmt.format(new Date(s)) : '');
 export const time = (s) => (s ? timeFmt.format(new Date(s)) : '');
 
 /** "in 12 days", "3 days ago" */
-export function relative(s) {
-  const days = Math.round((new Date(s) - Date.now()) / 86400000);
+export function relative(s, now = Date.now()) {
+  const ms = new Date(s) - now;
   const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  if (Math.abs(days) < 1) {
-    const h = Math.round((new Date(s) - Date.now()) / 3600000);
-    return rtf.format(h, 'hour');
-  }
+  // within a day in hours (13 hours ago, not "yesterday"), within an hour in minutes
+  if (Math.abs(ms) < 3600000) return rtf.format(Math.round(ms / 60000), 'minute');
+  if (Math.abs(ms) < 86400000) return rtf.format(Math.round(ms / 3600000), 'hour');
+  const days = Math.round(ms / 86400000);
   if (Math.abs(days) < 60) return rtf.format(days, 'day');
   return rtf.format(Math.round(days / 30), 'month');
 }

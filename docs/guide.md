@@ -720,10 +720,12 @@ the first record (trapdoor never deletes the session history).
   client or all; *Hide quick reconnects* folds a disconnect followed by a reconnect within the
   quiet time of the online / offline messages into one session.
 - **Summary**: clients online now, average uptime, time online, sessions, ups and downs.
-- **Status**: a bar per client, by hour up to 3 days and by day beyond. Dark green: online
-  (almost) all of it; light green: part of it; **red**: not connected while the server was up;
-  **empty**: the server was down (an outage); grey: not connected, before the server's own
-  record began. Hover for the details. The share of the period it was online and when it was
+- **Status**: a bar per client, by hour up to 3 days and by day beyond. Each hour or day is a
+  small stacked column split by time: **green** (bottom): online; **red**: not connected while
+  the server was up; **empty**: the server was down (an outage); grey: not connected, before
+  the server's own record began. Every part that is not zero is at least a few pixels tall, so a
+  one-minute connection in a red hour, or a short drop in a green one, still shows as a line.
+  Hover for the details. The share of the period it was online and when it was
   last seen; clients never seen are listed too, connected ones first.
 - **Server** row on top: when the server itself was up, and its uptime over the recorded time.
   The history poll records it: every answer (every 30 seconds) extends a span, a server that
