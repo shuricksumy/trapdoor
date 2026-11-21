@@ -22,6 +22,7 @@ import (
 	"github.com/shuricksumy/trapdoor/internal/config"
 	"github.com/shuricksumy/trapdoor/internal/history"
 	"github.com/shuricksumy/trapdoor/internal/httpx"
+	"github.com/shuricksumy/trapdoor/internal/oidc"
 	"github.com/shuricksumy/trapdoor/internal/pki"
 	"github.com/shuricksumy/trapdoor/internal/store"
 	"github.com/shuricksumy/trapdoor/internal/version"
@@ -215,12 +216,24 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 	if !cfg.CookieSecure {
 		log.Warn("TD_COOKIE_SECURE=false: login cookie is sent over plain HTTP")
 	}
+	var sso web.OIDC
+	if cfg.OIDCIssuer != "" {
+		p, err := oidc.New(oidc.Config{Issuer: cfg.OIDCIssuer, ClientID: cfg.OIDCClientID, ClientSecret: cfg.OIDCClientSecret,
+			RedirectURL: cfg.PublicURL + "/api/v1/auth/oidc/callback", Scopes: cfg.OIDCScopes, Groups: cfg.OIDCGroups,
+			AuthMethod: cfg.OIDCAuthMethod})
+		if err != nil {
+			return fmt.Errorf("TD_OIDC_*: %w", err)
+		}
+		sso = p
+		log.Info("sign-in with OIDC", "issuer", cfg.OIDCIssuer, "groups", cfg.OIDCGroups)
+	}
 	srv := web.New(web.Deps{
 		Agent: agents, Hosts: agents, Backup: agents, JoinSecret: cfg.JoinSecret, Stats: &history.Stats{DB: db},
 		Auth: authSvc, APIToken: cfg.APIToken, CookieSecure: cfg.CookieSecure,
 		TrustedProxies: cfg.TrustedProxies, Location: cfg.Location, Log: log,
 		ExpiryWarnDays: cfg.ExpiryWarnDays, BackupDir: cfg.BackupDir, BackupPassphrase: cfg.BackupPassphrase,
 		PublicURL: cfg.PublicURL, FrameAncestors: cfg.FrameAncestors,
+		OIDC: sso, OIDCName: cfg.OIDCName, OIDCUser: cfg.OIDCUser,
 	})
 	go srv.WatchExpiry(ctx)
 	go srv.RunBackups(ctx)

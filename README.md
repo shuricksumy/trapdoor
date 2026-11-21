@@ -74,6 +74,8 @@ same two-factor logins.
   defaults per server, reset, messages at 80% and 100%; per server traffic alarms (per hour,
   day, month) and the price of traffic, with this month's cost on the Overview
   ([how](docs/guide.md#limits))
+- **Sign in with Authelia** (or another OIDC provider) by group, next to the admin password
+  ([how](docs/guide.md#sign-in-with-authelia-oidc))
 - **Uptime** page for any period back to the first record: status bars per client, a month
   calendar, every up and down with filters and CSV export ([how](docs/guide.md#uptime))
 - **Online / offline messages** for the clients you pick: when they connect or disconnect, by

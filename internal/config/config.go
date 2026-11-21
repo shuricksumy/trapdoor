@@ -143,6 +143,13 @@ type Web struct {
 	BackupDir, BackupPassphrase string
 	// PublicURL is the web UI's address for links in emails (TD_PUBLIC_URL).
 	PublicURL string
+	// OIDC sign-in (TD_OIDC_ISSUER set = on): TD_OIDC_CLIENT_ID,
+	// TD_OIDC_CLIENT_SECRET (or TD_OIDC_CLIENT_SECRET_FILE), TD_OIDC_GROUPS
+	// (default admin), TD_OIDC_SCOPES, TD_OIDC_NAME (the button),
+	// TD_OIDC_USER (the local admin it signs in as), TD_OIDC_AUTH_METHOD.
+	OIDCIssuer, OIDCClientID, OIDCClientSecret string
+	OIDCGroups, OIDCScopes                     []string
+	OIDCName, OIDCUser, OIDCAuthMethod         string
 }
 
 // ErrNoToken is returned when the shared agent token is not set.
@@ -299,6 +306,24 @@ func LoadWeb() (Web, error) {
 	}
 	c.BackupPassphrase = os.Getenv("TD_BACKUP_PASSPHRASE")
 	c.PublicURL = strings.TrimRight(os.Getenv("TD_PUBLIC_URL"), "/")
+	c.OIDCIssuer = strings.TrimRight(os.Getenv("TD_OIDC_ISSUER"), "/")
+	c.OIDCClientID = os.Getenv("TD_OIDC_CLIENT_ID")
+	c.OIDCClientSecret = os.Getenv("TD_OIDC_CLIENT_SECRET")
+	if f := os.Getenv("TD_OIDC_CLIENT_SECRET_FILE"); f != "" && c.OIDCClientSecret == "" {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return c, fmt.Errorf("TD_OIDC_CLIENT_SECRET_FILE: %w", err)
+		}
+		c.OIDCClientSecret = strings.TrimSpace(string(b))
+	}
+	c.OIDCGroups = list(env("TD_OIDC_GROUPS", "admin"))
+	c.OIDCScopes = strings.Fields(strings.ReplaceAll(os.Getenv("TD_OIDC_SCOPES"), ",", " "))
+	c.OIDCName = env("TD_OIDC_NAME", "Authelia")
+	c.OIDCUser = os.Getenv("TD_OIDC_USER")
+	c.OIDCAuthMethod = os.Getenv("TD_OIDC_AUTH_METHOD")
+	if c.OIDCIssuer != "" && c.PublicURL == "" {
+		return c, fmt.Errorf("TD_OIDC_ISSUER needs TD_PUBLIC_URL (the callback address is built from it)")
+	}
 	for _, o := range list(env("TD_FRAME_ANCESTORS", "-")) {
 		if o != "'self'" && !frameOrigin.MatchString(o) {
 			return c, fmt.Errorf("TD_FRAME_ANCESTORS: %q is not an origin like https://admin.example.com", o)
