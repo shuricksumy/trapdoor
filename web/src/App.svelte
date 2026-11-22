@@ -304,11 +304,16 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: var(--sunken);
   }
+  .server-bar select { background-color: var(--surface); }
   .server-bar:not(:has(.server-switch, .where-chip)) { justify-content: flex-end; }
   .readonly-note { margin-bottom: var(--space-4); background: var(--sunken); color: var(--ink-2); }
-  .manage { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-s); color: var(--ink-2); font-size: var(--step--1); font-weight: 500; text-decoration: none; white-space: nowrap; }
+  .manage { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--surface); color: var(--ink-2); font-size: var(--step--1); font-weight: 500; text-decoration: none; white-space: nowrap; }
   .manage:hover { border-color: var(--accent); color: var(--ink); }
   .server-pick { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; min-width: 0; }
   .where-chip {
