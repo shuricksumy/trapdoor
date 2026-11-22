@@ -232,7 +232,8 @@
     .cols { grid-template-columns: 1fr; }
   }
   @media (max-width: 760px) {
-    .summary { grid-template-columns: 1fr 1fr; }
+    .summary, .summary.five { grid-template-columns: 1fr 1fr; }
+    .summary > .costtile { grid-column: 1 / -1; padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
     .summary > div:nth-child(3) { padding-left: 0; border-left: 0; }
     .summary > div:nth-child(n + 3) { border-top: 1px solid var(--line); }
   }
