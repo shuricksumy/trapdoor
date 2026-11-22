@@ -291,15 +291,11 @@ func (s *Server) presenceNames(ctx context.Context, events []presenceEvent, flag
 			continue
 		}
 		out[srv.ID] = srv.Name
-		if srv.Type != api.TypeOpenVPN || !srv.PKIReady {
+		if srv.Type == api.TypeOpenVPN && !srv.PKIReady {
 			continue
 		}
-		if certs, err := s.Agent.Server(srv.ID).ListCerts(ctx); err == nil {
-			for _, c := range certs {
-				if c.Notes != "" && c.Current {
-					out[srv.ID+"/"+c.Name] = c.Notes
-				}
-			}
+		for login, name := range s.displayNames(ctx, srv.ID, srv.Type) {
+			out[srv.ID+"/"+login] = name
 		}
 	}
 	return out

@@ -852,7 +852,7 @@ func (s *Server) reportLimits(ctx context.Context, server string, rows []LimitRo
 	}
 }
 
-// serverNames: the server's name and its OpenVPN clients' display names
+// serverNames: the server's name and its clients' display names
 // ("server" → name, "server/client" → name).
 func (s *Server) serverNames(ctx context.Context, server string) map[string]string {
 	out := map[string]string{}
@@ -866,10 +866,34 @@ func (s *Server) serverNames(ctx context.Context, server string) map[string]stri
 			}
 		}
 	}
-	if certs, err := s.Agent.Server(server).ListCerts(ctx); err == nil {
-		for _, c := range certs {
-			if c.Notes != "" && c.Current {
-				out[server+"/"+c.Name] = c.Notes
+	for login, name := range s.displayNames(ctx, server, "") {
+		out[server+"/"+login] = name
+	}
+	return out
+}
+
+// displayNames: the display names of a server's clients (login → name), from
+// the OpenVPN certificates or the WireGuard / AmneziaWG peers. typ may be ""
+// when unknown: both are tried.
+func (s *Server) displayNames(ctx context.Context, server, typ string) map[string]string {
+	out := map[string]string{}
+	b := s.Agent.Server(server)
+	if typ == "" || typ == api.TypeOpenVPN {
+		if certs, err := b.ListCerts(ctx); err == nil {
+			for _, c := range certs {
+				if c.Notes != "" && c.Current {
+					out[c.Name] = c.Notes
+				}
+			}
+			return out
+		}
+	}
+	if typ != api.TypeOpenVPN {
+		if peers, err := b.Peers(ctx); err == nil {
+			for _, p := range peers {
+				if p.Notes != "" {
+					out[p.Name] = p.Notes
+				}
 			}
 		}
 	}

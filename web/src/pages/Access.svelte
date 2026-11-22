@@ -40,8 +40,8 @@
       if (isWG) {
         const [fw, peers] = await Promise.all([api('/firewall'), api('/peers').catch(() => [])]);
         take(fw);
-        setClientNames([]);
-        clients = peers.filter((p) => !p.disabled).map((p) => p.name).sort();
+        setClientNames(peers);
+        clients = peers.filter((p) => !p.disabled).map((p) => p.name).sort((a, b) => clientName(a).localeCompare(clientName(b)));
         net = wgNetwork(peers, fw);
       } else {
         const [fw, cs, n, nn] = await Promise.all([api('/firewall'), api('/certs').catch(() => []), api('/network').catch(() => null), api('/named-networks').catch(() => null)]);

@@ -1,12 +1,13 @@
 import { api } from './api.js';
 import { servers } from './state.svelte.js';
 
-// Display names of OpenVPN clients (set on the Clients page and kept with the
-// certificate). Every listing shows the display name and falls back to the
-// login (the certificate name) when there is none.
+// Display names of clients ("Anna's phone"), set on the Clients page: kept
+// with the certificate for OpenVPN, with the peer for WireGuard / AmneziaWG.
+// Every listing shows the display name and falls back to the config name
+// (certificate or peer name) when there is none.
 const names = $state({ server: '', map: {} });
 
-/** Take the display names from a /certs answer the page already has. */
+/** Take the display names from a /certs or /peers answer the page already has. */
 export function setClientNames(certs) {
   const map = {};
   for (const c of certs ?? []) if (c.notes && c.kind !== 'server') map[c.name] = c.notes;
@@ -14,12 +15,11 @@ export function setClientNames(certs) {
   names.map = map;
 }
 
-/** Load the display names of the selected server's clients (no-op for WireGuard). */
+/** Load the display names of the selected server's clients. */
 export async function loadClientNames() {
   const type = servers.list?.find((s) => s.id === servers.current)?.type;
-  if (type && type !== 'openvpn') return setClientNames([]);
   try {
-    setClientNames(await api('/certs'));
+    setClientNames(await api(type && type !== 'openvpn' ? '/peers' : '/certs'));
   } catch {
     /* names are optional: logins are shown instead */
   }
@@ -34,5 +34,5 @@ export function clientName(login) {
 /** Tooltip with the login when a display name is shown instead. */
 export function clientTitle(login) {
   const n = clientName(login);
-  return n !== login ? `Login: ${login}` : undefined;
+  return n !== login ? `Config name: ${login}` : undefined;
 }
