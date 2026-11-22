@@ -153,7 +153,9 @@ type Web struct {
 	// TD_OIDC_USER (the local admin it signs in as), TD_OIDC_AUTH_METHOD.
 	OIDCIssuer, OIDCClientID, OIDCClientSecret string
 	OIDCGroups, OIDCScopes                     []string
-	OIDCName, OIDCUser, OIDCAuthMethod         string
+	// OIDCViewerGroups sign in read-only (TD_OIDC_VIEWER_GROUPS).
+	OIDCViewerGroups                   []string
+	OIDCName, OIDCUser, OIDCAuthMethod string
 	// OIDCCA: extra certificates to trust for the provider (TD_OIDC_CA_FILE, PEM).
 	OIDCCA []byte
 }
@@ -320,6 +322,7 @@ func LoadWeb() (Web, error) {
 		c.OIDCClientSecret = strings.TrimSpace(string(b))
 	}
 	c.OIDCGroups = list(env("TD_OIDC_GROUPS", "admin"))
+	c.OIDCViewerGroups = list(env("TD_OIDC_VIEWER_GROUPS", "-"))
 	c.OIDCScopes = strings.Fields(strings.ReplaceAll(os.Getenv("TD_OIDC_SCOPES"), ",", " "))
 	c.OIDCName = env("TD_OIDC_NAME", "Authelia")
 	c.OIDCUser = os.Getenv("TD_OIDC_USER")

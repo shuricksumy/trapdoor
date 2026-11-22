@@ -889,6 +889,13 @@ password comes from stdin or `TD_ADMIN_PASSWORD`.
   address (so the password is refused from the internet), and a VPN client reaches the
   password only when it gets to trapdoor directly (e.g. the VPN's DNS points the name at the
   proxy's internal address)
+- Accounts are **admins** or **viewers**. A viewer sees every page but changes nothing (the API
+  refuses it), runs no tools and downloads no keys (client profiles and configs, backups); it
+  can log out and change its own password. People signing in with Authelia get their own
+  account, its role from their groups (`TD_OIDC_GROUPS`, `TD_OIDC_VIEWER_GROUPS`). There is always
+  at least one enabled admin: the last one cannot be demoted, disabled or deleted.
+- `trapdoor user list` shows every account with its role and where it comes from (`local` or
+  `oidc`).
 - Every change is logged as `audit action=... target=... by=<user>`
 - Strict Content-Security-Policy, no CDN: the UI and its fonts are served by trapdoor itself
 

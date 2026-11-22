@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -219,13 +220,13 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 	var sso web.OIDC
 	if cfg.OIDCIssuer != "" {
 		p, err := oidc.New(oidc.Config{Issuer: cfg.OIDCIssuer, ClientID: cfg.OIDCClientID, ClientSecret: cfg.OIDCClientSecret,
-			RedirectURL: cfg.PublicURL + "/api/v1/auth/oidc/callback", Scopes: cfg.OIDCScopes, Groups: cfg.OIDCGroups,
+			RedirectURL: cfg.PublicURL + "/api/v1/auth/oidc/callback", Scopes: cfg.OIDCScopes, Groups: append(slices.Clone(cfg.OIDCGroups), cfg.OIDCViewerGroups...),
 			AuthMethod: cfg.OIDCAuthMethod, UserAgent: "trapdoor/" + version.Version, RootCAs: cfg.OIDCCA})
 		if err != nil {
 			return fmt.Errorf("TD_OIDC_*: %w", err)
 		}
 		sso = p
-		log.Info("sign-in with OIDC", "issuer", cfg.OIDCIssuer, "groups", cfg.OIDCGroups)
+		log.Info("sign-in with OIDC", "issuer", cfg.OIDCIssuer, "admin_groups", cfg.OIDCGroups, "viewer_groups", cfg.OIDCViewerGroups)
 	}
 	srv := web.New(web.Deps{
 		Agent: agents, Hosts: agents, Backup: agents, JoinSecret: cfg.JoinSecret, Stats: &history.Stats{DB: db},
@@ -233,7 +234,7 @@ func runWeb(ctx context.Context, log *slog.Logger) error {
 		TrustedProxies: cfg.TrustedProxies, PasswordFrom: cfg.PasswordFrom, Location: cfg.Location, Log: log,
 		ExpiryWarnDays: cfg.ExpiryWarnDays, BackupDir: cfg.BackupDir, BackupPassphrase: cfg.BackupPassphrase,
 		PublicURL: cfg.PublicURL, FrameAncestors: cfg.FrameAncestors,
-		OIDC: sso, OIDCName: cfg.OIDCName, OIDCUser: cfg.OIDCUser,
+		OIDC: sso, OIDCName: cfg.OIDCName, OIDCUser: cfg.OIDCUser, OIDCAdminGroups: cfg.OIDCGroups,
 	})
 	go srv.WatchExpiry(ctx)
 	go srv.RunBackups(ctx)
@@ -291,7 +292,11 @@ func runUser(ctx context.Context, args []string) error {
 			return err
 		}
 		for _, u := range users {
-			fmt.Printf("%s\tcreated %s\n", u.Username, u.CreatedAt.Format(time.DateOnly))
+			state := ""
+			if u.Disabled {
+				state = "\tdisabled"
+			}
+			fmt.Printf("%s\t%s\t%s\tcreated %s%s\n", u.Username, u.Role, u.Source, u.CreatedAt.Format(time.DateOnly), state)
 		}
 		return nil
 	case "add":
