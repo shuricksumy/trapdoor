@@ -118,7 +118,7 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
       month that slow down or block until the period ends, defaults per server, reset, messages
 - [x] Limits: priorities per client (with the server's link speed), traffic alarms per server
       (hour / day / month), price of traffic with the month's cost on the Overview
-- [ ] Audit log
+- [x] Audit log: in the database (two years), a page with filters, pages and CSV; sign-ins and failed sign-ins too
 - [ ] easyrsa `vars` in the native PKI: certificate name fields (`EASYRSA_DN` org mode:
       country, province, city, org, email, OU), key type and size, digest, CA / certificate /
       CRL lifetimes, read from `<pki>/vars` (or `TD_EASYRSA_VARS`), so new certificates match

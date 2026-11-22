@@ -169,6 +169,19 @@ var migrations = []string{
 	// and how each session signed in (addColumns: ALTER TABLE cannot say
 	// "if not exists")
 	`CREATE UNIQUE INDEX IF NOT EXISTS users_oidc_subject ON users (oidc_subject) WHERE oidc_subject != '';`,
+
+	// 12: the audit log: who did what, when and from where
+	`CREATE TABLE IF NOT EXISTS audit (
+		id       INTEGER PRIMARY KEY,
+		time     INTEGER NOT NULL, -- unix seconds
+		username TEXT    NOT NULL DEFAULT '',
+		via      TEXT    NOT NULL DEFAULT '', -- password | oidc | token
+		ip       TEXT    NOT NULL DEFAULT '',
+		action   TEXT    NOT NULL,            -- e.g. cert.issue, login.failed
+		server   TEXT    NOT NULL DEFAULT '',
+		target   TEXT    NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS audit_time ON audit (time);`,
 }
 
 // addColumns are added before a migration's SQL runs (only the missing

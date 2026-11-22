@@ -165,6 +165,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Limiter.Fail(ip, req.Username)
 		s.Log.Warn("login failed", "ip", ip, "username", req.Username)
+		s.auditAs(r, req.Username, "password", "login.failed", "")
 		httpx.WriteError(w, http.StatusUnauthorized, auth.ErrInvalidCredentials.Error())
 		return
 	}
@@ -180,12 +181,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true, Secure: s.CookieSecure, SameSite: http.SameSiteStrictMode,
 	})
 	s.Log.Info("login", "ip", ip, "username", u.Username)
+	s.auditAs(r, u.Username, "password", "login", "")
 	httpx.WriteJSON(w, http.StatusOK, Principal{Username: u.Username, Method: "session", Role: u.Role, Via: "password", Source: u.Source})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(cookieName); err == nil {
 		_ = s.Auth.EndSession(r.Context(), c.Value)
+		s.audit(r, "logout", "")
 	}
 	s.clearCookie(w)
 	w.WriteHeader(http.StatusNoContent)
