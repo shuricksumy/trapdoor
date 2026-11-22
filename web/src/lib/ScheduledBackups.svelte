@@ -1,4 +1,5 @@
 <script>
+  import Fold from './Fold.svelte';
   import { api, poll } from './api.js';
   import { servers, toast } from './state.svelte.js';
   import { nodeOf } from './location.js';
@@ -86,10 +87,18 @@
     const sv = servers.list.find((x) => x.id === m[2]);
     return sv ? `${sv.name} · node ${nodeOf(sv).name}` : `Server ${m[2]}`;
   };
+  // For the folded header.
+  const summary = $derived.by(() => {
+    if (off) return 'off (TD_BACKUP_DIR=-)';
+    if (!info) return '';
+    const sc = info.schedule;
+    const when = sc.every === 'off' ? 'off' : `${sc.every === 'weekly' ? `weekly on ${days[sc.weekday]}` : 'daily'} at ${String(sc.hour).padStart(2, '0')}:00 · keep ${sc.keep}`;
+    const last = info.last ? (info.last.ok ? ` · last ${fmt(info.last.time)}` : ' · last one failed') : '';
+    return when + last;
+  });
 </script>
 
-<section class="panel">
-  <div class="panel-head"><h2>Scheduled backups</h2></div>
+<Fold id="acct-schedule" title="Scheduled backups" summary={summary}>
   {#if off}
     <p class="panel-body muted">Turned off (<code>TD_BACKUP_DIR=-</code>).</p>
   {:else if loadError}
@@ -180,7 +189,7 @@
       {/if}
     </div>
   {/if}
-</section>
+</Fold>
 
 <Dialog bind:open={deleting.open} title="Delete this backup?">
   <p class="mono small">{deleting.name}</p>

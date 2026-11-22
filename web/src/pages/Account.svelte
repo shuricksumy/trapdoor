@@ -1,4 +1,5 @@
 <script>
+  import Fold from '../lib/Fold.svelte';
   import { api, download } from '../lib/api.js';
   import { session, navigate, toast, settings, repoURL, versionURL, shortVersion } from '../lib/state.svelte.js';
   import ThemeSwitch from '../lib/ThemeSwitch.svelte';
@@ -68,17 +69,22 @@
 </script>
 
 <header class="head">
-  <h1>Account</h1>
-  <p class="muted">Signed in as <strong>{session.user?.username}</strong>.</p>
-  <p class="muted small">
-    Trapdoor {#if settings.version}<a href={versionURL(settings.version)} target="_blank" rel="noopener noreferrer" title={settings.version}>{shortVersion(settings.version)}</a>{/if}
-    · <a href={repoURL} target="_blank" rel="noopener noreferrer">GitHub</a>
-  </p>
+  <div>
+    <h1>Account</h1>
+    <p class="muted">Signed in as <strong>{session.user?.username}</strong>.</p>
+    <p class="muted small">
+      Trapdoor {#if settings.version}<a href={versionURL(settings.version)} target="_blank" rel="noopener noreferrer" title={settings.version}>{shortVersion(settings.version)}</a>{/if}
+      · <a href={repoURL} target="_blank" rel="noopener noreferrer">GitHub</a>
+    </p>
+  </div>
+  <div class="quick">
+    <ThemeSwitch />
+    <button class="btn" onclick={logout}>Log out</button>
+  </div>
 </header>
 
-<div class="grid">
-  <section class="panel">
-    <div class="panel-head"><h2>Change password</h2></div>
+<div class="sections">
+  <Fold id="acct-password" title="Change password" summary="the admin password; you are logged out everywhere afterwards">
     <form class="panel-body form" onsubmit={change}>
       {#if error}<div class="banner bad" role="alert">{error}</div>{/if}
       <label class="field">
@@ -96,22 +102,9 @@
       </label>
       <div><button class="btn primary" type="submit" disabled={busy}>{busy ? 'Changing…' : 'Change password'}</button></div>
     </form>
-  </section>
+  </Fold>
 
-  <section class="panel">
-    <div class="panel-head"><h2>Appearance</h2></div>
-    <div class="panel-body">
-      <ThemeSwitch />
-      <p class="hint" style="margin-top: var(--space-2)">Auto follows your device's light or dark setting.</p>
-    </div>
-    <div class="panel-head"><h2>Session</h2></div>
-    <div class="panel-body">
-      <button class="btn" onclick={logout}>Log out</button>
-    </div>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head"><h2>Backup</h2></div>
+  <Fold id="acct-backup" title="Backup" summary="download one file with everything, now">
     <form class="panel-body form" onsubmit={makeBackup}>
       <p class="muted small">
         One file with everything: certificates and keys, server settings, clients, WireGuard and AmneziaWG servers, access
@@ -131,10 +124,8 @@
       {/if}
       <div><button class="btn primary" type="submit" disabled={bbusy}>{bbusy ? 'Preparing…' : 'Download a backup'}</button></div>
     </form>
-  </section>
-</div>
+  </Fold>
 
-<div class="scheduled">
   <ScheduledBackups />
   <EmailSettings />
   <TelegramSettings />
@@ -142,10 +133,9 @@
 </div>
 
 <style>
-  .head { margin-bottom: var(--space-5); }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-5); }
   .head p { margin-top: var(--space-1); }
-  .grid { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 320px); gap: var(--space-5); align-items: start; }
   .form { display: grid; gap: var(--space-4); }
-  .scheduled { margin-top: var(--space-5); max-width: 760px; display: grid; gap: var(--space-5); }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .sections { max-width: 860px; }
+  .quick { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 </style>

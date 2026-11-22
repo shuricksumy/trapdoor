@@ -1,5 +1,5 @@
 <script>
-  // A section of the Server page: one block of settings with its own Save,
+  // A section of a settings page (Server, Account): one block with its own Save,
   // folded by default. The header says what is set now; the browser
   // remembers which sections were left open.
   let { id, title, summary = '', badge, children, open: initial = false } = $props();

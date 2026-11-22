@@ -1,4 +1,5 @@
 <script>
+  import Fold from './Fold.svelte';
   import { api } from './api.js';
   import { toast } from './state.svelte.js';
 
@@ -91,10 +92,16 @@
     }
   }
   const fmt = (t) => new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  // For the folded header.
+  const summary = $derived.by(() => {
+    if (!f) return '';
+    if (!f.on) return 'off';
+    const n = f.admins.split(',').map((a) => a.trim()).filter(Boolean).length;
+    return `on · ${f.host || 'no SMTP server'} · ${n} admin${n === 1 ? '' : 's'}`;
+  });
 </script>
 
-<section class="panel">
-  <div class="panel-head"><h2>Email</h2></div>
+<Fold id="acct-email" title="Email" summary={summary}>
   {#if loadError}
     <div class="panel-body"><div class="banner bad" role="alert">Could not load the email settings: {loadError}</div></div>
   {:else if !f}
@@ -171,7 +178,7 @@
       </div>
     </form>
   {/if}
-</section>
+</Fold>
 
 <style>
   .body { display: grid; gap: var(--space-4); }

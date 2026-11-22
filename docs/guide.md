@@ -146,7 +146,8 @@ Use an authenticator app that supports SHA-256 codes (some apps only do SHA-1).
 The Server page is in sections, each with its own settings and its own Save: the server's
 settings, scripts and extra rules, backup, removing it (WireGuard / AmneziaWG: connection, hiding,
 client defaults too). They are folded, with what is set now in the header; the browser remembers
-which ones were left open.
+which ones were left open. The Account page works the same way (password, backup, scheduled
+backups, email, Telegram, online / offline messages), with the theme and *Log out* at the top.
 
 **Server** page (or `/api/v1/servers/openvpn/server/config`): a form for the common options (port, protocol,
 VPN subnet, topology, DNS and search domain for clients, duplicate-cn, max clients) and a raw

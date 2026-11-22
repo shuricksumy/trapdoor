@@ -1,4 +1,5 @@
 <script>
+  import Fold from './Fold.svelte';
   import { api } from './api.js';
   import { toast } from './state.svelte.js';
 
@@ -72,10 +73,16 @@
     }
   }
   const fmt = (t) => new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  // For the folded header.
+  const summary = $derived.by(() => {
+    if (!f) return '';
+    if (!f.on) return 'off';
+    const n = f.chats.split(',').map((c) => c.trim()).filter(Boolean).length;
+    return `on · ${n} chat${n === 1 ? '' : 's'}`;
+  });
 </script>
 
-<section class="panel">
-  <div class="panel-head"><h2>Telegram</h2></div>
+<Fold id="acct-telegram" title="Telegram" summary={summary}>
   {#if loadError}
     <div class="panel-body"><div class="banner bad" role="alert">Could not load the Telegram settings: {loadError}</div></div>
   {:else if !f}
@@ -121,7 +128,7 @@
       </div>
     </form>
   {/if}
-</section>
+</Fold>
 
 <style>
   .body { display: grid; gap: var(--space-4); }
