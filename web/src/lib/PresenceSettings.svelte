@@ -1,4 +1,5 @@
 <script>
+  import Fold from './Fold.svelte';
   import { api } from './api.js';
   import { toast } from './state.svelte.js';
 
@@ -38,10 +39,15 @@
       busy = false;
     }
   }
+  // For the folded header.
+  const summary = $derived.by(() => {
+    if (!f) return '';
+    const to = [f.email && `email ${f.email}`, f.chat && `Telegram ${f.chat}`].filter(Boolean);
+    return to.length ? `${to.join(' · ')} · quiet ${f.grace} min` : 'not sent anywhere';
+  });
 </script>
 
-<section class="panel">
-  <div class="panel-head"><h2>Client online / offline</h2></div>
+<Fold id="acct-presence" title="Client online / offline" summary={summary}>
   {#if loadError}
     <div class="panel-body"><div class="banner bad" role="alert">{loadError}</div></div>
   {:else if !f}
@@ -73,7 +79,7 @@
       <div class="actions"><button class="btn primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button></div>
     </form>
   {/if}
-</section>
+</Fold>
 
 <style>
   .body { display: grid; gap: var(--space-4); }
