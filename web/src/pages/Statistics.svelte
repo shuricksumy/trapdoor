@@ -95,7 +95,7 @@
     <p class="muted">How much each client sent and received, per {group}.</p>
   </div>
   {#if report}
-    <a class="btn" href={apiURL(`/stats.csv?${params}`)} download>Export CSV</a>
+    <a class="btn keep" href={apiURL(`/stats.csv?${params}`)} download>Export CSV</a>
   {/if}
 </header>
 

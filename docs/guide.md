@@ -883,6 +883,13 @@ down), log it out everywhere, delete it. You cannot turn off or delete your own 
 last admin that is turned on cannot be made read-only, turned off or deleted. A read-only account
 sees My account, Servers, Nodes and Notifications.
 
+**What a read-only account sees.** Every page except Tools (they run on the server's network), with
+a banner at the top. Buttons that change something (New client, Edit, Save, Restart, Add rule,
+the access switches and so on) are hidden, and settings forms are shown but cannot be changed.
+Profiles, WireGuard configs and backup files cannot be downloaded; CSV exports still work. The
+API enforces the same: a read-only account may only read (`GET`), apart from signing out and
+changing its own password, and gets 403 for the downloads above.
+
 ## Admin login and security
 
 Create admins with the CLI (`trapdoor user add <name>`, also `passwd`, `del`, `list`); the

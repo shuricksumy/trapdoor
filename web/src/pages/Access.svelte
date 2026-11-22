@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
-  import { toast, currentServer } from '../lib/state.svelte.js';
+  import { toast, currentServer, readOnly } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
   import AccessDiagram from '../lib/AccessDiagram.svelte';
   import { setClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
@@ -160,12 +160,12 @@
   <section class="panel top">
     <div class="state">
       <label class="switch">
-        <input type="checkbox" bind:checked={policy.enabled} disabled={state.mode === 'off'} />
+        <input type="checkbox" bind:checked={policy.enabled} disabled={state.mode === 'off' || readOnly()} />
         <span>Use access rules</span>
       </label>
       <span class="pill {status.cls}">{status.text}</span>
     </div>
-    <fieldset class="defaults" disabled={!policy.enabled}>
+    <fieldset class="defaults" disabled={!policy.enabled || readOnly()}>
       <legend>When no rule matches</legend>
       <label class:chosen={policy.default === 'allow'}>
         <input type="radio" bind:group={policy.default} value="allow" />
@@ -188,7 +188,7 @@
         {state.missing.join(', ')}
         {state.missing.length === 1 ? 'has' : 'have'} no fixed VPN address, so {state.missing.length === 1 ? 'its rules are' : 'their rules are'} not active.
       </span>
-      <button class="btn small" onclick={assign} disabled={busy || dirty} title={dirty ? 'Save your changes first' : ''}>Give fixed addresses</button>
+      <button class="btn small admin-only" onclick={assign} disabled={busy || dirty} title={dirty ? 'Save your changes first' : ''}>Give fixed addresses</button>
     </div>
   {/if}
   {#each state.warnings.filter((w) => !w.includes('no fixed VPN address') && !w.includes('client-to-client')) as w (w)}
@@ -198,7 +198,7 @@
   <section class="panel rules" class:off={!policy.enabled}>
     <div class="panel-head">
       <h2>Rules</h2>
-      <button class="btn small" onclick={() => openRule(-1)}>Add rule</button>
+      <button class="btn small admin-only" onclick={() => openRule(-1)}>Add rule</button>
     </div>
     <ol>
       {#each policy.rules as r, i (i)}
@@ -212,7 +212,7 @@
             <span class="muted">to <span class="mono">{r.to ? r.to.replace(/\/32$/, '') : 'anywhere'}</span>, {what(r)}</span>
             {#if r.note}<span class="note">{r.note}</span>{/if}
           </span>
-          <span class="tools">
+          <span class="tools admin-only">
             <button class="icon" aria-label="Move rule {i + 1} up" disabled={i === 0} onclick={() => move(i, -1)}>↑</button>
             <button class="icon" aria-label="Move rule {i + 1} down" disabled={i === policy.rules.length - 1} onclick={() => move(i, 1)}>↓</button>
             <button class="btn small ghost" onclick={() => openRule(i)}>Edit</button>
@@ -239,7 +239,7 @@
   </details>
 
   {#if dirty}
-    <div class="savebar" role="region" aria-label="Unsaved changes">
+    <div class="admin-only savebar" role="region" aria-label="Unsaved changes">
       <span>Unsaved changes</span>
       <button class="btn" onclick={() => (policy = JSON.parse(saved))} disabled={busy}>Discard</button>
       <button class="btn primary" onclick={save} disabled={busy}>{busy ? 'Applying…' : 'Save and apply'}</button>

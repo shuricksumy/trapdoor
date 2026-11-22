@@ -1,4 +1,5 @@
 <script>
+  import { readOnly } from './state.svelte.js';
   import { destinations, toggle as flip } from './accessRules.js';
   // What the access settings mean, drawn: a client, the server's filter and
   // where traffic goes. It follows the unsaved policy and edits it: clicking a
@@ -30,7 +31,7 @@
   );
 
   function toggle(d) {
-    if (!on || !d.usable) return;
+    if (!on || !d.usable || readOnly()) return;
     const next = flip(policy, ctx, d.key);
     policy.default = next.default;
     policy.rules = next.rules;
@@ -77,12 +78,12 @@
       <path d="M411 107 C 450 107, 445 {y + 20}, 494 {y + 20}" class="wire {tone(d)}" marker-end="url(#ad-{tone(d)})" />
       <g
         class="dest {tone(d)}"
-        class:click={on && d.usable}
+        class:click={on && d.usable && !readOnly()}
         role="switch"
         aria-checked={d.ok}
-        aria-disabled={!on || !d.usable}
-        aria-label={label(d)}
-        tabindex={on && d.usable ? 0 : undefined}
+        aria-disabled={!on || !d.usable || readOnly()}
+        aria-label={readOnly() ? `${d.name}: ${verdict(d)}` : label(d)}
+        tabindex={on && d.usable && !readOnly() ? 0 : undefined}
         onclick={() => toggle(d)}
         onkeydown={(e) => key(e, d)}
       >
@@ -107,7 +108,7 @@
     <div class="sbox" class:on><strong>{on ? `Chain ${chain}` : 'Access rules off'}</strong><span class="faint">{gate[0]}; {gate[1]}</span></div>
     <div class="arrow">↓</div>
     {#each dests as d (d.key)}
-      <button type="button" class="sbox row {tone(d)}" disabled={!on || !d.usable} role="switch" aria-checked={d.ok} aria-label={label(d)} onclick={() => toggle(d)}>
+      <button type="button" class="sbox row {tone(d)}" disabled={!on || !d.usable || readOnly()} role="switch" aria-checked={d.ok} aria-label={readOnly() ? `${d.name}: ${verdict(d)}` : label(d)} onclick={() => toggle(d)}>
         <span><strong>{d.name}</strong> <span class="faint">{d.sub}{extra(d)}</span></span>
         <span class="v {tone(d)}">{verdict(d)}</span>
       </button>

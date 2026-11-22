@@ -252,3 +252,21 @@ td.num, th.num { text-align: right; }
 
 /* A checkbox with its label on one line */
 .check { display: flex; gap: var(--space-2); align-items: center; }
+
+/* A read-only account (main.readonly): no buttons that change things. The API
+   refuses changes anyway; these only keep them out of sight. Buttons that
+   only read carry .keep. */
+.readonly td.actions,
+.readonly td.act,
+.readonly td.acts,
+.readonly td.sel,
+.readonly th.sel,
+.readonly details.menu,
+.readonly .problems .btn,
+.readonly .banner .btn,
+.readonly .srvbar .btn,
+.readonly .admin-only { display: none !important; }
+.readonly .head .btn:not(.keep),
+.readonly .panel-head .btn:not(.keep),
+.readonly .actions .btn:not(.keep) { display: none !important; }
+.readonly td.act:has(.keep) { display: table-cell !important; }

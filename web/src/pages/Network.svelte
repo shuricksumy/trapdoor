@@ -1,6 +1,6 @@
 <script>
   import { api, reloadServers } from '../lib/api.js';
-  import { currentServer, toast, route, setQuery } from '../lib/state.svelte.js';
+  import { currentServer, toast, route, setQuery, readOnly } from '../lib/state.svelte.js';
   import NetworkDialog from '../lib/NetworkDialog.svelte';
   import NamedNetworks from '../lib/NamedNetworks.svelte';
   import { loadClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
@@ -278,7 +278,7 @@
                   {#if c.static_ip}<span class="mono">{c.static_ip}</span>
                   {:else}
                     <span class="faint">automatic</span>{#if now}<span class="mono small block">now {now}</span>{/if}
-                    <button class="link small block" disabled={!!busy} onclick={() => makeFixed(c.name)} title="Give it a fixed address (needed for access rules about this client)">{busy === c.name ? 'Fixing…' : 'Make fixed'}</button>
+                    <button class="link small block admin-only" disabled={!!busy} onclick={() => makeFixed(c.name)} title="Give it a fixed address (needed for access rules about this client)">{busy === c.name ? 'Fixing…' : 'Make fixed'}</button>
                   {/if}
                 </td>
                 <td data-label="All traffic">{c.full_tunnel || srv?.pushes_full_tunnel ? 'Yes' : '–'}</td>
@@ -317,7 +317,7 @@
 {#if map && (map.clients.length || map.networks.length)}
   <section class="panel">
     <div class="panel-head"><h2>Map</h2></div>
-    <div class="panel-body"><NetworkMap {map} server={box} onclient={editClient} onnetwork={openNetwork} /></div>
+    <div class="panel-body"><NetworkMap {map} server={box} onclient={readOnly() ? undefined : editClient} onnetwork={readOnly() ? undefined : openNetwork} /></div>
   </section>
 {/if}
 

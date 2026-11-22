@@ -41,6 +41,9 @@ addEventListener('click', (e) => {
 
 export const session = $state({ user: null, checked: false });
 
+/** A read-only account: it sees everything, changes nothing (the API refuses it too). */
+export const readOnly = () => session.user?.role === 'viewer';
+
 // VPN servers (from /api/v1/status) and the one the pages show.
 // hosts: the other nodes (agents) this web UI manages (their servers have a "host").
 // containers: where the own node runs each type (type → container name).

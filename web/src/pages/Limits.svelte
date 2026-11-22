@@ -3,7 +3,7 @@
   // own values, usage in the period, reset. The web part checks usage every
   // minute; the agent applies the speeds with tc.
   import { api } from '../lib/api.js';
-  import { currentServer, toast } from '../lib/state.svelte.js';
+  import { currentServer, readOnly, toast } from '../lib/state.svelte.js';
   import { clientName, clientTitle, loadClientNames } from '../lib/names.svelte.js';
   import { bytes } from '../lib/format.js';
   import Dialog from '../lib/Dialog.svelte';
@@ -189,7 +189,7 @@
       <table class="list">
         <thead><tr><th>Client</th><th>Speed ↓ / ↑</th><th>Priority</th><th>Usage limit</th><th class="use">Used</th><th>Then</th><th>Now</th>{#if priced}<th class="num">Month</th>{/if}<th><span class="sr">Actions</span></th></tr></thead>
         <tbody>
-          <tr class="def" onclick={() => edit(null)}>
+          <tr class="def" onclick={() => !readOnly() && edit(null)}>
             <td class="who"><strong>Default</strong><span class="faint small block">every client</span></td>
             <td class="c-speed">{sp(def.down, def.up)}</td>
             <td class="c-prio"><span class="prio {def.priority}">{prioText[def.priority]}</span></td>
@@ -203,7 +203,7 @@
           {#each shown.rows as r (r.name)}
             {@const pct = usagePct(r.used, r.limit.quota_mb)}
             {@const og = ownGroups(r.own)}
-            <tr onclick={() => edit(r)}>
+            <tr onclick={() => !readOnly() && edit(r)}>
               <td class="who">
                 <strong title={clientTitle(r.name)}>{clientName(r.name)}</strong>
                 <span class="pill {stateKind[r.state]} m-only">{nowShort(r)}</span>

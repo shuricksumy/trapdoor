@@ -209,7 +209,7 @@
     <h1>Uptime</h1>
     <p class="muted">When each client was online: any period, back to the first record.</p>
   </div>
-  <a class="btn" href={apiURL(`/history/events.csv?${params}`)} download>Export CSV</a>
+  <a class="btn keep" href={apiURL(`/history/events.csv?${params}`)} download>Export CSV</a>
 </header>
 
 <section class="filters" aria-label="Filters">

@@ -53,7 +53,7 @@
   </div>
   <div class="quick">
     <ThemeSwitch />
-    <button class="btn" onclick={logout}>Log out</button>
+    <button class="btn keep" onclick={logout}>Log out</button>
   </div>
 </header>
 
@@ -61,7 +61,7 @@
   {#if session.user?.source === 'oidc'}
     <p class="muted sso-note">You sign in with single sign-on: your password, its reset and your second factor are managed there. An admin can also give this account a local password (Admins), for when the sign-on is down.</p>
   {/if}
-  <Fold id="acct-password" title="Change password" summary="your local password; you are logged out everywhere afterwards">
+  <Fold own id="acct-password" title="Change password" summary="your local password; you are logged out everywhere afterwards">
     <form class="panel-body form" onsubmit={change}>
       {#if error}<div class="banner bad" role="alert">{error}</div>{/if}
       <label class="field">

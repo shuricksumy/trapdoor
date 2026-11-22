@@ -2,7 +2,9 @@
   // A section of a settings page (Server, Account): one block with its own Save,
   // folded by default. The header says what is set now; the browser
   // remembers which sections were left open.
-  let { id, title, summary = '', badge, children, open: initial = false } = $props();
+  import { readOnly } from './state.svelte.js';
+  let { id, title, summary = '', badge, children, open: initial = false, own = false } = $props();
+  // own: the section is about yourself (e.g. your password): a read-only account may use it.
   const key = () => `td-fold-${id}`;
   let open = $state(read());
   function read() {
@@ -30,11 +32,12 @@
     {#if badge}{@render badge()}{/if}
     {#if summary}<span class="sum">{summary}</span>{/if}
   </summary>
-  <div class="inner">{@render children()}</div>
+  <fieldset class="inner" disabled={readOnly() && !own}>{@render children()}</fieldset>
 </details>
 
 <style>
   .fold { margin-bottom: var(--space-4); }
+  .inner { min-width: 0; margin: 0; padding: 0; border: 0; }
   summary { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-5); cursor: pointer; list-style: none; user-select: none; border-radius: var(--radius-m); }
   summary::-webkit-details-marker { display: none; }
   summary:hover { background: var(--sunken); }
