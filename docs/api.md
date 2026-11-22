@@ -16,7 +16,7 @@ server). Below, `…` stands for that prefix.
 |---|---|---|
 | POST | `/api/v1/auth/login` | `{"username","password"}` → sets the session cookie |
 | POST | `/api/v1/auth/logout` | 204 |
-| GET | `/api/v1/auth/me` | current user |
+| GET | `/api/v1/auth/me` | `{"username","method":"session\|token","role":"admin\|viewer","via":"password\|oidc","source":"local\|oidc"}`; a viewer gets 403 for every change and for client profiles / configs and backup files |
 | POST | `/api/v1/auth/password` | `{"current_password","new_password"}` → 204, logs out everywhere |
 | GET | `/api/v1/status` | web version, agent reachability, `agent.servers` (id, type, name, PKI and OpenVPN state) |
 | GET | `…/sessions` | live sessions (from the agent) |

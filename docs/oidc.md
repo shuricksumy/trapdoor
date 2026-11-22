@@ -1,9 +1,12 @@
 # Sign in with Authelia (OIDC)
 
-trapdoor can sign admins in with Authelia, or any other OpenID Connect provider, next to the
-admin password. There are no separate users: a sign-in becomes the **local admin**, and only
-for members of the groups you allow. The admin password stays as the way in when Authelia is
-down, and can be limited to your own networks.
+trapdoor can sign people in with Authelia, or any other OpenID Connect provider, next to the
+admin password. Everyone in an allowed group gets **an account of their own** at their first
+sign-in, so the log says who did what; their password, reset and two factors stay Authelia's
+business. Members of `TD_OIDC_GROUPS` sign in as **admins**, members of
+`TD_OIDC_VIEWER_GROUPS` **read-only** (they see everything, change nothing and download no keys).
+The admin password stays as the way in when Authelia is down, and can be limited to your own
+networks.
 
 Examples use `vpn-admin.example.com` for trapdoor and `auth.example.com` for Authelia.
 
@@ -66,9 +69,10 @@ the login page shows **Sign in with Authelia** with *Use the admin password* und
 |---|---|
 | `TD_OIDC_ISSUER` | the provider's address (empty: sign-in with it is off) |
 | `TD_OIDC_CLIENT_ID`, `TD_OIDC_CLIENT_SECRET` | as registered; or `TD_OIDC_CLIENT_SECRET_FILE` |
-| `TD_OIDC_GROUPS` | groups that may sign in (default `admin`) |
+| `TD_OIDC_GROUPS` | groups that sign in as admins (default `admin`) |
+| `TD_OIDC_VIEWER_GROUPS` | groups that sign in read-only (default: none) |
 | `TD_OIDC_NAME` | the button: *Sign in with …* (default `Authelia`) |
-| `TD_OIDC_USER` | the local admin a sign-in becomes (default: the first admin) |
+| `TD_OIDC_USER` | sign everyone in as this local account instead of their own (how it worked before 0.9) |
 | `TD_OIDC_SCOPES` | default `openid profile email groups` |
 | `TD_OIDC_AUTH_METHOD` | `client_secret_basic` (default) or `client_secret_post` |
 | `TD_OIDC_CA_FILE` | a PEM certificate to trust for the provider besides the system's (below) |
@@ -133,7 +137,7 @@ The login page shows a short reason; trapdoor's log has the details (`sign-in fa
 | *… is not in a group allowed to sign in here* | the user is not in `TD_OIDC_GROUPS` | add the group in Authelia, or the group to `TD_OIDC_GROUPS` |
 | *The sign-in expired or came from another browser* | more than 10 minutes, or the callback without trapdoor's cookie | try again; check `response_modes: ['query']` |
 | log *answers with a signed JWT* | userinfo is signed | `userinfo_signed_response_alg: 'none'` |
-| *There is no local admin to sign in as* | no admin user yet | `trapdoor user add admin` |
+| *The account … is disabled here* | an admin turned the account off | turn it on again (Admins page, or `trapdoor user`) |
 
 ## How it is checked
 
@@ -141,5 +145,7 @@ The authorization code flow with PKCE (S256), a one-time state bound to the brow
 `SameSite=Lax` cookie for the callback path only) and a nonce. The ID token's signature is checked
 against the provider's published keys (RS256 / ES256 and their 384 / 512 variants), and so are its
 issuer, audience and lifetime. Then userinfo is read; Authelia puts the groups there unless the
-client's claims policy adds them to the ID token. The log line `login … via=oidc oidc_user=…
-oidc_email=…` says who signed in.
+client's claims policy adds them to the ID token. The account is found again by the
+provider's subject (never by name: a local account with the same name is not taken over, the
+new one gets a suffix), and its role follows the person's groups at every sign-in. The log
+line `login username=… role=… via=oidc oidc_user=… oidc_email=…` says who signed in.

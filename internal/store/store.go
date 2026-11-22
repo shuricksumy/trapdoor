@@ -164,6 +164,41 @@ var migrations = []string{
 		end   INTEGER NOT NULL,
 		PRIMARY KEY (agent, start)
 	) WITHOUT ROWID;`,
+
+	// 11: admin accounts with a role, one per person signing in with OIDC,
+	// and how each session signed in (addColumns: ALTER TABLE cannot say
+	// "if not exists")
+	`CREATE UNIQUE INDEX IF NOT EXISTS users_oidc_subject ON users (oidc_subject) WHERE oidc_subject != '';`,
+}
+
+// addColumns are added before a migration's SQL runs (only the missing
+// ones, so a migration can run again), by migration number.
+var addColumns = map[int][][3]string{ // table, column, definition
+	11: {
+		{"users", "role", "TEXT NOT NULL DEFAULT 'admin'"},   // admin | viewer
+		{"users", "source", "TEXT NOT NULL DEFAULT 'local'"}, // local | oidc
+		{"users", "oidc_subject", "TEXT NOT NULL DEFAULT ''"},
+		{"users", "disabled", "INTEGER NOT NULL DEFAULT 0"},
+		{"users", "last_login_at", "INTEGER NOT NULL DEFAULT 0"},
+		{"users", "last_login_ip", "TEXT NOT NULL DEFAULT ''"},
+		{"users", "last_login_via", "TEXT NOT NULL DEFAULT ''"},
+		{"login_sessions", "via", "TEXT NOT NULL DEFAULT 'password'"},
+	},
+}
+
+func addMissingColumns(ctx context.Context, tx *sql.Tx, cols [][3]string) error {
+	for _, c := range cols {
+		var n int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, c[0], c[1]).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			if _, err := tx.ExecContext(ctx, `ALTER TABLE `+c[0]+` ADD COLUMN `+c[1]+` `+c[2]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -193,6 +228,10 @@ func (db *DB) migrate(ctx context.Context) error {
 		if done > i {
 			_ = tx.Rollback()
 			continue
+		}
+		if err := addMissingColumns(ctx, tx, addColumns[i+1]); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("migration %d: %w", i+1, err)
 		}
 		if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
 			_ = tx.Rollback()

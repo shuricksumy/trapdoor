@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -21,10 +22,28 @@ const cookieName = "td_session"
 
 type ctxKey struct{}
 
-// Principal is who made a request: an admin user, or the API token.
+// Principal is who made a request: an account, or the API token.
 type Principal struct {
 	Username string `json:"username"`
-	Method   string `json:"method"` // "session" or "token"
+	Method   string `json:"method"`        // "session" or "token"
+	Role     string `json:"role"`          // admin or viewer
+	Via      string `json:"via,omitempty"` // a session: password or oidc
+	// Source: the account was made by OIDC (no password of its own unless one was set).
+	Source string `json:"source,omitempty"`
+}
+
+// viewerSecrets are reads a viewer may not do: they hand out keys.
+var viewerSecrets = regexp.MustCompile(`^/api/v1/(servers/[^/]+/(certs/[^/]+/ovpn|peers/[^/]+/conf)|backups/files/)`)
+
+// viewerAllowed: a viewer only looks (and logs out or changes its own password).
+func viewerAllowed(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		return !viewerSecrets.MatchString(r.URL.Path)
+	case http.MethodPost:
+		return r.URL.Path == "/api/v1/auth/logout" || r.URL.Path == "/api/v1/auth/password"
+	}
+	return false
 }
 
 // principal returns the authenticated caller of r (set by requireAuth).
@@ -52,7 +71,7 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 				httpx.WriteError(w, http.StatusUnauthorized, "invalid API token")
 				return
 			}
-			ctx := context.WithValue(r.Context(), ctxKey{}, Principal{Username: "api-token", Method: "token"})
+			ctx := context.WithValue(r.Context(), ctxKey{}, Principal{Username: "api-token", Method: "token", Role: auth.RoleAdmin})
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -75,7 +94,12 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			httpx.WriteError(w, http.StatusForbidden, "cross-site request refused")
 			return
 		}
-		ctx := context.WithValue(r.Context(), ctxKey{}, Principal{Username: sess.User.Username, Method: "session"})
+		p := Principal{Username: sess.User.Username, Method: "session", Role: sess.User.Role, Via: sess.Via, Source: sess.User.Source}
+		if p.Role == auth.RoleViewer && !viewerAllowed(r) {
+			httpx.WriteError(w, http.StatusForbidden, "this account can only look: ask an admin to change it")
+			return
+		}
+		ctx := context.WithValue(r.Context(), ctxKey{}, p)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -156,7 +180,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true, Secure: s.CookieSecure, SameSite: http.SameSiteStrictMode,
 	})
 	s.Log.Info("login", "ip", ip, "username", u.Username)
-	httpx.WriteJSON(w, http.StatusOK, Principal{Username: u.Username, Method: "session"})
+	httpx.WriteJSON(w, http.StatusOK, Principal{Username: u.Username, Method: "session", Role: u.Role, Via: "password", Source: u.Source})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -187,6 +211,10 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.Auth.Authenticate(r.Context(), p.Username, req.Current); err != nil {
+		if p.Source == auth.SourceOIDC {
+			httpx.WriteError(w, http.StatusForbidden, "this account signs in with single sign-on: its password is managed there (an admin can set a local one on the Admins page)")
+			return
+		}
 		httpx.WriteError(w, http.StatusForbidden, "current password is wrong")
 		return
 	}

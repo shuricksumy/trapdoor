@@ -116,6 +116,9 @@ type Deps struct {
 	// as (empty: the first admin).
 	OIDC               OIDC
 	OIDCName, OIDCUser string
+	// OIDCAdminGroups: members sign in as admins; the other allowed groups
+	// (TD_OIDC_VIEWER_GROUPS) as viewers. Empty: everyone allowed is an admin.
+	OIDCAdminGroups []string
 	// SendMail sends an email (nil = mail.Send; replaced in tests).
 	SendMail func(context.Context, mail.Config, mail.Message) error
 	// SendTelegram sends a Telegram message (nil = telegram.Send; replaced in tests).

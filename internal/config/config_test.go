@@ -162,3 +162,12 @@ func TestLoadWebPasswordFrom(t *testing.T) {
 		t.Error("not a network accepted")
 	}
 }
+
+func TestLoadWebOIDCViewerGroups(t *testing.T) {
+	t.Setenv("TD_AGENT_TOKEN", "x")
+	t.Setenv("TD_OIDC_VIEWER_GROUPS", "family, guests")
+	c, err := LoadWeb()
+	if err != nil || len(c.OIDCViewerGroups) != 2 || c.OIDCViewerGroups[1] != "guests" {
+		t.Fatalf("%v %v", c.OIDCViewerGroups, err)
+	}
+}

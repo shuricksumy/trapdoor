@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"github.com/shuricksumy/trapdoor/internal/auth"
 	"github.com/shuricksumy/trapdoor/internal/httpx"
@@ -94,13 +95,20 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		s.loginError(w, r, "the sign-in could not be checked")
 		return
 	}
-	u, err := s.oidcUser(r.Context())
+	u, err := s.oidcAccount(r.Context(), id)
 	if err != nil {
-		s.Log.Error("sign-in: no local admin", "err", err)
-		s.loginError(w, r, "there is no local admin to sign in as: create one with 'trapdoor user add'")
+		s.Log.Warn("sign-in refused", "ip", ip, "user", id.Username, "err", err)
+		msg := "the account could not be used"
+		switch {
+		case errors.Is(err, auth.ErrInvalidCredentials):
+			msg = "the account " + id.Username + " is disabled here"
+		case s.OIDCUser != "":
+			msg = "TD_OIDC_USER " + s.OIDCUser + " is not an account here"
+		}
+		s.loginError(w, r, msg)
 		return
 	}
-	tok, exp, err := s.Auth.StartSession(r.Context(), u, ip, r.UserAgent())
+	tok, exp, err := s.Auth.StartSessionVia(r.Context(), u, ip, r.UserAgent(), "oidc")
 	if err != nil {
 		s.Log.Error("start session", "err", err)
 		s.loginError(w, r, "internal error")
@@ -108,33 +116,35 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: tok, Path: "/", Expires: exp,
 		HttpOnly: true, Secure: s.CookieSecure, SameSite: http.SameSiteStrictMode})
-	s.Log.Info("login", "ip", ip, "username", u.Username, "via", "oidc", "oidc_user", id.Username, "oidc_email", id.Email)
+	s.Log.Info("login", "ip", ip, "username", u.Username, "role", u.Role, "via", "oidc", "oidc_user", id.Username, "oidc_email", id.Email)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// oidcUser is the local admin a sign-in becomes: TD_OIDC_USER, or the
-// first admin created.
-func (s *Server) oidcUser(ctx context.Context) (auth.User, error) {
-	users, err := s.Auth.Users(ctx)
-	if err != nil {
-		return auth.User{}, err
-	}
-	if len(users) == 0 {
-		return auth.User{}, errors.New("no admin users")
-	}
-	first := users[0]
-	for _, u := range users {
-		if s.OIDCUser != "" && u.Username == s.OIDCUser {
-			return u, nil
-		}
-		if u.ID < first.ID {
-			first = u
-		}
-	}
+// oidcAccount is the account a sign-in becomes: the person's own (made at
+// their first sign-in, its role from their groups: an admin group makes an
+// admin, else a viewer), or, with TD_OIDC_USER, that local account for
+// everyone (how it worked before accounts per person).
+func (s *Server) oidcAccount(ctx context.Context, id oidc.Identity) (auth.User, error) {
 	if s.OIDCUser != "" {
-		return auth.User{}, errors.New("TD_OIDC_USER " + s.OIDCUser + " is not an admin user")
+		users, err := s.Auth.Users(ctx)
+		if err != nil {
+			return auth.User{}, err
+		}
+		for _, u := range users {
+			if u.Username == s.OIDCUser {
+				if u.Disabled {
+					return auth.User{}, auth.ErrInvalidCredentials
+				}
+				return u, nil
+			}
+		}
+		return auth.User{}, auth.ErrUserNotFound
 	}
-	return first, nil
+	role := auth.RoleViewer
+	if len(s.OIDCAdminGroups) == 0 || slices.ContainsFunc(id.Groups, func(g string) bool { return slices.Contains(s.OIDCAdminGroups, g) }) {
+		role = auth.RoleAdmin
+	}
+	return s.Auth.OIDCAccount(ctx, id.Subject, id.Username, role)
 }
 
 // loginError sends the browser back to the login page with a message.

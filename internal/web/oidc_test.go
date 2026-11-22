@@ -78,51 +78,111 @@ func TestOIDCLogin(t *testing.T) {
 		t.Errorf("state cookie: %+v", sc)
 	}
 
-	// No local admin yet: refused with a hint.
-	stub.id = oidc.Identity{Username: "alex", Groups: []string{"admin"}}
-	rec = get(h, "/api/v1/auth/oidc/callback?state=st-1&code=c1", sc)
-	if loc, _ := url.QueryUnescape(rec.Header().Get("Location")); rec.Code != http.StatusSeeOther || !strings.Contains(loc, "no local admin") {
-		t.Errorf("no admin: %d %s", rec.Code, loc)
+	signIn := func(h http.Handler, id oidc.Identity) (*http.Cookie, string) {
+		t.Helper()
+		stub.id, stub.err = id, nil
+		rec := get(h, "/api/v1/auth/oidc/callback?state=st-1&code=c1", sc)
+		for _, c := range rec.Result().Cookies() {
+			if c.Name == cookieName && c.Value != "" {
+				return c, rec.Header().Get("Location")
+			}
+		}
+		loc, _ := url.QueryUnescape(rec.Header().Get("Location"))
+		return nil, loc
 	}
+	deps.OIDCAdminGroups = []string{"admin"}
+	h = New(deps).Handler()
+
+	// The first sign-in makes the person's own account (no local admin needed),
+	// an admin by group; the next one finds it again by the subject.
+	sess, loc := signIn(h, oidc.Identity{Subject: "sub-alex", Username: "alex", Groups: []string{"admin", "users"}})
+	if sess == nil || sess.SameSite != http.SameSiteStrictMode || loc != "/" || stub.got != [3]string{"st-1", "st-1", "c1"} {
+		t.Fatalf("callback: %v %s %v", sess, loc, stub.got)
+	}
+	if rec := get(h, "/api/v1/auth/me", sess); !strings.Contains(rec.Body.String(), `"username":"alex","method":"session","role":"admin","via":"oidc","source":"oidc"`) {
+		t.Errorf("me: %d %s", rec.Code, rec.Body)
+	}
+	// a local account with the same name is not taken over: the second "alex" gets "alex-2"
 	if _, err := a.CreateUser(ctx, "admin", "correct horse battery staple"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.CreateUser(ctx, "backup", "correct horse battery staple 2"); err != nil {
+	if _, err := a.CreateUser(ctx, "bob", "correct horse battery staple 2"); err != nil {
 		t.Fatal(err)
 	}
-
-	// Signed in: a session as the first admin, back to the app.
-	rec = get(h, "/api/v1/auth/oidc/callback?state=st-1&code=c1", sc)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" || stub.got != [3]string{"st-1", "st-1", "c1"} {
-		t.Fatalf("callback: %d %v %v", rec.Code, rec.Header(), stub.got)
+	if c, _ := signIn(h, oidc.Identity{Subject: "sub-bob", Username: "bob", Groups: []string{"admin"}}); c == nil {
+		t.Fatal("bob from Authelia not signed in")
+	} else if rec := get(h, "/api/v1/auth/me", c); !strings.Contains(rec.Body.String(), `"username":"bob-2"`) {
+		t.Errorf("same name as a local account: %s", rec.Body)
 	}
-	var sess *http.Cookie
-	for _, c := range rec.Result().Cookies() {
-		if c.Name == cookieName {
-			sess = c
-		}
-	}
-	if sess == nil || sess.SameSite != http.SameSiteStrictMode {
-		t.Fatalf("no session cookie: %v", rec.Result().Cookies())
-	}
-	if rec := get(h, "/api/v1/auth/me", sess); !strings.Contains(rec.Body.String(), `"username":"admin"`) {
-		t.Errorf("me: %d %s", rec.Code, rec.Body)
+	if c, _ := signIn(h, oidc.Identity{Subject: "sub-alex", Username: "alex", Groups: []string{"admin"}}); c == nil {
+		t.Fatal("alex again")
+	} else if us, _ := a.Users(ctx); len(us) != 4 {
+		t.Errorf("accounts after the second sign-in: %d", len(us))
 	}
 
-	// TD_OIDC_USER picks the admin; a missing one is an error.
-	deps.OIDCUser = "backup"
-	rec = get(New(deps).Handler(), "/api/v1/auth/oidc/callback?state=st-1&code=c1", sc)
-	for _, c := range rec.Result().Cookies() {
-		if c.Name == cookieName {
-			if r := get(h, "/api/v1/auth/me", c); !strings.Contains(r.Body.String(), `"username":"backup"`) {
-				t.Errorf("TD_OIDC_USER: %s", r.Body)
-			}
+	// Another allowed group (TD_OIDC_VIEWER_GROUPS) signs in read-only.
+	viewer, _ := signIn(h, oidc.Identity{Subject: "sub-kid", Username: "kid", Groups: []string{"family"}})
+	if viewer == nil {
+		t.Fatal("viewer not signed in")
+	}
+	call := func(method, path string, c *http.Cookie) int {
+		req := httptest.NewRequest(method, path, strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(c)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if rec := get(h, "/api/v1/auth/me", viewer); !strings.Contains(rec.Body.String(), `"role":"viewer"`) {
+		t.Errorf("viewer me: %s", rec.Body)
+	}
+	for _, c := range []struct {
+		method, path string
+		ok           bool
+	}{
+		{http.MethodGet, "/api/v1/presence", true},                             // looks
+		{http.MethodPut, "/api/v1/presence", false},                            // changes nothing
+		{http.MethodPost, "/api/v1/servers/openvpn/certs", false},              // issues nothing
+		{http.MethodDelete, "/api/v1/servers/openvpn/certs/anna", false},       // removes nothing
+		{http.MethodPost, "/api/v1/servers/openvpn/tools/ping", false},         // runs nothing on the server
+		{http.MethodGet, "/api/v1/servers/openvpn/certs/anna/ovpn", false},     // no keys
+		{http.MethodGet, "/api/v1/servers/wg0/peers/anna/conf", false},         // no keys
+		{http.MethodGet, "/api/v1/backups/files/trapdoor-all-1.tar.gz", false}, // no backups
+		{http.MethodPost, "/api/v1/auth/logout", true},                         // can leave
+	} {
+		code := call(c.method, c.path, viewer)
+		if (code == http.StatusForbidden) == c.ok {
+			t.Errorf("viewer %s %s: %d", c.method, c.path, code)
 		}
+	}
+	// an admin is not limited by it
+	if code := call(http.MethodPut, "/api/v1/presence", sess); code == http.StatusForbidden {
+		t.Errorf("admin refused: %d", code)
+	}
+
+	// A disabled account cannot sign in, and its sessions end.
+	if err := a.SetDisabled(ctx, "alex", true); err != nil {
+		t.Fatal(err)
+	}
+	if rec := get(h, "/api/v1/auth/me", sess); rec.Code != http.StatusUnauthorized {
+		t.Errorf("disabled account still in: %d", rec.Code)
+	}
+	if c, loc := signIn(h, oidc.Identity{Subject: "sub-alex", Username: "alex", Groups: []string{"admin"}}); c != nil || !strings.Contains(loc, "disabled") {
+		t.Errorf("disabled sign-in: %v %s", c, loc)
+	}
+
+	// TD_OIDC_USER: everyone signs in as that local account (as before accounts per person).
+	deps.OIDCUser = "admin"
+	if c, _ := signIn(New(deps).Handler(), oidc.Identity{Subject: "sub-x", Username: "x", Groups: []string{"admin"}}); c == nil {
+		t.Error("TD_OIDC_USER not signed in")
+	} else if rec := get(h, "/api/v1/auth/me", c); !strings.Contains(rec.Body.String(), `"username":"admin"`) {
+		t.Errorf("TD_OIDC_USER: %s", rec.Body)
 	}
 	deps.OIDCUser = "nobody"
-	if rec := get(New(deps).Handler(), "/api/v1/auth/oidc/callback?state=st-1&code=c1", sc); !strings.Contains(rec.Header().Get("Location"), "error=") {
-		t.Errorf("unknown TD_OIDC_USER signed in: %v", rec.Header())
+	if c, loc := signIn(New(deps).Handler(), oidc.Identity{Subject: "sub-x", Username: "x", Groups: []string{"admin"}}); c != nil || !strings.Contains(loc, "TD_OIDC_USER") {
+		t.Errorf("unknown TD_OIDC_USER: %v %s", c, loc)
 	}
+	deps.OIDCUser = ""
 
 	// Refusals go back to the login page with a reason, no session.
 	for name, c := range map[string]struct {
