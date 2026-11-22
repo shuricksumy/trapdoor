@@ -862,6 +862,20 @@ A message when a client connects or disconnects, by email and / or Telegram:
 - Messages use the client's display name and the server's name, e.g. *🟢 Anna's phone (anna) is
   online on OpenVPN since Nov 20 14:02 from 203.0.113.45.*
 
+## Admin area
+
+Your name at the bottom of the menu, or **Manage** at the top of a server's pages, opens the
+Admin area: **My account** (password, theme, log out), **Admins**, **Servers** (*Add a server*),
+**Nodes**, **Backups** and **Notifications** (email, Telegram, online / offline messages).
+
+**Admins** lists every account: its role (admin or read-only), how it signs in (password or
+single sign-on), its last sign-in (when, from where, how) and its open sessions. From there:
+add a local account, change a role, turn an account off or on (turning off ends its sessions),
+set a new password (also a local one for a single sign-on account, for when the sign-on is
+down), log it out everywhere, delete it. You cannot turn off or delete your own account, and the
+last admin that is turned on cannot be made read-only, turned off or deleted. A read-only account
+sees My account, Servers, Nodes and Notifications.
+
 ## Admin login and security
 
 Create admins with the CLI (`trapdoor user add <name>`, also `passwd`, `del`, `list`); the

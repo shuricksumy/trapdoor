@@ -193,6 +193,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerTelegramRoutes(api)
 	s.registerPresenceRoutes(api)
 	s.registerLimitRoutes(api)
+	s.registerAdminRoutes(api)
 	s.registerServerControlRoutes(api)
 
 	mux := http.NewServeMux()

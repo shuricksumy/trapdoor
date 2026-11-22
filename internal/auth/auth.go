@@ -134,6 +134,41 @@ func (s *Service) CreateUser(ctx context.Context, username, password string) (Us
 	return User{ID: id, Username: username, CreatedAt: time.Unix(now, 0).UTC(), Role: RoleAdmin, Source: SourceLocal, HasPassword: true}, nil
 }
 
+// CreateUserRole adds a local account with a role.
+func (s *Service) CreateUserRole(ctx context.Context, username, password, role string) (User, error) {
+	if role != RoleAdmin && role != RoleViewer {
+		return User{}, ErrBadRole
+	}
+	u, err := s.CreateUser(ctx, username, password)
+	if err != nil || role == RoleAdmin {
+		return u, err
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE users SET role = ? WHERE id = ?`, role, u.ID); err != nil {
+		return u, err
+	}
+	u.Role = role
+	return u, nil
+}
+
+// SessionCounts is the number of open sessions per account (by id).
+func (s *Service) SessionCounts(ctx context.Context) (map[int64]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT user_id, COUNT(*) FROM login_sessions WHERE expires_at > ? GROUP BY user_id`, s.now().Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[int64]int{}
+	for rows.Next() {
+		var id int64
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		out[id] = n
+	}
+	return out, rows.Err()
+}
+
 // SetPassword changes a user's password and logs out all their sessions.
 func (s *Service) SetPassword(ctx context.Context, username, password string) error {
 	if err := CheckPassword(password); err != nil {

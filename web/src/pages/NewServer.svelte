@@ -1,4 +1,5 @@
 <script>
+  import AdminNav from '../lib/AdminNav.svelte';
   import { api, reloadServers, upload } from '../lib/api.js';
   import { canRun, containerFor, machineName, machines, typeNames } from '../lib/location.js';
   import { navigate, selectServer, servers, toast } from '../lib/state.svelte.js';
@@ -150,6 +151,7 @@
   }
 </script>
 
+<AdminNav />
 <header class="head">
   <h1>Add a server</h1>
   {#if isRestore}
