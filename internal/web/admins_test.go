@@ -108,7 +108,7 @@ func TestAdmins(t *testing.T) {
 	if _, err := a.Authenticate(ctx, "ops", "another long password"); err != nil {
 		t.Errorf("new password: %v", err)
 	}
-	opsTok = session("ops")
+	_ = session("ops") // a session to end
 	if code, body := call(adm, http.MethodPost, "/api/v1/admins/ops/logout", ""); code != 200 || !strings.Contains(body, `"ended":1`) {
 		t.Errorf("log out ops: %d %s", code, body)
 	}
