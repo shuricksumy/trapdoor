@@ -3,7 +3,7 @@
   // vpn container's network): ping, traceroute, DNS, TCP ports, HTTP(S) and
   // routes. Results stay on the page while it is open.
   import { api } from '../lib/api.js';
-  import { currentServer, route, setQuery } from '../lib/state.svelte.js';
+  import { currentServer, readOnly, route, setQuery } from '../lib/state.svelte.js';
   import { clientName, loadClientNames } from '../lib/names.svelte.js';
   import { where } from '../lib/location.js';
   import { toolPicks } from '../lib/toolPicks.js';
@@ -85,6 +85,9 @@
   </div>
 </header>
 
+{#if readOnly()}
+  <p class="banner warn">Tools run on the server's network, so they are for admins only.</p>
+{:else}
 <section class="panel">
   <div class="seg" role="tablist" aria-label="Tool">
     {#each tools as [k, l] (k)}<button role="tab" aria-selected={tool === k} onclick={() => (tool = k)}>{l}</button>{/each}
@@ -135,6 +138,8 @@
   <datalist id="tool-picks">{#each picks as p (p.v)}<option value={p.v}>{p.title}</option>{/each}</datalist>
   <datalist id="dns-picks">{#each dnsPicks as p (p.v)}<option value={p.v}>{p.l}</option>{/each}</datalist>
 </section>
+
+{/if}
 
 {#each runs as r (r.id)}
   <section class="panel run-card">

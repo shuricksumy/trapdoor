@@ -1,5 +1,5 @@
 <script>
-  import { route, session, navigate, toasts, toast, settings, servers, setServers, selectServer, currentServer, repoURL, versionURL, shortVersion } from './lib/state.svelte.js';
+  import { readOnly, route, session, navigate, toasts, toast, settings, servers, setServers, selectServer, currentServer, repoURL, versionURL, shortVersion } from './lib/state.svelte.js';
   import { api, reloadServers } from './lib/api.js';
   import { machines, typeNames, where } from './lib/location.js';
 
@@ -54,7 +54,8 @@
 
   // WireGuard and AmneziaWG servers share their pages.
   const isWG = $derived(['wireguard', 'amneziawg'].includes(currentServer()?.type));
-  const navPages = $derived(isWG ? wgPages : pages);
+  // A read-only account runs no tools (they act on the server's network).
+  const navPages = $derived((isWG ? wgPages : pages).filter((p) => !(readOnly() && p.path === '/tools')));
 
   const current = $derived(
     route.path === '/login'
@@ -185,7 +186,8 @@
       </div>
     </nav>
 
-    <main>
+    <main class:readonly={readOnly()}>
+      {#if readOnly()}<div class="banner readonly-note" role="status">Read-only account: you can look around; only admins can change things.</div>{/if}
       {#if !serverFree.includes(route.path)}
       <div class="server-bar">
         <div class="server-pick">
@@ -302,10 +304,16 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: var(--sunken);
   }
+  .server-bar select { background-color: var(--surface); }
   .server-bar:not(:has(.server-switch, .where-chip)) { justify-content: flex-end; }
-  .manage { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-s); color: var(--ink-2); font-size: var(--step--1); font-weight: 500; text-decoration: none; white-space: nowrap; }
+  .readonly-note { margin-bottom: var(--space-4); background: var(--sunken); color: var(--ink-2); }
+  .manage { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--surface); color: var(--ink-2); font-size: var(--step--1); font-weight: 500; text-decoration: none; white-space: nowrap; }
   .manage:hover { border-color: var(--accent); color: var(--ink); }
   .server-pick { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; min-width: 0; }
   .where-chip {

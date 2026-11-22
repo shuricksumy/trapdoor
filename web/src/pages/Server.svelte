@@ -270,7 +270,7 @@
             <tr>
               <td>{dateTime(b.time)} <span class="mono faint small">{b.name}</span></td>
               <td class="num">{b.size} B</td>
-              <td class="act"><button class="btn small" onclick={() => view(b)}>View</button></td>
+              <td class="act"><button class="btn small keep" onclick={() => view(b)}>View</button></td>
             </tr>
           {/each}
         </tbody>

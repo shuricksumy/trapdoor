@@ -193,7 +193,7 @@
   </section>
 {/each}
 
-<section class="panel add">
+<section class="panel add admin-only">
   <div class="panel-head"><h2>Add a node</h2></div>
   <div class="panel-body grid-form">
     <div class="seg" role="radiogroup" aria-label="How">
