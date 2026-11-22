@@ -105,6 +105,11 @@ the login. It is a `#TD_NOTE:` line in the client's `ccd` file, next to the
 network and two-factor lines, so it moves with the server, its backups and copies;
 OpenVPN and openvpn-ui ignore it. One line, at most 200 characters.
 
+WireGuard and AmneziaWG clients work the same way: the client's name (`alice-phone`) is
+its config name, and *Display name* in *Add client* or *Edit* is shown on every page
+instead (online / offline and limit messages too). It is kept with the client in the
+server's state file. Clients added several at once get none; give them one with *Edit*.
+
 ## Client profiles
 
 `.ovpn` files are built like openvpn-ui did, so existing servers produce the same files:
@@ -463,7 +468,7 @@ interface with its own port and subnet, e.g. `wg0` on UDP 51820 with `10.9.0.0/2
   disconnected. Disabling keeps the client but takes it off the interface; removing
   deletes its keys.
 - **Adding clients**: one, or several at once (`<prefix>-1`, `-2`, … on the next free
-  addresses). Per client: notes, the VPN address (a free one is suggested), keys made here
+  addresses). Per client: a [display name](#display-names), the VPN address (a free one is suggested), keys made here
   or the device's own public key (then trapdoor never has its private key and the config
   has a placeholder for it), a preshared key on or off, networks behind it, and its own
   DNS, allowed IPs, MTU and keepalive. All of it can be changed later (Clients → Edit).

@@ -9,6 +9,7 @@
   import SendProfile from '../lib/SendProfile.svelte';
   import Pager from '../lib/Pager.svelte';
   import { paginate, savedSize } from '../lib/pager.js';
+  import { setClientNames } from '../lib/names.svelte.js';
 
   const app = currentServer()?.type === 'amneziawg' ? 'AmneziaWG' : 'WireGuard';
 
@@ -32,6 +33,7 @@
   async function load() {
     try {
       peers = await api('/peers');
+      setClientNames(peers);
       api('/emails').then((m) => (emails = m)).catch(() => {});
       api('/notify').then((m) => (notify = m)).catch(() => {});
       loadError = '';
@@ -135,7 +137,8 @@
   const until = (t) => new Date(t).toLocaleDateString([], { dateStyle: 'medium' });
 
   function settingsBody() {
-    const b = { notes: form.notes.trim() };
+    // bulk clients get no display name (it would be the same for all)
+    const b = { notes: mode === 'bulk' ? '' : form.notes.trim() };
     if (form.until) b.expires_at = new Date(form.until + 'T23:59:59').toISOString();
     if (form.dns.trim()) b.dns = list(form.dns);
     if (form.allowed.trim()) b.allowed_ips = list(form.allowed);
@@ -276,8 +279,7 @@
             <tr class:old={p.disabled}>
               <td class="c-name">
                 <div class="nm">
-                  <span class="name">{p.name}{#if notify[p.name]}<span class="bell" title="Online / offline messages on">🔔</span>{/if}{#if emails[p.name]}<span class="faint small email">{emails[p.name]}</span>{/if}</span>
-                  {#if p.notes}<span class="faint small">{p.notes}</span>{/if}
+                  <span class="name">{p.notes || p.name}{#if p.notes}<span class="mono faint small cfg" title="Config name">{p.name}</span>{/if}{#if notify[p.name]}<span class="bell" title="Online / offline messages on">🔔</span>{/if}{#if emails[p.name]}<span class="faint small email">{emails[p.name]}</span>{/if}</span>
                   {#if p.expires_at}<span class="small" class:faint={!p.expired} class:bad-text={p.expired}>{p.expired ? 'Ended' : 'Until'} {until(p.expires_at)}</span>{/if}
 
                   {#if p.lan?.length}<span class="faint small mono">LAN {p.lan.join(', ')}</span>{/if}
@@ -348,10 +350,13 @@
       </label>
     {/if}
 
-    <label class="field">
-      <span>Notes (optional)</span>
-      <input bind:value={form.notes} placeholder="e.g. Alice's work phone" maxlength="500" autocomplete="off" />
-    </label>
+    {#if mode !== 'bulk'}
+      <label class="field">
+        <span>Display name (optional)</span>
+        <input bind:value={form.notes} placeholder="e.g. Alice's phone" maxlength="200" autocomplete="off" />
+        <span class="hint">Shown on every page instead of the config name. You can change it any time.</span>
+      </label>
+    {/if}
 
     <label class="field">
       <span>Works until (optional)</span>
@@ -475,6 +480,7 @@
   .until { display: flex; gap: var(--space-2); align-items: center; }
   .bad-text { color: var(--bad); }
   .email { font-weight: 400; margin-left: var(--space-2); }
+  .cfg { font-weight: 400; margin-left: var(--space-2); }
   .nm { display: grid; gap: 2px; }
   .c-traffic span + span { margin-left: var(--space-3); }
   tr.old td { color: var(--ink-3); }

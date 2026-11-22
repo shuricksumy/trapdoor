@@ -8,6 +8,7 @@
   import { bytes, duration, relative, date } from '../lib/format.js';
   import { currentServer, servers, settings } from '../lib/state.svelte.js';
   import TodayTrace from '../lib/TodayTrace.svelte';
+  import { setClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
 
   let status = $state(null);
   let peers = $state([]);
@@ -30,7 +31,7 @@
       api('/stats?preset=today'),
     ]);
     if (st.status === 'fulfilled') status = st.value;
-    if (ps.status === 'fulfilled') peers = ps.value;
+    if (ps.status === 'fulfilled') setClientNames((peers = ps.value));
     if (hs.status === 'fulfilled') history = hs.value;
     if (rep.status === 'fulfilled') today = rep.value;
     api('/cost').then((c) => (cost = c), () => {});
@@ -107,7 +108,7 @@
     <a class="small" href="/statistics?preset=today">Traffic details</a>
   </div>
   <div class="panel-body">
-    <TodayTrace sessions={history} {now} />
+    <TodayTrace sessions={history} {now} label={clientName} />
   </div>
 </section>
 
@@ -125,7 +126,7 @@
       <ul class="list">
         {#each live.sessions as s (s.name)}
           <li>
-            <span class="pill ok">{s.name}</span>
+            <span class="pill ok" title={clientTitle(s.name)}>{clientName(s.name)}</span>
             <span class="mono faint">{s.virtual_address}</span>
             <span class="muted small right">{duration((now - new Date(s.connected_since)) / 1000)}, {bytes(s.bytes_sent + s.bytes_received)}</span>
           </li>
@@ -145,7 +146,7 @@
       <ul class="list">
         {#each attention as { p } (p.name)}
           <li>
-            <span class="pill {p.expired ? 'bad' : 'warn'}">{p.name}</span>
+            <span class="pill {p.expired ? 'bad' : 'warn'}" title={clientTitle(p.name)}>{clientName(p.name)}</span>
             <span class="muted small right">{p.expired ? 'Ended' : 'Ends'} {relative(p.expires_at)} ({date(p.expires_at)})</span>
           </li>
         {/each}

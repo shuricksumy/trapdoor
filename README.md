@@ -111,7 +111,7 @@ same two-factor logins.
 
 **WireGuard and AmneziaWG**
 
-- **Clients** with a QR code for the apps; add one or many at once, notes, your own address,
+- **Clients** with a QR code for the apps; add one or many at once, a display name shown on every page, your own address,
   the device's own key if you prefer, per-client DNS, allowed IPs, MTU and keepalive
   ([how](docs/guide.md#wireguard-servers))
 - **AmneziaWG** hides the VPN from blocking: obfuscation levels 1.5, 2.0 (default) and 3.1,

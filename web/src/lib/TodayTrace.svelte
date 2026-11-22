@@ -3,7 +3,7 @@
   // connected today, like a logic-analyser trace.
   import { time, duration, bytes } from './format.js';
 
-  // label: how a client's login is shown (its display name, for OpenVPN).
+  // label: how a client is shown (its display name, or its config name).
   let { sessions = [], now = new Date(), label = (n) => n } = $props();
 
   const dayStart = $derived(new Date(now.getFullYear(), now.getMonth(), now.getDate()));

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/shuricksumy/trapdoor/internal/api"
 )
 
 func TestWireGuardThroughWeb(t *testing.T) {
@@ -46,5 +48,36 @@ func TestWireGuardThroughWeb(t *testing.T) {
 		if rec.Code != st.want || !strings.Contains(rec.Body.String(), st.contains) {
 			t.Errorf("%s %s %s: %d %s; want %d containing %q", st.method, st.path, st.body, rec.Code, rec.Body.String(), st.want, st.contains)
 		}
+	}
+}
+
+// A WireGuard client's display name (its notes) is used in messages, like an
+// OpenVPN client's; a client without one keeps its config name.
+func TestWireGuardDisplayNames(t *testing.T) {
+	e := newTestEnv(t, "")
+	_, _ = e.auth.CreateUser(context.Background(), "admin", "long-enough-pw")
+	c := sessionCookie(t, e.login("admin", "long-enough-pw"))
+	same := header("Origin", "https://vpn.example.com")
+	for _, st := range []struct{ method, path, body string }{
+		{http.MethodPost, "/api/v1/servers", `{"type":"wireguard","id":"wg0","name":"Home","public_host":"vpn.example.com"}`},
+		{http.MethodPost, "/api/v1/servers/wg0/peers", `{"name":"anna","notes":"Anna's phone"}`},
+		{http.MethodPost, "/api/v1/servers/wg0/peers", `{"name":"bob"}`},
+	} {
+		if rec := e.do(st.method, st.path, st.body, cookie(c), same); rec.Code != http.StatusCreated {
+			t.Fatalf("%s %s: %d %s", st.method, st.path, rec.Code, rec.Body)
+		}
+	}
+	s := &Server{Deps: Deps{Agent: e.agent}}
+	for _, typ := range []string{"", api.TypeWireGuard} {
+		got := s.displayNames(context.Background(), "wg0", typ)
+		if len(got) != 1 || got["anna"] != "Anna's phone" {
+			t.Errorf("displayNames(%q) = %v", typ, got)
+		}
+	}
+	if got := s.serverNames(context.Background(), "wg0"); got["wg0/anna"] != "Anna's phone" {
+		t.Errorf("serverNames = %v", got)
+	}
+	if _, ok := s.serverNames(context.Background(), "wg0")["wg0/bob"]; ok {
+		t.Error("bob has no display name")
 	}
 }

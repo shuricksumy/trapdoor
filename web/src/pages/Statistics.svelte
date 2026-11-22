@@ -1,7 +1,7 @@
 <script>
   import { api, apiURL } from '../lib/api.js';
   import { bytes, duration } from '../lib/format.js';
-  import { route, setQuery } from '../lib/state.svelte.js';
+  import { route, setQuery, currentServer } from '../lib/state.svelte.js';
   import BarChart from '../lib/BarChart.svelte';
   import { setClientNames, clientName, clientTitle } from '../lib/names.svelte.js';
   import Pager from '../lib/Pager.svelte';
@@ -68,8 +68,9 @@
     return () => ctl.abort();
   });
 
+  // the clients and their display names: certificates (OpenVPN) or peers
   $effect(() => {
-    api('/certs')
+    api(currentServer()?.type && currentServer().type !== 'openvpn' ? '/peers' : '/certs')
       .then((cs) => {
         setClientNames(cs);
         clients = [...new Set(cs.filter((c) => c.kind !== 'server').map((c) => c.name))].sort((a, b) => clientName(a).localeCompare(clientName(b)));
