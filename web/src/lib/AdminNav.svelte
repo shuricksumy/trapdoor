@@ -12,6 +12,7 @@
       ['/nodes', 'Nodes', true],
       ['/backups', 'Backups', isAdmin],
       ['/notifications', 'Notifications', true],
+      ['/audit', 'Audit log', isAdmin],
     ].filter(([, , show]) => show),
   );
   const active = (p) => route.path === p || (p === '/servers' && route.path === '/servers/new') || (p === '/nodes' && route.path === '/hosts');

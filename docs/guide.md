@@ -866,7 +866,14 @@ A message when a client connects or disconnects, by email and / or Telegram:
 
 Your name at the bottom of the menu, or **Manage** at the top of a server's pages, opens the
 Admin area: **My account** (password, theme, log out), **Admins**, **Servers** (*Add a server*),
-**Nodes**, **Backups** and **Notifications** (email, Telegram, online / offline messages).
+**Nodes**, **Backups**, **Notifications** (email, Telegram, online / offline messages) and the
+**Audit log**.
+
+**Audit log** (admins only): every change, sign-in and failed sign-in, with who, how they signed
+in (password, single sign-on, API token), from which address, on which server and what. Filter by
+period, person, kind (sign-ins, clients, access rules, limits, servers, backups, accounts, tools…)
+and text; pages of 15 / 25 / 50 / 100; *Export CSV*. Kept for two years in the database, and
+written to the log as before (`audit action=… target=… by=…`).
 
 **Admins** lists every account: its role (admin or read-only), how it signs in (password or
 single sign-on), its last sign-in (when, from where, how) and its open sessions. From there:

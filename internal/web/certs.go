@@ -169,7 +169,11 @@ func (s *Server) name(w http.ResponseWriter, r *http.Request) (string, bool) {
 // audit logs a change with the user who made it.
 func (s *Server) audit(r *http.Request, action, target string) {
 	p := principal(r)
-	s.Log.Info("audit", "server", r.PathValue("server"), "action", action, "target", target, "by", p.Username, "via", p.Method, "ip", s.clientIP(r))
+	via := p.Via
+	if p.Method == "token" {
+		via = "token"
+	}
+	s.auditAs(r, p.Username, via, action, target)
 }
 
 // agentError forwards the agent's 4xx answers; anything else is a 502.

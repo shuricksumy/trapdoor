@@ -194,6 +194,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerPresenceRoutes(api)
 	s.registerLimitRoutes(api)
 	s.registerAdminRoutes(api)
+	s.registerAuditRoutes(api)
 	s.registerServerControlRoutes(api)
 
 	mux := http.NewServeMux()

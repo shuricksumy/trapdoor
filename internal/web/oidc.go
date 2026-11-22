@@ -88,6 +88,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	case errors.Is(err, oidc.ErrNotAllowed):
 		s.Log.Warn("sign-in refused: not in an allowed group", "ip", ip, "user", id.Username, "groups", id.Groups)
+		s.auditAs(r, id.Username, "oidc", "login.failed", "not in an allowed group")
 		s.loginError(w, r, id.Username+" is not in a group allowed to sign in here")
 		return
 	case err != nil:
@@ -98,6 +99,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	u, err := s.oidcAccount(r.Context(), id)
 	if err != nil {
 		s.Log.Warn("sign-in refused", "ip", ip, "user", id.Username, "err", err)
+		s.auditAs(r, id.Username, "oidc", "login.failed", err.Error())
 		msg := "the account could not be used"
 		switch {
 		case errors.Is(err, auth.ErrInvalidCredentials):
@@ -117,6 +119,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: tok, Path: "/", Expires: exp,
 		HttpOnly: true, Secure: s.CookieSecure, SameSite: http.SameSiteStrictMode})
 	s.Log.Info("login", "ip", ip, "username", u.Username, "role", u.Role, "via", "oidc", "oidc_user", id.Username, "oidc_email", id.Email)
+	s.auditAs(r, u.Username, "oidc", "login", id.Email)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

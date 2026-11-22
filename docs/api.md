@@ -74,6 +74,8 @@ given in full.
 | POST | `/api/v1/admins/{name}/password` | `{"password"}` → 204; the account is logged out everywhere |
 | POST | `/api/v1/admins/{name}/logout` | → `{"ended"}` sessions |
 | DELETE | `/api/v1/admins/{name}` | 204; not your own account, not the last admin |
+| GET | `/api/v1/audit` | admins only; `?from&to` (YYYY-MM-DD, both included), `user`, `action` (an action or its group, e.g. `cert`, `login`), `q` (search), `offset`, `limit` (≤ 1000) → `{"total","entries":[{"id","time","username","via","ip","action","server","target"}],"users"}`, newest first |
+| GET | `/api/v1/audit.csv` | the same, all of it, oldest first: `time,user,via,address,action,server,target` |
 | GET | `/api/v1/auth/methods` | no login needed → `{"password":true,"oidc":"<button name>"}` (`oidc` only when set up) |
 | GET | `/api/v1/auth/oidc` | no login needed: to the OIDC provider (sets the one-time state cookie) |
 | GET | `/api/v1/auth/oidc/callback` | the provider's answer (`code`, `state`) → session cookie and `/`, or `/login?error=…` |

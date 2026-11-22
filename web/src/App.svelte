@@ -4,7 +4,7 @@
   import { machines, typeNames, where } from './lib/location.js';
 
   // Pages that do not belong to the selected server.
-  const serverFree = ['/servers', '/servers/new', '/nodes', '/hosts', '/account', '/admins', '/backups', '/notifications'];
+  const serverFree = ['/servers', '/servers/new', '/nodes', '/hosts', '/account', '/admins', '/backups', '/notifications', '/audit'];
   import ThemeSwitch from './lib/ThemeSwitch.svelte';
   import Login from './pages/Login.svelte';
   import Dashboard from './pages/Dashboard.svelte';
@@ -18,6 +18,7 @@
   import Admins from './pages/Admins.svelte';
   import Backups from './pages/Backups.svelte';
   import Notifications from './pages/Notifications.svelte';
+  import Audit from './pages/Audit.svelte';
   import Server from './pages/Server.svelte';
   import Setup from './pages/Setup.svelte';
   import Access from './pages/Access.svelte';
@@ -66,6 +67,8 @@
           ? { component: Backups }
         : route.path === '/notifications'
           ? { component: Notifications }
+        : route.path === '/audit'
+          ? { component: Audit }
         : route.path === '/servers/new'
           ? { component: NewServer }
           : route.path === '/nodes' || route.path === '/hosts'
@@ -138,7 +141,7 @@
   });
 
   $effect(() => {
-    const titles = { '/login': 'Log in', '/account': 'My account', '/admins': 'Admins', '/backups': 'Backups', '/notifications': 'Notifications', '/setup': 'Setup', '/servers/new': 'Add a server', '/nodes': 'Nodes', '/hosts': 'Nodes', '/servers': 'Servers' };
+    const titles = { '/login': 'Log in', '/account': 'My account', '/admins': 'Admins', '/backups': 'Backups', '/notifications': 'Notifications', '/audit': 'Audit log', '/setup': 'Setup', '/servers/new': 'Add a server', '/nodes': 'Nodes', '/hosts': 'Nodes', '/servers': 'Servers' };
     const name = titles[route.path] ?? navPages.find((p) => p.path === route.path)?.label ?? 'Overview';
     document.title = `${name} · Trapdoor`;
   });
