@@ -1,4 +1,5 @@
 <script>
+  import AdminNav from '../lib/AdminNav.svelte';
   import { api, poll, reloadServers } from '../lib/api.js';
   import { navigate, selectServer, servers, toast } from '../lib/state.svelte.js';
   import { bytes } from '../lib/format.js';
@@ -92,6 +93,7 @@
   }
 </script>
 
+<AdminNav />
 <header class="head">
   <div>
     <h1>Servers</h1>

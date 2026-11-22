@@ -4,7 +4,7 @@
   import { machines, typeNames, where } from './lib/location.js';
 
   // Pages that do not belong to the selected server.
-  const serverFree = ['/servers', '/servers/new', '/nodes', '/hosts', '/account'];
+  const serverFree = ['/servers', '/servers/new', '/nodes', '/hosts', '/account', '/admins', '/backups', '/notifications'];
   import ThemeSwitch from './lib/ThemeSwitch.svelte';
   import Login from './pages/Login.svelte';
   import Dashboard from './pages/Dashboard.svelte';
@@ -15,6 +15,9 @@
   import Tools from './pages/Tools.svelte';
   import Limits from './pages/Limits.svelte';
   import Account from './pages/Account.svelte';
+  import Admins from './pages/Admins.svelte';
+  import Backups from './pages/Backups.svelte';
+  import Notifications from './pages/Notifications.svelte';
   import Server from './pages/Server.svelte';
   import Setup from './pages/Setup.svelte';
   import Access from './pages/Access.svelte';
@@ -57,6 +60,12 @@
       ? { component: Login }
       : route.path === '/account'
         ? { component: Account }
+        : route.path === '/admins'
+          ? { component: Admins }
+        : route.path === '/backups'
+          ? { component: Backups }
+        : route.path === '/notifications'
+          ? { component: Notifications }
         : route.path === '/servers/new'
           ? { component: NewServer }
           : route.path === '/nodes' || route.path === '/hosts'
@@ -129,7 +138,7 @@
   });
 
   $effect(() => {
-    const titles = { '/login': 'Log in', '/account': 'Account', '/setup': 'Setup', '/servers/new': 'Add a server', '/nodes': 'Nodes', '/hosts': 'Nodes', '/servers': 'Servers' };
+    const titles = { '/login': 'Log in', '/account': 'My account', '/admins': 'Admins', '/backups': 'Backups', '/notifications': 'Notifications', '/setup': 'Setup', '/servers/new': 'Add a server', '/nodes': 'Nodes', '/hosts': 'Nodes', '/servers': 'Servers' };
     const name = titles[route.path] ?? navPages.find((p) => p.path === route.path)?.label ?? 'Overview';
     document.title = `${name} · Trapdoor`;
   });
@@ -163,7 +172,7 @@
       </ul>
       <div class="rail-foot">
         <ThemeSwitch />
-        <a class="who" href="/account" class:active={route.path === '/account'}>
+        <a class="who" href="/account" class:active={serverFree.includes(route.path)} title="Admin: your account, admins, servers, nodes, backups, notifications">
           <span class="avatar" aria-hidden="true">{session.user.username.slice(0, 1).toUpperCase()}</span>
           <span>{session.user.username}</span>
         </a>
@@ -174,6 +183,7 @@
     </nav>
 
     <main>
+      {#if !serverFree.includes(route.path)}
       <div class="server-bar">
         <div class="server-pick">
         {#if servers.list.length > 1}
@@ -205,12 +215,13 @@
           </span>
         {/if}
         </div>
-        <span class="bar-links small">
-          {#if route.path !== '/servers'}<a class="add-server" href="/servers">Servers ({servers.list.length})</a>{/if}
-          {#if route.path !== '/nodes' && route.path !== '/hosts'}<a class="add-server" href="/nodes">Nodes ({servers.hosts.length + 1})</a>{/if}
-          {#if route.path !== '/servers/new'}<a class="add-server" href="/servers/new">Add a server</a>{/if}
-        </span>
+        <!-- The way to the Admin area: servers, nodes, admins, backups, notifications. -->
+        <a class="manage" href="/servers" title="Servers, nodes, admins, backups and notifications">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Manage</span>
+        </a>
       </div>
+      {/if}
       {#if currentServer()?.stopped && !serverFree.includes(route.path)}
         <div class="banner warn stopped-banner" role="status">
           <span><strong>{currentServer().name}</strong> is stopped: clients cannot connect.</span>
@@ -291,6 +302,8 @@
     margin-bottom: var(--space-4);
   }
   .server-bar:not(:has(.server-switch, .where-chip)) { justify-content: flex-end; }
+  .manage { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-s); color: var(--ink-2); font-size: var(--step--1); font-weight: 500; text-decoration: none; white-space: nowrap; }
+  .manage:hover { border-color: var(--accent); color: var(--ink); }
   .server-pick { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; min-width: 0; }
   .where-chip {
     display: inline-flex; align-items: center; gap: var(--space-2); padding: 3px 10px;
@@ -306,8 +319,6 @@
     color: var(--ink-2);
     font-size: 14px;
   }
-  .add-server { color: var(--ink-2); }
-  .bar-links { display: inline-flex; gap: var(--space-4); }
   .stopped-banner { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
   .avatar {
     display: grid;

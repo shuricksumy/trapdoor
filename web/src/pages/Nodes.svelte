@@ -1,4 +1,5 @@
 <script>
+  import AdminNav from '../lib/AdminNav.svelte';
   import { api, poll, reloadServers } from '../lib/api.js';
   import { navigate, selectServer, servers, toast } from '../lib/state.svelte.js';
   import Dialog from '../lib/Dialog.svelte';
@@ -123,6 +124,7 @@
   }
 </script>
 
+<AdminNav />
 <header class="head">
   <h1>Nodes</h1>
   <p class="muted">

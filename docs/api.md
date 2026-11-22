@@ -68,6 +68,12 @@ given in full.
 | GET | `/api/v1/servers/{server}/history/uptime` | `?from=YYYY-MM-DD&to=YYYY-MM-DD` (both days included; by hour up to 3 days, by day beyond, at most 4 years), `?range=24h\|7d` (by hour), `?range=30d` (by day) or `?month=YYYY-MM` (a calendar month by day) → `{"from","to","step","starts":[…],"clients":[{"name","online","last_seen","sessions","online_seconds","buckets":[seconds per step]}],"server":[seconds the server was up per step],"server_seconds","tracked"}` (`tracked`: when the server's record begins; before it, unknown) |
 | GET | `/api/v1/servers/{server}/history/events` | `?from&to` (dates), `name`, `quiet=1` (fold reconnects within the online / offline quiet time), `offset`, `limit` (≤ 1000) → `{"total","events":[{"time","name","up","from","lasted","merged"}]}`, newest first |
 | GET | `/api/v1/servers/{server}/history/events.csv` | the same, all of it, oldest first: `time,client,event,from,was_up_seconds,quick_reconnects` |
+| GET | `/api/v1/admins` | admins only → every account: `[{"id","username","role","source","has_password","disabled","last_login_at","last_login_ip","last_login_via","sessions","you"}]` |
+| POST | `/api/v1/admins` | `{"username","password","role"}` → 201 a local account; 409 when the name is taken |
+| PUT | `/api/v1/admins/{name}` | `{"role"?,"disabled"?}` → the list; 409 for your own account (turning off) or when no admin would be left |
+| POST | `/api/v1/admins/{name}/password` | `{"password"}` → 204; the account is logged out everywhere |
+| POST | `/api/v1/admins/{name}/logout` | → `{"ended"}` sessions |
+| DELETE | `/api/v1/admins/{name}` | 204; not your own account, not the last admin |
 | GET | `/api/v1/auth/methods` | no login needed → `{"password":true,"oidc":"<button name>"}` (`oidc` only when set up) |
 | GET | `/api/v1/auth/oidc` | no login needed: to the OIDC provider (sets the one-time state cookie) |
 | GET | `/api/v1/auth/oidc/callback` | the provider's answer (`code`, `state`) → session cookie and `/`, or `/login?error=…` |

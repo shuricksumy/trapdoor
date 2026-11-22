@@ -1,12 +1,9 @@
 <script>
   import Fold from '../lib/Fold.svelte';
-  import { api, download } from '../lib/api.js';
+  import { api } from '../lib/api.js';
+  import AdminNav from '../lib/AdminNav.svelte';
   import { session, navigate, toast, settings, repoURL, versionURL, shortVersion } from '../lib/state.svelte.js';
   import ThemeSwitch from '../lib/ThemeSwitch.svelte';
-  import ScheduledBackups from '../lib/ScheduledBackups.svelte';
-  import EmailSettings from '../lib/EmailSettings.svelte';
-  import TelegramSettings from '../lib/TelegramSettings.svelte';
-  import PresenceSettings from '../lib/PresenceSettings.svelte';
 
   let current = $state('');
   let next = $state('');
@@ -34,30 +31,6 @@
     }
   }
 
-  // Backup: everything in one file, encrypted with a passphrase if given.
-  let bpass = $state('');
-  let bpass2 = $state('');
-  let bbusy = $state(false);
-  let berror = $state('');
-  async function makeBackup(e) {
-    e.preventDefault();
-    berror = '';
-    if (bpass !== bpass2) {
-      berror = 'The passphrases do not match.';
-      return;
-    }
-    bbusy = true;
-    try {
-      const f = await download('/backup', { passphrase: bpass }, 'trapdoor-backup.tar.gz');
-      toast(`Saved ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB). Keep it somewhere safe${bpass ? ' with its passphrase' : ''}.`);
-      bpass = bpass2 = '';
-    } catch (err) {
-      berror = err.message;
-    } finally {
-      bbusy = false;
-    }
-  }
-
   async function logout() {
     try {
       await api('/auth/logout', { method: 'POST' });
@@ -68,10 +41,11 @@
   }
 </script>
 
+<AdminNav />
 <header class="head">
   <div>
-    <h1>Account</h1>
-    <p class="muted">Signed in as <strong>{session.user?.username}</strong>.</p>
+    <h1>My account</h1>
+    <p class="muted">Signed in as <strong>{session.user?.username}</strong>{session.user?.role === 'viewer' ? ' (read-only)' : ''}{session.user?.via === 'oidc' ? ' with single sign-on' : ''}.</p>
     <p class="muted small">
       Trapdoor {#if settings.version}<a href={versionURL(settings.version)} target="_blank" rel="noopener noreferrer" title={settings.version}>{shortVersion(settings.version)}</a>{/if}
       · <a href={repoURL} target="_blank" rel="noopener noreferrer">GitHub</a>
@@ -84,7 +58,10 @@
 </header>
 
 <div class="sections">
-  <Fold id="acct-password" title="Change password" summary="the admin password; you are logged out everywhere afterwards">
+  {#if session.user?.source === 'oidc'}
+    <p class="muted sso-note">You sign in with single sign-on: your password, its reset and your second factor are managed there. An admin can also give this account a local password (Admins), for when the sign-on is down.</p>
+  {/if}
+  <Fold id="acct-password" title="Change password" summary="your local password; you are logged out everywhere afterwards">
     <form class="panel-body form" onsubmit={change}>
       {#if error}<div class="banner bad" role="alert">{error}</div>{/if}
       <label class="field">
@@ -104,32 +81,8 @@
     </form>
   </Fold>
 
-  <Fold id="acct-backup" title="Backup" summary="download one file with everything, now">
-    <form class="panel-body form" onsubmit={makeBackup}>
-      <p class="muted small">
-        One file with everything: certificates and keys, server settings, clients, WireGuard and AmneziaWG servers, access
-        rules, admins, traffic history and the other nodes. Restore it with <code>trapdoor restore</code> (see the guide).
-      </p>
-      {#if berror}<div class="banner bad" role="alert">{berror}</div>{/if}
-      <label class="field">
-        <span>Passphrase</span>
-        <input type="password" bind:value={bpass} autocomplete="new-password" />
-        <span class="hint">Encrypts the file. Strongly recommended: it holds your CA keys. Without the passphrase it cannot be restored.</span>
-      </label>
-      {#if bpass}
-        <label class="field">
-          <span>Passphrase again</span>
-          <input type="password" bind:value={bpass2} autocomplete="new-password" />
-        </label>
-      {/if}
-      <div><button class="btn primary" type="submit" disabled={bbusy}>{bbusy ? 'Preparing…' : 'Download a backup'}</button></div>
-    </form>
-  </Fold>
 
-  <ScheduledBackups />
-  <EmailSettings />
-  <TelegramSettings />
-  <PresenceSettings />
+
 </div>
 
 <style>
@@ -137,5 +90,6 @@
   .head p { margin-top: var(--space-1); }
   .form { display: grid; gap: var(--space-4); }
   .sections { max-width: 860px; }
+  .sso-note { margin: 0 0 var(--space-4); max-width: 72ch; }
   .quick { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 </style>
