@@ -89,7 +89,7 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
 
 ## v4 — extras
 
-- [x] OIDC login (e.g. Authelia): signs in as the local admin by group, password login stays
+- [x] OIDC login (e.g. Authelia): an account per person, role by group, password login stays
 - [x] Backup / restore (PKI + config + DB, every host): one file from the UI, optionally
       encrypted; `trapdoor restore agent|web`
   - [x] Per server: backup on the server's page, restore (or move to another host) with
@@ -119,6 +119,8 @@ AmneziaWG side by side: several VPN servers of any type on one host, managed in 
 - [x] Limits: priorities per client (with the server's link speed), traffic alarms per server
       (hour / day / month), price of traffic with the month's cost on the Overview
 - [x] Audit log: in the database (two years), a page with filters, pages and CSV; sign-ins and failed sign-ins too
+- [x] Several admins and read-only accounts; Admin area (accounts, servers, nodes, backups,
+      notifications, audit log)
 - [ ] easyrsa `vars` in the native PKI: certificate name fields (`EASYRSA_DN` org mode:
       country, province, city, org, email, OU), key type and size, digest, CA / certificate /
       CRL lifetimes, read from `<pki>/vars` (or `TD_EASYRSA_VARS`), so new certificates match
