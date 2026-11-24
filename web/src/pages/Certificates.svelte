@@ -336,7 +336,7 @@
                   {c.notes || c.name}
                   {#if c.current && notify[c.name]}<span class="bell" title="Online / offline messages on">🔔</span>{/if}
                 </span>
-                {#if c.notes}<span class="mono faint small ip" title="Login (certificate name)">{c.name}</span>{/if}
+                {#if c.notes && c.notes !== c.name}<span class="mono faint small ip" title="Config name (certificate name)">{c.name}</span>{/if}
                 {#if !c.current}<span class="faint small">replaced</span>{/if}
                 {#if c.current && staticIPs[c.name]}<span class="mono faint small ip">{staticIPs[c.name]}</span>{/if}
                 {#if c.current && emails[c.name]}<span class="faint small ip">{emails[c.name]}</span>{/if}

@@ -279,7 +279,7 @@
             <tr class:old={p.disabled}>
               <td class="c-name">
                 <div class="nm">
-                  <span class="name">{p.notes || p.name}{#if p.notes}<span class="mono faint small cfg" title="Config name">{p.name}</span>{/if}{#if notify[p.name]}<span class="bell" title="Online / offline messages on">🔔</span>{/if}{#if emails[p.name]}<span class="faint small email">{emails[p.name]}</span>{/if}</span>
+                  <span class="name">{p.notes || p.name}{#if p.notes && p.notes !== p.name}<span class="mono faint small cfg" title="Config name">{p.name}</span>{/if}{#if notify[p.name]}<span class="bell" title="Online / offline messages on">🔔</span>{/if}{#if emails[p.name]}<span class="faint small email">{emails[p.name]}</span>{/if}</span>
                   {#if p.expires_at}<span class="small" class:faint={!p.expired} class:bad-text={p.expired}>{p.expired ? 'Ended' : 'Until'} {until(p.expires_at)}</span>{/if}
 
                   {#if p.lan?.length}<span class="faint small mono">LAN {p.lan.join(', ')}</span>{/if}
